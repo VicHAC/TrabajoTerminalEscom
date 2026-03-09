@@ -53,14 +53,37 @@ def inicializar_bd():
         CREATE TABLE IF NOT EXISTS Microglia (
             id_microglia INTEGER PRIMARY KEY AUTOINCREMENT,
             id_analisis INTEGER NOT NULL,
-            area REAL NOT NULL,
+            
+            -- Localización Espacial en la imagen 2D
+            centroide_x REAL NOT NULL,
+            centroide_y REAL NOT NULL,
+            
+            -- Morfología General (Área en lugar de Volumen)
+            area_total_pixeles REAL NOT NULL,
+            area_soma_pixeles REAL, -- El tamaño del cuerpo central
             perimetro REAL NOT NULL,
-            grosor_ramificaciones REAL, 
-            longitud_ramificaciones REAL, 
+            
+            -- Análisis del Esqueleto 2D (Lo que saca ImageJ)
+            pixeles_rama INTEGER, -- Píxeles que forman el esqueleto
+            puntos_finales INTEGER, -- Puntas de las dendritas
+            uniones_triples INTEGER, -- Bifurcaciones (nodos de 3)
+            uniones_cuadruples INTEGER, -- Cruces (nodos de 4)
+            
+            -- Métricas de Longitud
+            longitud_promedio_ramas REAL,
+            longitud_maxima_rama REAL,
+            ruta_mas_larga REAL, -- Longest shortest path en 2D
+            
+            -- Clasificación Biomédica (El chisme de qué le pasó a la rata)
+            tiempo_exposicion_horas REAL,
+            estado_clasificado TEXT, -- "Ramificado" (0.2h-5h) o "Fagocítico/Ameboide" (24h-168h)
+            
+            -- Datos técnicos para pintar la cajita en la Interfaz
             bbox_x REAL, 
             bbox_y REAL, 
             bbox_w REAL, 
             bbox_h REAL, 
+            
             FOREIGN KEY (id_analisis) REFERENCES Analisis(id_analisis)
         );
 

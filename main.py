@@ -5,14 +5,70 @@ from bd.database import inicializar_bd
 from vistas.login import VentanaLogin
 
 def main():
-    # 1. Asegurar que la BD exista antes de levantar la interfaz
     inicializar_bd()
 
-    # 2. Levantar la app de PyQt
     app = QApplication(sys.argv)
     
-    # 3. Mostrar la ventana de login
+    # ==========================================
+    # EL SANTO GRIAL DE LA ESTÉTICA (Global QSS Corregido)
+    # ==========================================
+    estilo_global = """
+    QMainWindow, QDialog, QWidget#ventana_login {
+        background-color: #FFFFFF;
+    }
+    /* Forzar a que todo el texto base sea negro */
+    QWidget {
+        color: #000000; 
+    }
+    QLabel {
+        font-family: 'Segoe UI', Arial, sans-serif;
+        color: #333333;
+    }
+    QLineEdit {
+        border: 1px solid #CCCCCC;
+        border-radius: 8px;
+        padding: 10px;
+        background-color: #FDFDFD;
+        color: #000000; /* Letras negras en los inputs */
+        font-size: 14px;
+    }
+    QLineEdit:focus {
+        border: 2px solid #003366;
+    }
+    QPushButton {
+        border-radius: 8px;
+        font-family: 'Segoe UI', Arial, sans-serif;
+        font-size: 14px;
+        font-weight: bold;
+        color: #333333; /* Texto de los botones visible */
+    }
+    QTableWidget {
+        background-color: #FFFFFF;
+        color: #000000; /* Letras negras en las tablas */
+        border: 1px solid #E0E0E0;
+        gridline-color: #CCCCCC;
+    }
+    QTableWidget::item {
+        color: #000000;
+    }
+    QHeaderView::section {
+        background-color: #FFFFFF;
+        color: #000000; /* Letras negras en los títulos de las columnas */
+        padding: 8px;
+        border: none;
+        border-bottom: 2px solid #003366;
+        font-weight: bold;
+        font-size: 14px;
+    }
+    QFrame#menu_lateral {
+        background-color: #FFFFFF;
+        border-right: 1px solid #E0E0E0;
+    }
+    """
+    app.setStyleSheet(estilo_global)
+    
     ventana = VentanaLogin()
+    ventana.setObjectName("ventana_login") # Para que agarre el fondo blanco
     ventana.show()
     
     sys.exit(app.exec())

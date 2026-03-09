@@ -12,11 +12,10 @@ class VentanaInvestigador(QMainWindow):
         self.ruta_imagen_actual = None
         
         self.setWindowTitle(f"Prototipo Microglías - Panel ({self.rol})")
-        self.resize(1100, 700) # Más grandecita para que quepa bien la imagen
+        self.resize(1100, 700)
         self.inicializar_ui()
 
     def inicializar_ui(self):
-        # Widget y layout principal
         widget_central = QWidget()
         layout_principal = QHBoxLayout()
         
@@ -26,12 +25,10 @@ class VentanaInvestigador(QMainWindow):
         menu_lateral = QVBoxLayout()
         menu_lateral.setAlignment(Qt.AlignmentFlag.AlignTop)
         
-        # Etiqueta de usuario
         label_bienvenida = QLabel(f"Sesión: {self.rol}")
         label_bienvenida.setStyleSheet("font-weight: bold; font-size: 16px; margin-bottom: 20px;")
         menu_lateral.addWidget(label_bienvenida)
 
-        # Botones basados en tu diagrama (Figura 8)
         self.btn_cargar = QPushButton("Cargar Imagen")
         self.btn_historial = QPushButton("Historial")
         
@@ -47,34 +44,51 @@ class VentanaInvestigador(QMainWindow):
         
         self.btn_reporte = QPushButton("Generar Reporte")
         self.btn_guardar_img = QPushButton("Guardar Imagen")
-        self.btn_cerrar_sesion = QPushButton("Cerrar Sesión")
-        self.btn_cerrar_sesion.setStyleSheet("background-color: #8b0000; color: white; margin-top: 30px;")
 
-        # Estilo genérico para los botones del menú para que no se vean tan x
-        estilo_btn = "padding: 8px; text-align: left;"
+        estilo_btn_menu = """
+            QPushButton {
+                background-color: transparent; 
+                text-align: left; 
+                padding: 10px; 
+                font-weight: normal;
+                color: #333333;
+            }
+            QPushButton:hover {
+                background-color: #F0F0F0;
+                border-radius: 5px;
+            }
+        """
         for btn in [self.btn_cargar, self.btn_historial, self.btn_conteo, self.btn_perimetros, self.btn_areas, self.btn_reporte, self.btn_guardar_img]:
-            btn.setStyleSheet(estilo_btn)
+            btn.setStyleSheet(estilo_btn_menu)
+            menu_lateral.addWidget(btn)
 
-        # Agregar todo al sidebar
-        menu_lateral.addWidget(self.btn_cargar)
-        menu_lateral.addWidget(self.btn_historial)
-        menu_lateral.addWidget(label_caract)
-        menu_lateral.addWidget(self.btn_conteo)
-        menu_lateral.addWidget(self.btn_perimetros)
-        menu_lateral.addWidget(self.btn_areas)
-        menu_lateral.addWidget(label_reporte)
-        menu_lateral.addWidget(self.btn_reporte)
-        menu_lateral.addWidget(self.btn_guardar_img)
+        # Botón de cerrar sesión AESTHETIC hasta abajo
+        menu_lateral.addStretch()
+        self.btn_cerrar_sesion = QPushButton("Cerrar Sesión")
+        self.btn_cerrar_sesion.setStyleSheet("""
+            QPushButton {
+                background-color: transparent; 
+                border: 2px solid #cc0000; 
+                color: #cc0000; 
+                font-weight: bold; 
+                border-radius: 8px; 
+                padding: 10px; 
+                margin-top: 20px;
+            }
+            QPushButton:hover {
+                background-color: #cc0000;
+                color: white;
+            }
+        """)
         menu_lateral.addWidget(self.btn_cerrar_sesion)
 
-        # Contenedor visual para el menú (una línea separadora a la derecha)
         frame_menu = QFrame()
+        frame_menu.setObjectName("menu_lateral")
         frame_menu.setFixedWidth(200)
         frame_menu.setLayout(menu_lateral)
-        frame_menu.setStyleSheet("border-right: 1px solid #ccc;")
 
         # ==========================================
-        # 2. ÁREA DE LA IMAGEN (Main Content)
+        # 2. ÁREA DE LA IMAGEN
         # ==========================================
         area_imagen = QVBoxLayout()
         self.visor_imagen = QLabel("Sube una imagen .tiff para empezar el análisis...")
@@ -83,22 +97,26 @@ class VentanaInvestigador(QMainWindow):
         
         area_imagen.addWidget(self.visor_imagen)
 
-        # Juntar el menú y el área de la imagen
         layout_principal.addWidget(frame_menu)
-        layout_principal.addLayout(area_imagen, stretch=1) # El stretch=1 hace que la imagen ocupe todo el espacio sobrante
+        layout_principal.addLayout(area_imagen, stretch=1) 
 
         widget_central.setLayout(layout_principal)
         self.setCentralWidget(widget_central)
 
-        # Conectar botones a sus funciones
+        # Conectar botones
         self.btn_cargar.clicked.connect(self.cargar_imagen)
         self.btn_cerrar_sesion.clicked.connect(self.cerrar_sesion)
         
-        # Desactivar botones de análisis hasta que no haya imagen
+        # Desactivar botones si no hay imagen
         self.alternar_botones_analisis(False)
 
+        # Si es invitado, le mochamos funciones VIP 
+        if self.rol == "Invitado":
+            self.btn_historial.hide()
+            self.btn_reporte.hide()
+            self.btn_guardar_img.hide()
+
     def alternar_botones_analisis(self, estado):
-        """Activa o desactiva los botones dependiendo si hay imagen cargada."""
         self.btn_conteo.setEnabled(estado)
         self.btn_perimetros.setEnabled(estado)
         self.btn_areas.setEnabled(estado)
@@ -106,7 +124,6 @@ class VentanaInvestigador(QMainWindow):
         self.btn_guardar_img.setEnabled(estado)
 
     def cargar_imagen(self):
-        """Abre el explorador de archivos para buscar el TIFF."""
         ruta_archivo, _ = QFileDialog.getOpenFileName(
             self, 
             "Seleccionar imagen de Microglías", 
@@ -116,17 +133,17 @@ class VentanaInvestigador(QMainWindow):
         
         if ruta_archivo:
             self.ruta_imagen_actual = ruta_archivo
-            
-            # Cargar y mostrar la imagen en el QLabel
             pixmap = QPixmap(ruta_archivo)
             if not pixmap.isNull():
-                # Escalar la imagen para que quepa en la ventana sin deformarse
                 self.visor_imagen.setPixmap(pixmap.scaled(self.visor_imagen.size(), Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
                 self.alternar_botones_analisis(True)
                 QMessageBox.information(self, "Imagen cargada", "Imagen lista para meterle la IA.")
             else:
-                QMessageBox.critical(self, "Error", "El archivo está corrupto o no es una imagen válida.")
+                QMessageBox.critical(self, "Error", "El archivo está corrupto o no es válido.")
 
     def cerrar_sesion(self):
+        from vistas.login import VentanaLogin
+        self.ventana_login = VentanaLogin()
+        self.ventana_login.setObjectName("ventana_login")
+        self.ventana_login.show()
         self.close()
-        # Aquí la señal regresaría a abrir el login, pero por ahora solo cerramos.

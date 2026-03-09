@@ -2,47 +2,62 @@ import hashlib
 import sqlite3
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QLabel, QLineEdit, QPushButton, QMessageBox)
 from PyQt6.QtCore import Qt
-from vistas.investigador import VentanaInvestigador
+from PyQt6.QtGui import QPixmap
 
 class VentanaLogin(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Prototipo Microglías - Inicio de Sesión")
-        self.resize(350, 450)
+        self.resize(400, 550) # Un poco más alto para que quepa el logo
         
-        # Layout vertical
         layout = QVBoxLayout()
         layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.setContentsMargins(40, 20, 40, 20) # Márgenes para que no se vea apretado
 
-        # Elementos de la UI
+        # 1. EL LOGO (Figura 7) 
+        self.logo = QLabel("Aquí va tu logo (assets/logo.png)")
+        self.logo.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        pixmap = QPixmap("assets/logo.png")
+        if not pixmap.isNull():
+            self.logo.setPixmap(pixmap.scaled(150, 150, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+        else:
+            self.logo.setStyleSheet("border: 1px dashed #ccc; color: #999; padding: 20px;")
+            
         titulo = QLabel("Iniciar Sesión")
-        titulo.setStyleSheet("font-size: 24px; font-weight: bold; margin-bottom: 20px;")
+        titulo.setStyleSheet("font-size: 22px; font-weight: bold; color: #000000; margin-top: 10px;")
+        subtitulo = QLabel("Ingresa nombre de usuario y contraseña")
+        subtitulo.setStyleSheet("color: #666666; margin-bottom: 20px;")
         
         self.input_usuario = QLineEdit()
         self.input_usuario.setPlaceholderText("Usuario")
-        self.input_usuario.setStyleSheet("padding: 8px; font-size: 14px;")
         
         self.input_password = QLineEdit()
         self.input_password.setPlaceholderText("Contraseña")
         self.input_password.setEchoMode(QLineEdit.EchoMode.Password)
-        self.input_password.setStyleSheet("padding: 8px; font-size: 14px;")
 
+        # Botón Negro como en tu mockup 
         btn_ingresar = QPushButton("Ingresar")
-        btn_ingresar.setStyleSheet("background-color: #003366; color: white; padding: 10px; font-weight: bold;")
+        btn_ingresar.setStyleSheet("background-color: #000000; color: #FFFFFF; padding: 12px; margin-top: 10px;")
+        btn_ingresar.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_ingresar.clicked.connect(self.verificar_login)
 
         btn_invitado = QPushButton("Ingresar como invitado")
-        btn_invitado.setFlat(True)
-        btn_invitado.setStyleSheet("color: #555;")
+        btn_invitado.setStyleSheet("background-color: transparent; color: #555555; text-decoration: underline;")
+        btn_invitado.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_invitado.clicked.connect(self.login_invitado)
+        
+        label_ayuda = QLabel("¿No tienes una cuenta? Comunícate con el administrador")
+        label_ayuda.setStyleSheet("color: #888888; font-size: 11px; margin-top: 30px;")
+        label_ayuda.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        # Agregando al layout
+        layout.addWidget(self.logo)
         layout.addWidget(titulo, alignment=Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(subtitulo, alignment=Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(self.input_usuario)
         layout.addWidget(self.input_password)
-        layout.addSpacing(15)
         layout.addWidget(btn_ingresar)
         layout.addWidget(btn_invitado)
+        layout.addWidget(label_ayuda)
 
         self.setLayout(layout)
 
@@ -51,7 +66,7 @@ class VentanaLogin(QWidget):
         password = self.input_password.text()
 
         if not usuario or not password:
-            QMessageBox.warning(self, "Awanta", "Llena los campos, no se llenan solos.")
+            QMessageBox.warning(self, "Aguanta", "Llena los campos, no se llenan solos.")
             return
 
         pass_hash = hashlib.sha256(password.encode()).hexdigest()
@@ -65,19 +80,24 @@ class VentanaLogin(QWidget):
 
             if resultado:
                 id_user, rol = resultado
-                # Abrimos el dashboard
-                self.dashboard = VentanaInvestigador(id_usuario=id_user, rol=rol)
+                
+                if rol == "Administrador":
+                    from vistas.administrador import VentanaAdministrador
+                    self.dashboard = VentanaAdministrador(id_usuario=id_user)
+                else:
+                    from vistas.investigador import VentanaInvestigador
+                    self.dashboard = VentanaInvestigador(id_usuario=id_user, rol=rol)
+                
                 self.dashboard.show()
-                # Cerramos el login
                 self.close()
             else:
                 QMessageBox.critical(self, "Error", "Usuario o contraseña incorrectos.")
-
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Falla en la Matrix (BD): {e}")
 
     def login_invitado(self):
         QMessageBox.information(self, "Modo Invitado", "Entraste de a grapa. No se guardará nada.")
+        from vistas.investigador import VentanaInvestigador
         self.dashboard = VentanaInvestigador(id_usuario=0, rol="Invitado")
         self.dashboard.show()
         self.close()

@@ -1,5 +1,12 @@
+# Interfaz Gráfica (La fachada)
 PyQt6==6.6.1
-ultralytics==8.1.0  # Paquete oficial de YOLOv8
-opencv-python==4.9.0.80
-Pillow==10.2.0
-pandas==2.2.0
+
+# El cerebro del proyecto (IA y Visión)
+ultralytics==8.1.0        # Este trae YOLOv8 para segmentar las microglias
+opencv-python==4.9.0.80   # Para manipular los píxeles, leer TIFFs y pintar cuadritos
+Pillow==10.2.0            # Para hacer el puente entre OpenCV y la interfaz de PyQt
+scikit-image==0.22.0      # Para la "esqueletización" matemática
+numpy==1.26.4             # Porque sin arreglos de matrices, Python no sabe sumar 2+2 en imagenes
+
+# Manejo de Datos y Reportes
+pandas==2.2.0             # Para exportar los resultados a CSV/Excel
