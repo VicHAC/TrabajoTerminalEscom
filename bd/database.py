@@ -96,7 +96,7 @@ def inicializar_bd():
         );
     ''')
     
-    # Crear usuario administrador si la BD esta
+    # Crear usuario administrador
     cursor.execute("SELECT COUNT(*) FROM Usuario")
     if cursor.fetchone()[0] == 0:
         pass_hash = hashlib.sha256("admin123".encode()).hexdigest()

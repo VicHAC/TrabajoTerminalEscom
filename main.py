@@ -68,7 +68,7 @@ def main():
     app.setStyleSheet(estilo_global)
     
     ventana = VentanaLogin()
-    ventana.setObjectName("ventana_login") # Para que agarre el fondo blanco
+    ventana.setObjectName("ventana_login")
     ventana.show()
     
     sys.exit(app.exec())

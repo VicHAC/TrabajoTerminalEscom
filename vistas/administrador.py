@@ -141,7 +141,7 @@ class VentanaAdministrador(QMainWindow):
         widget_central = QWidget()
         layout_principal = QHBoxLayout()
         
-        # --- MENÚ LATERAL ---
+        # --- MENU LATERAL ---
         menu_lateral = QVBoxLayout()
         menu_lateral.setAlignment(Qt.AlignmentFlag.AlignTop)
         
@@ -172,7 +172,7 @@ class VentanaAdministrador(QMainWindow):
             btn.setStyleSheet(estilo_btn_menu)
             menu_lateral.addWidget(btn)
 
-        # Botón de cerrar sesión AESTHETIC hasta abajo
+        # Boton de cerrar sesión
         menu_lateral.addStretch() # Empuja el botón al fondo
         self.btn_cerrar_sesion = QPushButton("Cerrar Sesión")
         self.btn_cerrar_sesion.setStyleSheet("""
@@ -197,10 +197,10 @@ class VentanaAdministrador(QMainWindow):
         frame_menu.setFixedWidth(200)
         frame_menu.setLayout(menu_lateral)
 
-        # --- ÁREA CENTRAL (El StackedWidget) ---
+        # --- AREA CENTRAL ---
         self.stack = QStackedWidget()
 
-        # PÁGINA 1: Vista de Usuarios 
+        # Vista de Usuarios 
         pagina_usuarios = QWidget()
         layout_usuarios = QVBoxLayout(pagina_usuarios)
         titulo_usuarios = QLabel("Usuarios Registrados")
@@ -216,7 +216,7 @@ class VentanaAdministrador(QMainWindow):
         layout_usuarios.addWidget(titulo_usuarios)
         layout_usuarios.addWidget(self.tabla_usuarios)
 
-        # PÁGINA 2: Vista de Reportes 
+        # Vista de Reportes 
         pagina_reportes = QWidget()
         layout_reportes = QVBoxLayout(pagina_reportes)
         titulo_reportes = QLabel("Reportes del Sistema")

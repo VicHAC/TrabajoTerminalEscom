@@ -8,13 +8,13 @@ class VentanaLogin(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Prototipo Microglías - Inicio de Sesión")
-        self.resize(400, 550) # Un poco más alto para que quepa el logo
+        self.resize(400, 550)
         
         layout = QVBoxLayout()
         layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.setContentsMargins(40, 20, 40, 20) # Márgenes para que no se vea apretado
+        layout.setContentsMargins(40, 20, 40, 20)
 
-        # 1. EL LOGO (Figura 7) 
+        # 1. EL LOGO
         self.logo = QLabel("Aquí va tu logo (assets/logo.png)")
         self.logo.setAlignment(Qt.AlignmentFlag.AlignCenter)
         pixmap = QPixmap("assets/logo.png")
@@ -35,7 +35,6 @@ class VentanaLogin(QWidget):
         self.input_password.setPlaceholderText("Contraseña")
         self.input_password.setEchoMode(QLineEdit.EchoMode.Password)
 
-        # Botón Negro como en tu mockup 
         btn_ingresar = QPushButton("Ingresar")
         btn_ingresar.setStyleSheet("background-color: #000000; color: #FFFFFF; padding: 12px; margin-top: 10px;")
         btn_ingresar.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -93,10 +92,10 @@ class VentanaLogin(QWidget):
             else:
                 QMessageBox.critical(self, "Error", "Usuario o contraseña incorrectos.")
         except Exception as e:
-            QMessageBox.critical(self, "Error", f"Falla en la Matrix (BD): {e}")
+            QMessageBox.critical(self, "Error", f"Falla en (BD): {e}")
 
     def login_invitado(self):
-        QMessageBox.information(self, "Modo Invitado", "Entraste de a grapa. No se guardará nada.")
+        QMessageBox.information(self, "Modo Invitado", "No se guardará nada.")
         from vistas.investigador import VentanaInvestigador
         self.dashboard = VentanaInvestigador(id_usuario=0, rol="Invitado")
         self.dashboard.show()

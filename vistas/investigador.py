@@ -62,7 +62,7 @@ class VentanaInvestigador(QMainWindow):
             btn.setStyleSheet(estilo_btn_menu)
             menu_lateral.addWidget(btn)
 
-        # Botón de cerrar sesión AESTHETIC hasta abajo
+        # Boton de cerrar sesion
         menu_lateral.addStretch()
         self.btn_cerrar_sesion = QPushButton("Cerrar Sesión")
         self.btn_cerrar_sesion.setStyleSheet("""
@@ -110,7 +110,7 @@ class VentanaInvestigador(QMainWindow):
         # Desactivar botones si no hay imagen
         self.alternar_botones_analisis(False)
 
-        # Si es invitado, le mochamos funciones VIP 
+        # Si es invitado, le quitamos funciones 
         if self.rol == "Invitado":
             self.btn_historial.hide()
             self.btn_reporte.hide()
