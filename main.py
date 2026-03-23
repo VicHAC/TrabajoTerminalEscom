@@ -9,9 +9,6 @@ def main():
 
     app = QApplication(sys.argv)
     
-    # ==========================================
-    # EL SANTO GRIAL DE LA ESTÉTICA (Global QSS Corregido)
-    # ==========================================
     estilo_global = """
     QMainWindow, QDialog, QWidget#ventana_login {
         background-color: #FFFFFF;
