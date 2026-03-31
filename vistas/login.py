@@ -65,7 +65,7 @@ class VentanaLogin(QWidget):
         password = self.input_password.text()
 
         if not usuario or not password:
-            QMessageBox.warning(self, "Aguanta", "Llena los campos, no se llenan solos.")
+            QMessageBox.warning(self, "Llena los campos.")
             return
 
         pass_hash = hashlib.sha256(password.encode()).hexdigest()
@@ -95,7 +95,6 @@ class VentanaLogin(QWidget):
             QMessageBox.critical(self, "Error", f"Falla en (BD): {e}")
 
     def login_invitado(self):
-        QMessageBox.information(self, "Modo Invitado", "No se guardará nada.")
         from vistas.investigador import VentanaInvestigador
         self.dashboard = VentanaInvestigador(id_usuario=0, rol="Invitado")
         self.dashboard.show()

@@ -44,7 +44,7 @@ class DialogoCrearUsuario(QDialog):
         rol = self.combo_rol.currentText()
         
         if not usuario or not password:
-            QMessageBox.warning(self, "Aguanta", "Llena todos los campos, pa'.")
+            QMessageBox.warning(self, "Llena todos los campos.")
             return
             
         pass_hash = hashlib.sha256(password.encode()).hexdigest()
@@ -56,10 +56,10 @@ class DialogoCrearUsuario(QDialog):
                            (usuario, pass_hash, rol))
             conexion.commit()
             conexion.close()
-            QMessageBox.information(self, "Éxito", "Usuario registrado al cien.")
+            QMessageBox.information(self, "Éxito", "Usuario registrado.")
             self.accept()
         except sqlite3.IntegrityError:
-            QMessageBox.critical(self, "Error", "Ese usuario ya existe, ponte creativo.")
+            QMessageBox.critical(self, "Error", "Ese usuario ya existe.")
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Tronó la BD: {e}")
 
@@ -102,7 +102,7 @@ class DialogoEditarUsuario(QDialog):
         nuevo_rol = self.combo_rol.currentText()
         
         if not nuevo_nombre:
-            QMessageBox.warning(self, "Aguanta", "El nombre no puede estar vacío.")
+            QMessageBox.warning(self, "El nombre no puede estar vacío.")
             return
             
         try:
@@ -119,12 +119,12 @@ class DialogoEditarUsuario(QDialog):
                                
             conexion.commit()
             conexion.close()
-            QMessageBox.information(self, "Éxito", "Usuario actualizado, jefe.")
+            QMessageBox.information(self, "Éxito", "Usuario actualizado.")
             self.accept()
         except sqlite3.IntegrityError:
             QMessageBox.critical(self, "Error", "Ese nombre de usuario ya está ocupado.")
         except Exception as e:
-            QMessageBox.critical(self, "Error", f"Tronó la BD: {e}")
+            QMessageBox.critical(self, "Error", f"Murio la BD: {e}")
 
 # ==========================================
 # VENTANA PRINCIPAL DEL ADMINISTRADOR
@@ -291,7 +291,7 @@ class VentanaAdministrador(QMainWindow):
         fila_seleccionada = self.tabla_usuarios.currentRow()
         
         if fila_seleccionada < 0:
-            QMessageBox.warning(self, "Ey", "Selecciona a un wey de la tabla primero.")
+            QMessageBox.warning(self, "Ey", "Selecciona a una persona de la tabla primero.")
             return
             
         id_usuario = self.tabla_usuarios.item(fila_seleccionada, 0).text()
@@ -307,14 +307,14 @@ class VentanaAdministrador(QMainWindow):
         fila_seleccionada = self.tabla_usuarios.currentRow()
         
         if fila_seleccionada < 0:
-            QMessageBox.warning(self, "Ey", "Selecciona a un wey de la tabla primero para darle cuello.")
+            QMessageBox.warning(self, "Ey", "Selecciona a una persona de la tabla primero para darle cuello.")
             return
             
         id_usuario_eliminar = self.tabla_usuarios.item(fila_seleccionada, 0).text()
         nombre_usuario = self.tabla_usuarios.item(fila_seleccionada, 1).text()
         
         if str(self.id_usuario) == id_usuario_eliminar:
-            QMessageBox.critical(self, "Error", "No te puedes borrar a ti mismo, suicida.")
+            QMessageBox.critical(self, "Error", "No te puedes borrar a ti mismo.")
             return
 
         respuesta = QMessageBox.question(self, "Confirmar", f"¿Seguro que quieres borrar a {nombre_usuario}?", 
