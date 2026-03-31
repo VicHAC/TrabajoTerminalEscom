@@ -9,13 +9,9 @@ def main():
     inicializar_bd()
 
     app = QApplication(sys.argv)
-<<<<<<< HEAD
-    
-=======
     # ==========================================
     # Global QSS
     # ==========================================
->>>>>>> 6349c4e (First image processing implementation)
     estilo_global = """
     QMainWindow, QDialog, QWidget#ventana_login {
         background-color: #FFFFFF;
