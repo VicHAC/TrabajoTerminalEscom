@@ -1,0 +1,14 @@
+path: ia/dataset
+train: train/images
+val: valid/images
+test: test/images
+
+nc: 1
+names: ["microglia"]
+
+roboflow:
+    workspace: angels-workspace-mh9pn
+    project: microglias-ratas-tt
+    version: 1
+    license: Private
+    url: https://app.roboflow.com/angels-workspace-mh9pn/microglias-ratas-tt/1

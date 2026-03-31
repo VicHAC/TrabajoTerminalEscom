@@ -1,21 +1,28 @@
 import sys
-import os
-from PyQt6.QtWidgets import QApplication
+
 from bd.database import inicializar_bd
+from PyQt6.QtWidgets import QApplication
 from vistas.login import VentanaLogin
+
 
 def main():
     inicializar_bd()
 
     app = QApplication(sys.argv)
+<<<<<<< HEAD
     
+=======
+    # ==========================================
+    # Global QSS
+    # ==========================================
+>>>>>>> 6349c4e (First image processing implementation)
     estilo_global = """
     QMainWindow, QDialog, QWidget#ventana_login {
         background-color: #FFFFFF;
     }
     /* Forzar a que todo el texto base sea negro */
     QWidget {
-        color: #000000; 
+        color: #000000;
     }
     QLabel {
         font-family: 'Segoe UI', Arial, sans-serif;
@@ -63,12 +70,13 @@ def main():
     }
     """
     app.setStyleSheet(estilo_global)
-    
+
     ventana = VentanaLogin()
     ventana.setObjectName("ventana_login")
     ventana.show()
-    
+
     sys.exit(app.exec())
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()
