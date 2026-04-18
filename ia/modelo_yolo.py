@@ -138,17 +138,36 @@ class MicrogliaProcessor:
                 saved_count += 1
                 
                 # --- Aplicar filtros para preparar esqueletización ---
-                # 1. Convertir a escala de grises
+                # 1. Carga y grises: Convertir a escala de grises
                 gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
-                # 2. Aplicar filtro gaussiano para suavizar y reducir ruido (previene falsas ramas)
-                blurred = cv2.GaussianBlur(gray, (5, 5), 0)
-                # 3. Binarizar con Otsu para detectar automáticamente el umbral
-                # Deja la microglía (si es más clara) en blanco y el fondo en negro.
+                
+                # --- Mejora: Aplicar CLAHE para resaltar contrastes de ramificaciones delgadas ---
+                clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
+                gray = clahe.apply(gray)
+                
+                # 2. Suavizado (Filtro Gaussiano): Kernel más pequeño (3x3) para no emborronar ramas
+                blurred = cv2.GaussianBlur(gray, (3, 3), 0)
+                
+                # 3. Binarización (Thresholding): Otsu para binarizar
                 _, binary = cv2.threshold(blurred, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
                 
-                # Guardar el recorte filtrado en la nueva carpeta
+                # --- Mejora: Cierre Morfológico para reconectar ramitas finas que se hayan partido ---
+                kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+                binary = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel)
+                
+                # 4. Limpieza de ruido (Máscara limpia): Quedarnos solo con la estructura principal
+                num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(binary, connectivity=8)
+                
+                clean_mask = np.zeros_like(binary)
+                
+                if num_labels > 1:
+                    # Buscamos el componente conectado con el área más grande (ignorando fondo = 0)
+                    max_label = 1 + np.argmax(stats[1:, cv2.CC_STAT_AREA])
+                    clean_mask[labels == max_label] = 255
+                
+                # Guardar el recorte filtrado (máscara limpia) en la nueva carpeta
                 filtered_save_path = os.path.join(filtered_crops_folder, crop_filename)
-                binary_contiguo = np.ascontiguousarray(binary)
+                binary_contiguo = np.ascontiguousarray(clean_mask)
                 is_success_filt, im_buf_arr_filt = cv2.imencode(".png", binary_contiguo)
                 if is_success_filt:
                     im_buf_arr_filt.tofile(filtered_save_path)
