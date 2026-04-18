@@ -2,3 +2,6 @@ conversion_log.txt
 __pycache__/
 *.py[cod]
 *$py.class
+venv/
+vistas/__pycache__/
+bd/__pycache__/
