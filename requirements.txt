@@ -1,9 +1,14 @@
-PyQt6==6.6.1
+--extra-index-url https://download.pytorch.org/whl/cu124
 
-ultralytics==8.1.0        # YOLO v8
-opencv-python==4.9.0.80   # Para manipular los pixeles, leer TIFFs y pintar cuadritos
-Pillow==10.2.0            # Para hacer el puente entre OpenCV y la interfaz de PyQt
-scikit-image==0.22.0      # Para la esqueletización matematica
-numpy==1.26.4
+PyQt6==6.11.0
 
-pandas==2.2.0             # Para exportar los resultados a CSV/Excel
+ultralytics==8.4.37       # YOLO v8 object detection model
+opencv-python==4.13.0.92  # Pixel manipulation, reading TIFFs, and drawing bounding boxes
+Pillow==10.3.0            # Bridge between OpenCV and PyQt interface
+scikit-image==0.23.1      # Mathematical skeletonization
+numpy==1.26.4             # Array operations
+pandas==2.2.2             # Export results to CSV/Excel
+tifffile==2026.4.11       # Native TIFF image reading
+torch==2.6.0              # PyTorch for YOLO model inference
+torchvision==0.21.0       # Computer vision utilities for PyTorch
+torchaudio==2.6.0         # Audio utilities for PyTorch
