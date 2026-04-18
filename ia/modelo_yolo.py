@@ -81,10 +81,12 @@ class MicrogliaProcessor:
     def process_and_crop(self, input_image_path, base_output_folder):
         # Executes object detection on the input image and saves individual crops of detected objects.
         base_name = Path(input_image_path).stem
-        crops_folder = os.path.join(base_output_folder, f"crops_{base_name}")
+        image_base_folder = os.path.join(base_output_folder, base_name)
+        
+        crops_folder = os.path.join(image_base_folder, "originales")
         os.makedirs(crops_folder, exist_ok=True)
         
-        filtered_crops_folder = os.path.join(base_output_folder, f"crops_filtrados_{base_name}")
+        filtered_crops_folder = os.path.join(image_base_folder, "filtradas")
         os.makedirs(filtered_crops_folder, exist_ok=True)
 
         detection_img, raw_img = self.read_image(input_image_path)
@@ -94,7 +96,9 @@ class MicrogliaProcessor:
             source=detection_img,
             conf=self.confidence_threshold,
             device=self.device,
-            save = True
+            save=True,
+            name=base_name,
+            exist_ok=True
         )
         result = results[0]
         boxes = result.boxes
@@ -102,7 +106,7 @@ class MicrogliaProcessor:
         saved_count = 0
 
         if boxes is None:
-            return crops_folder, saved_count
+            return image_base_folder, saved_count
 
         for i in range(len(boxes)):
             box = boxes[i]
@@ -122,7 +126,7 @@ class MicrogliaProcessor:
             if crop.size == 0:
                 continue
 
-            crop_filename = f"microglia_{i:03d}_conf_{conf:.2f}.png"
+            crop_filename = f"celula_{i:03d}.png"
             save_path = os.path.join(crops_folder, crop_filename)
 
             # Usar imencode y tofile evita bugs silenciosos de cv2.imwrite en Windows
@@ -153,7 +157,7 @@ class MicrogliaProcessor:
             else:
                 print(f"Error al codificar el recorte: {save_path}")
 
-        return crops_folder, saved_count
+        return image_base_folder, saved_count
 
 
 if __name__ == "__main__":
