@@ -5,53 +5,78 @@ import cv2
 import numpy as np
 import tifffile as tiff
 from ultralytics.models.yolo.model import YOLO
+import torch
 
+_original_load = torch.load
+def _trusted_torch_load(*args, **kwargs):
+    kwargs['weights_only'] = False
+    return _original_load(*args, **kwargs)
+torch.load = _trusted_torch_load
+
+def get_optimal_device():
+    # Evaluates available hardware and returns the optimal supported computation device
+    if not torch.cuda.is_available():
+        return 'cpu'
+    
+    capability = torch.cuda.get_device_capability()
+    if capability[0] > 9:
+        return 'cpu'
+        
+    return 'cuda'
 
 class MicrogliaProcessor:
-    def __init__(self, model_path, confidence_threshold=0.5):
+    def __init__(self, model_path, confidence_threshold=0.20):
         # Initializes the YOLO model with the specified weights and sets the confidence threshold.
         if not os.path.exists(model_path):
             raise FileNotFoundError(f"Model file not found: {model_path}")
 
         self.model = YOLO(model_path)
-        self.threshold = confidence_threshold
+        self.confidence_threshold = confidence_threshold
+        self.device = get_optimal_device()
 
-    def read_tiff_image(self, image_path):
-        # Reads a TIFF image and standardizes its format to 8-bit BGR for YOLO processing.
+    def read_image(self, image_path):
+        # Determines the file extension and delegates the image reading to the appropriate library.
         try:
-            img_raw = tiff.imread(image_path)
-
-            if img_raw.ndim == 3:
-                if img_raw.dtype != np.uint8:
-                    img_8bit = (
-                        (img_raw - img_raw.min())
-                        / (img_raw.max() - img_raw.min())
-                        * 255
-                    ).astype(np.uint8)
+            ext = Path(image_path).suffix.lower()
+            
+            if ext in ['.tif', '.tiff']:
+                img_raw = tiff.imread(image_path)
+                
+                if img_raw.ndim == 3:
+                    if img_raw.dtype != np.uint8:
+                        img_8bit = ((img_raw - img_raw.min()) / (img_raw.max() - img_raw.min()) * 255).astype(np.uint8)
+                    else:
+                        img_8bit = img_raw
+                    bgr_image = cv2.cvtColor(img_8bit, cv2.COLOR_RGB2BGR)
+                    return bgr_image, img_raw
+                    
+                elif img_raw.ndim == 2:
+                    if img_raw.dtype != np.uint8:
+                        img_8bit = ((img_raw - img_raw.min()) / (img_raw.max() - img_raw.min()) * 255).astype(np.uint8)
+                    else:
+                        img_8bit = img_raw
+                    bgr_image = cv2.cvtColor(img_8bit, cv2.COLOR_GRAY2BGR)
+                    return bgr_image, img_raw
                 else:
-                    img_8bit = img_raw
-
-                bgr_image = cv2.cvtColor(img_8bit, cv2.COLOR_RGB2BGR)
-                return bgr_image, img_raw
-
-            elif img_raw.ndim == 2:
-                if img_raw.dtype != np.uint8:
-                    img_8bit = (
-                        (img_raw - img_raw.min())
-                        / (img_raw.max() - img_raw.min())
-                        * 255
-                    ).astype(np.uint8)
-                else:
-                    img_8bit = img_raw
-
-                bgr_image = cv2.cvtColor(img_8bit, cv2.COLOR_GRAY2BGR)
-                return bgr_image, img_raw
-
+                    raise ValueError("Unsupported TIFF image format.")
+            
             else:
-                raise ValueError("Unsupported TIFF image format.")
+                # Uses OpenCV to load standard formats like PNG or JPG
+                img_raw = cv2.imread(image_path, cv2.IMREAD_UNCHANGED)
+                if img_raw is None:
+                    raise ValueError(f"OpenCV could not decode the image file: {image_path}")
+                
+                if len(img_raw.shape) == 3:
+                    bgr_image = img_raw
+                elif len(img_raw.shape) == 2:
+                    bgr_image = cv2.cvtColor(img_raw, cv2.COLOR_GRAY2BGR)
+                else:
+                    raise ValueError("Unsupported standard image format.")
+                    
+                return bgr_image, img_raw
 
         except Exception as e:
-            raise Exception(f"Error reading TIFF: {e}")
+            raise Exception(f"Error reading image: {e}")
 
     def process_and_crop(self, input_image_path, base_output_folder):
         # Executes object detection on the input image and saves individual crops of detected objects.
@@ -59,11 +84,14 @@ class MicrogliaProcessor:
         crops_folder = os.path.join(base_output_folder, f"crops_{base_name}")
         os.makedirs(crops_folder, exist_ok=True)
 
-        detection_img, raw_img = self.read_tiff_image(input_image_path)
+        detection_img, raw_img = self.read_image(input_image_path)
         height, width = detection_img.shape[:2]
 
         results = self.model.predict(
-            source=detection_img, conf=self.threshold, verbose=False
+            source=detection_img,
+            conf=self.confidence_threshold,
+            device=self.device,
+            save = True
         )
         result = results[0]
         boxes = result.boxes

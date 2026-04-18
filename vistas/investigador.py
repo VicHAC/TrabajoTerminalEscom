@@ -1,8 +1,15 @@
 import os
+import logging
+
+os.environ["QT_QPA_PLATFORM"] = "xcb"
 from PyQt6.QtWidgets import (QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, 
                              QPushButton, QLabel, QFileDialog, QMessageBox, QFrame)
-from PyQt6.QtGui import QPixmap
+from PyQt6.QtGui import QPixmap, QImage
 from PyQt6.QtCore import Qt
+# Imports the external YOLO processing module
+from ia.modelo_yolo import MicrogliaProcessor
+
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 
 class VentanaInvestigador(QMainWindow):
     def __init__(self, id_usuario, rol):
@@ -19,9 +26,6 @@ class VentanaInvestigador(QMainWindow):
         widget_central = QWidget()
         layout_principal = QHBoxLayout()
         
-        # ==========================================
-        # 1. MENÚ LATERAL (Sidebar)
-        # ==========================================
         menu_lateral = QVBoxLayout()
         menu_lateral.setAlignment(Qt.AlignmentFlag.AlignTop)
         
@@ -62,7 +66,6 @@ class VentanaInvestigador(QMainWindow):
             btn.setStyleSheet(estilo_btn_menu)
             menu_lateral.addWidget(btn)
 
-        # Boton de cerrar sesion
         menu_lateral.addStretch()
         self.btn_cerrar_sesion = QPushButton("Cerrar Sesión")
         self.btn_cerrar_sesion.setStyleSheet("""
@@ -87,9 +90,6 @@ class VentanaInvestigador(QMainWindow):
         frame_menu.setFixedWidth(200)
         frame_menu.setLayout(menu_lateral)
 
-        # ==========================================
-        # 2. ÁREA DE LA IMAGEN
-        # ==========================================
         area_imagen = QVBoxLayout()
         self.visor_imagen = QLabel("Sube una imagen .tiff para empezar el análisis...")
         self.visor_imagen.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -103,14 +103,14 @@ class VentanaInvestigador(QMainWindow):
         widget_central.setLayout(layout_principal)
         self.setCentralWidget(widget_central)
 
-        # Conectar botones
         self.btn_cargar.clicked.connect(self.cargar_imagen)
         self.btn_cerrar_sesion.clicked.connect(self.cerrar_sesion)
         
-        # Desactivar botones si no hay imagen
+        # Connects the UI button to the YOLO processing logic
+        self.btn_conteo.clicked.connect(self.execute_microglia_counting)
+        
         self.alternar_botones_analisis(False)
 
-        # Si es invitado, le quitamos funciones 
         if self.rol == "Invitado":
             self.btn_historial.hide()
             self.btn_reporte.hide()
@@ -134,16 +134,69 @@ class VentanaInvestigador(QMainWindow):
         if ruta_archivo:
             self.ruta_imagen_actual = ruta_archivo
             pixmap = QPixmap(ruta_archivo)
+            
+            if pixmap.isNull():
+                # Logs the error to identify unsupported formats by the default Qt parser
+                logging.error(f"QPixmap failed to parse the image natively: {ruta_archivo}")
+                
+                try:
+                    import cv2
+                    import numpy as np
+                    
+                    # Reads the image array directly via OpenCV to bypass QPixmap limitations
+                    cv_img = cv2.imread(ruta_archivo, cv2.IMREAD_UNCHANGED)
+                    if cv_img is not None:
+                        if cv_img.dtype == np.uint16:
+                            cv_img = ((cv_img - cv_img.min()) / (cv_img.max() - cv_img.min()) * 255).astype(np.uint8)
+                            
+                        if len(cv_img.shape) == 2:
+                            h, w = cv_img.shape
+                            qimg = QImage(cv_img.data, w, h, w, QImage.Format.Format_Grayscale8)
+                        else:
+                            cv_img = cv2.cvtColor(cv_img, cv2.COLOR_BGR2RGB)
+                            h, w, ch = cv_img.shape
+                            qimg = QImage(cv_img.data, w, h, ch * w, QImage.Format.Format_RGB888)
+                            
+                        pixmap = QPixmap.fromImage(qimg)
+                        logging.info("Image successfully loaded and converted via OpenCV.")
+                except Exception as e:
+                    logging.error(f"Alternative OpenCV loading method also failed: {e}")
+
             if not pixmap.isNull():
                 self.visor_imagen.setPixmap(pixmap.scaled(self.visor_imagen.size(), Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
                 self.alternar_botones_analisis(True)
                 QMessageBox.information(self, "Imagen cargada", "Imagen lista para meterle la IA.")
             else:
                 QMessageBox.critical(self, "Error", "El archivo está corrupto o no es válido.")
-
     def cerrar_sesion(self):
         from vistas.login import VentanaLogin
         self.ventana_login = VentanaLogin()
         self.ventana_login.setObjectName("ventana_login")
         self.ventana_login.show()
         self.close()
+
+    def execute_microglia_counting(self):
+        # Executes the object detection model on the loaded image and displays the results
+        if not self.ruta_imagen_actual:
+            QMessageBox.warning(self, "Warning", "Please load an image first.")
+            return
+
+        try:
+            model_weights_path = os.path.join(os.getcwd(), "ia", "entrenamiento_resultados", "modelo_microglias5", "weights", "best.pt")
+            output_directory = os.path.join(os.getcwd(), "analisis_resultados")
+
+            processor = MicrogliaProcessor(model_path=model_weights_path, confidence_threshold=0.45)
+            
+            crops_folder, detection_count = processor.process_and_crop(
+                input_image_path=self.ruta_imagen_actual, 
+                base_output_folder=output_directory
+            )
+
+            QMessageBox.information(
+                self, 
+                "Analysis Complete", 
+                f"Successfully detected {detection_count} microglia cells.\n\nIndividual crops saved at:\n{crops_folder}"
+            )
+
+        except Exception as error:
+            QMessageBox.critical(self, "Processing Error", f"An error occurred during AI analysis:\n{str(error)}")
