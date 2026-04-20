@@ -30,7 +30,7 @@ def get_optimal_device():
 
 
 class MicrogliaProcessor:
-    def __init__(self, model_path, confidence_threshold=0.20):
+    def __init__(self, model_path, confidence_threshold=0.25):
         """Initializes the YOLO model and sets the device."""
         if not os.path.exists(model_path):
             raise FileNotFoundError(f"Model file not found: {model_path}")
@@ -105,7 +105,7 @@ class MicrogliaProcessor:
             source=bgr_image,
             conf=self.confidence_threshold,
             device=self.device,
-            save=False,
+            save=True,
         )
 
         detected_boxes_data = []
