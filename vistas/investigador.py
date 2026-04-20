@@ -20,8 +20,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-# Imports the external YOLO processing module
-from ia.modelo_yolo import MicrogliaProcessor
+# Imports the external YOLO processing module (Deferred to execute_microglia_counting)
 
 logging.basicConfig(
     level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s"
@@ -444,6 +443,11 @@ class VentanaInvestigador(QMainWindow):
             return
 
         try:
+            from PyQt6.QtWidgets import QApplication
+            QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+            
+            from ia.modelo_yolo import MicrogliaProcessor
+
             model_path = os.path.join(
                 os.getcwd(),
                 "ia",
@@ -480,6 +484,9 @@ class VentanaInvestigador(QMainWindow):
 
         except Exception as e:
             QMessageBox.critical(self, "Error", str(e))
+        finally:
+            from PyQt6.QtWidgets import QApplication
+            QApplication.restoreOverrideCursor()
 
     def construir_imagen_global(self, carpeta_origen):
         """
