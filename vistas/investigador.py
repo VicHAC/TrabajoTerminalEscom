@@ -72,6 +72,7 @@ class InteractiveImageViewer(QLabel):
         self.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         self.original_pixmap = None
+        self._current_pixmap = None
         self.boxes = []
         self.hovered_index = -1
         self.view_mode = "Original"
@@ -187,15 +188,29 @@ class InteractiveImageViewer(QLabel):
             painter.setBrush(Qt.BrushStyle.NoBrush)
             painter.drawRect(rect)
 
-            painter.end()
+        painter.end()
+        self._current_pixmap = temp_pixmap
+        self.update()
 
-        self.setPixmap(
-            temp_pixmap.scaled(
+    def paintEvent(self, event):
+        if self._current_pixmap and not self._current_pixmap.isNull():
+            painter = QPainter(self)
+            scaled_pix = self._current_pixmap.scaled(
                 self.size(),
                 Qt.AspectRatioMode.KeepAspectRatio,
                 Qt.TransformationMode.SmoothTransformation,
             )
-        )
+            x = (self.width() - scaled_pix.width()) // 2
+            y = (self.height() - scaled_pix.height()) // 2
+            painter.drawPixmap(x, y, scaled_pix)
+            painter.end()
+        else:
+            super().paintEvent(event)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        if self.original_pixmap:
+            self.update()
 
 
 class VentanaInvestigador(QMainWindow):
