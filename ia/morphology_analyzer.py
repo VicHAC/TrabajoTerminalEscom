@@ -1,4 +1,3 @@
-import logging
 import os
 from pathlib import Path
 
@@ -6,111 +5,79 @@ import cv2
 import numpy as np
 from skimage.morphology import skeletonize
 
-# Configuración del log para ver detalles en la terminal
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - [%(levelname)s] - %(message)s"
-)
-
 
 class MorphologyAnalyzer:
-    def __init__(self, input_directory: str, output_directory: str):
-        self.input_dir = Path(input_directory)
-        self.output_dir = Path(output_directory)
+    def __init__(self, base_folder: str):
+        """
+        Initializes the morphology analyzer targeting a specific image's result folder.
+        """
+        self.base_folder = Path(base_folder)
+        self.crops_dir = self.base_folder / "crops"
+        self.filtered_dir = self.base_folder / "filtradas"
+        self.skeleton_dir = self.base_folder / "esqueletos"
 
-        logging.info(f"Analizador iniciado.")
-        logging.info(
-            f"Carpeta de entrada (Buscando imágenes aquí): {self.input_dir.absolute()}"
-        )
-        logging.info(
-            f"Carpeta de salida (Guardando esqueletos aquí): {self.output_dir.absolute()}"
-        )
-
-        self.output_dir.mkdir(parents=True, exist_ok=True)
-
-    def process_image(self, image_path: Path) -> bool:
-        img_raw = cv2.imread(str(image_path), cv2.IMREAD_GRAYSCALE)
+    def _apply_otsu_blur(self, img_path: Path, out_path: Path):
+        """Helper method: Applies Gaussian Blur and Otsu Binarization."""
+        img_raw = cv2.imread(str(img_path), cv2.IMREAD_GRAYSCALE)
         if img_raw is None:
-            logging.error(f"No se pudo leer la imagen: {image_path}")
             return False
 
-        # Suavizado y Binarización
         img_blurred = cv2.GaussianBlur(img_raw, (5, 5), 0)
         _, img_binary = cv2.threshold(
             img_blurred, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU
         )
 
-        # Skeletonize
-        img_bool = img_binary > 0
+        cv2.imwrite(str(out_path), img_binary)
+        return True
+
+    def _apply_skeleton(self, img_path: Path, out_path: Path):
+        """Helper method: Reduces binary image to a topological skeleton."""
+        img_raw = cv2.imread(str(img_path), cv2.IMREAD_GRAYSCALE)
+        if img_raw is None:
+            return False
+
+        img_bool = img_raw > 0
         skeleton = skeletonize(img_bool)
         skeleton_img = (skeleton * 255).astype(np.uint8)
 
-        output_filename = f"{image_path.name}"
-        save_path = self.output_dir / output_filename
-
-        cv2.imwrite(str(save_path), skeleton_img)
+        cv2.imwrite(str(out_path), skeleton_img)
         return True
 
-    def execute_batch_processing(self) -> int:
+    def execute_filtering(self, global_img_path: str):
+        """Step 1: Applies filtering to all individual crops and the global image."""
+        self.filtered_dir.mkdir(parents=True, exist_ok=True)
         count = 0
-        extensions = ("*.png", "*.jpg", "*.jpeg", "*.tif", "*.tiff")
 
-        found_any = False
-        for ext in extensions:
-            files = list(self.input_dir.glob(ext))
-            if files:
-                found_any = True
-                logging.info(
-                    f"Se encontraron {len(files)} archivos con extensión {ext}"
-                )
-
-            for file in files:
-                if self.process_image(file):
+        # 1. Process individual crops
+        if self.crops_dir.exists():
+            for file in self.crops_dir.glob("*.png"):
+                out_path = self.filtered_dir / file.name
+                if self._apply_otsu_blur(file, out_path):
                     count += 1
 
-        if not found_any:
-            logging.warning(
-                f"¡Atención! No se encontró ningún archivo de imagen en {self.input_dir}"
-            )
+        # 2. Process the global large image for the UI Viewer
+        global_out = self.base_folder / "global_filtrada.png"
+        self._apply_otsu_blur(Path(global_img_path), global_out)
 
-        return count
+        return count, str(global_out)
 
+    def execute_skeletonization(self):
+        """Step 2: Applies skeletonization to the filtered images."""
+        self.skeleton_dir.mkdir(parents=True, exist_ok=True)
+        count = 0
 
-if __name__ == "__main__":
-    # Ruta base del proyecto
-    base_path = Path("./analisis_resultados")
-    logging.info(f"--- Iniciando escaneo global en: {base_path.absolute()} ---")
+        # 1. Process individual filtered crops
+        if self.filtered_dir.exists():
+            for file in self.filtered_dir.glob("*.png"):
+                out_path = self.skeleton_dir / file.name
+                if self._apply_skeleton(file, out_path):
+                    count += 1
 
-    if not base_path.exists():
-        logging.error(f"La carpeta raíz '{base_path}' NO EXISTE. Revisa la ruta.")
-    else:
-        total_global = 0
-        # Recorre cada carpeta dentro de analisis_resultados (ej. Sin título-22)
-        for folder in base_path.iterdir():
-            if folder.is_dir():
-                logging.info(f"Explorando subcarpeta encontrada: {folder.name}")
+        # 2. Process the global filtered image for the UI Viewer
+        global_filtered = self.base_folder / "global_filtrada.png"
+        global_out = self.base_folder / "global_esqueleto.png"
 
-                # Buscamos específicamente la carpeta 'filtradas'
-                filtradas_path = folder / "filtradas"
+        if global_filtered.exists():
+            self._apply_skeleton(global_filtered, global_out)
 
-                if filtradas_path.exists():
-                    logging.info(
-                        f"  [OK] Carpeta 'filtradas' localizada en: {filtradas_path}"
-                    )
-                    output_path = base_path / f"esqueletos_{folder.name}"
-
-                    analyzer = MorphologyAnalyzer(
-                        input_directory=str(filtradas_path),
-                        output_directory=str(output_path),
-                    )
-
-                    total = analyzer.execute_batch_processing()
-                    total_global += total
-                    logging.info(
-                        f"  [FIN] {total} esqueletos generados para esta carpeta."
-                    )
-                else:
-                    logging.warning(
-                        f"  [OMITIDO] No existe la carpeta 'filtradas' dentro de {folder.name}"
-                    )
-
-        logging.info(f"--- Proceso finalizado. Total global: {total_global} ---")
+        return count, str(global_out)
