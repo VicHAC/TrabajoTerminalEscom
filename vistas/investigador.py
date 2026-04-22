@@ -27,6 +27,42 @@ logging.basicConfig(
 )
 
 
+class DialogoCarga(QDialog):
+    """
+    Diálogo flotante estilizado para mostrar progreso
+    sin bloquear la UI pero impidiendo clics adicionales.
+    """
+    def __init__(self, mensaje="Procesando...", parent=None):
+        super().__init__(parent)
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.setModal(True)
+        
+        layout = QVBoxLayout(self)
+        frame = QFrame(self)
+        frame.setStyleSheet("""
+            QFrame {
+                background-color: #FFFFFF;
+                border-radius: 12px;
+                border: 2px solid #003366;
+            }
+            QLabel {
+                color: #003366;
+                font-size: 16px;
+                font-weight: bold;
+                padding: 20px;
+            }
+        """)
+        
+        flayout = QVBoxLayout(frame)
+        label = QLabel(mensaje)
+        label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        flayout.addWidget(label)
+        
+        layout.addWidget(frame)
+        self.setLayout(layout)
+
+
 class DialogoVistaCelular(QDialog):
     """
     Ventana emergente interna (dentro de la app) para visualizar
@@ -442,10 +478,13 @@ class VentanaInvestigador(QMainWindow):
             )
             return
 
+        dialogo = DialogoCarga("Cargando IA y aplicando conteo...\nPor favor, espera.", self)
+        dialogo.show()
+        from PyQt6.QtWidgets import QApplication
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        QApplication.processEvents()
+
         try:
-            from PyQt6.QtWidgets import QApplication
-            QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
-            
             from ia.modelo_yolo import MicrogliaProcessor
 
             model_path = os.path.join(
@@ -485,7 +524,7 @@ class VentanaInvestigador(QMainWindow):
         except Exception as e:
             QMessageBox.critical(self, "Error", str(e))
         finally:
-            from PyQt6.QtWidgets import QApplication
+            dialogo.close()
             QApplication.restoreOverrideCursor()
 
     def construir_imagen_global(self, carpeta_origen):
@@ -548,6 +587,12 @@ class VentanaInvestigador(QMainWindow):
 
         count = 0
         try:
+            dialogo = DialogoCarga("Aplicando filtrado a las células...\nPor favor, espera.", self)
+            dialogo.show()
+            from PyQt6.QtWidgets import QApplication
+            QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+            QApplication.processEvents()
+
             for box in self.visor_imagen.boxes:
                 crop_path = box["crop_path"]
                 if os.path.exists(crop_path):
@@ -587,6 +632,9 @@ class VentanaInvestigador(QMainWindow):
                 )
         except Exception as error:
             QMessageBox.critical(self, "Error", f"Falló el filtrado: {str(error)}")
+        finally:
+            dialogo.close()
+            QApplication.restoreOverrideCursor()
 
     def mostrar_ramas_morfologia(self):
         if not self.ruta_imagen_actual or not self.visor_imagen.boxes:
@@ -610,6 +658,11 @@ class VentanaInvestigador(QMainWindow):
 
         count = 0
         try:
+            dialogo = DialogoCarga("Calculando morfología y ramas...\nPor favor, espera.", self)
+            dialogo.show()
+            from PyQt6.QtWidgets import QApplication
+            QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+            QApplication.processEvents()
             for box in self.visor_imagen.boxes:
                 nombre = os.path.basename(box["crop_path"])
                 fil_path = os.path.join(filtradas_dir, nombre)
@@ -650,3 +703,6 @@ class VentanaInvestigador(QMainWindow):
             QMessageBox.critical(
                 self, "Error de Procesamiento", f"Falló el cálculo:\n{str(error)}"
             )
+        finally:
+            dialogo.close()
+            QApplication.restoreOverrideCursor()
