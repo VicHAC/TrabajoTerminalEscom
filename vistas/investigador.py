@@ -538,6 +538,11 @@ class VentanaInvestigador(QMainWindow):
                     self.pixmaps_globales["Original"], []
                 )
 
+            # --- SOLUCIÓN DEL CONGELAMIENTO ---
+            # Cerramos el diálogo y restauramos el cursor ANTES de la alerta
+            dialogo.close()
+            QApplication.restoreOverrideCursor()
+
             QMessageBox.information(
                 self,
                 "1. Conteo completado",
@@ -545,10 +550,10 @@ class VentanaInvestigador(QMainWindow):
             )
 
         except Exception as e:
-            QMessageBox.critical(self, "Error", str(e))
-        finally:
+            # Si hay error, también liberamos el cursor y cerramos el diálogo ANTES de la alerta
             dialogo.close()
             QApplication.restoreOverrideCursor()
+            QMessageBox.critical(self, "Error", str(e))
 
     def construir_imagen_global(self, carpeta_origen):
         """
