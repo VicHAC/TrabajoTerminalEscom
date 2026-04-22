@@ -1,7 +1,10 @@
 import logging
 import os
 import subprocess
+from PyQt6.QtCore import QThread, pyqtSignal
 from pathlib import Path
+
+from ia.morphology_analyzer import MorphologyAnalyzer
 
 os.environ["QT_QPA_PLATFORM"] = "xcb"
 from PyQt6.QtCore import QRect, Qt
@@ -26,6 +29,26 @@ logging.basicConfig(
     level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s"
 )
 
+class WorkerFiltrado(QThread):
+    # Señales para comunicarse con la interfaz (éxito, conteo, ruta_global, error)
+    terminado = pyqtSignal(int, str)
+    error = pyqtSignal(str)
+
+    def __init__(self, ruta_imagen, base_folder):
+        super().__init__()
+        self.ruta_imagen = ruta_imagen
+        self.base_folder = base_folder
+
+    def run(self):
+        # Todo lo que esté aquí adentro correrá en el CPU sin congelar la pantalla
+        try:
+            analyzer = MorphologyAnalyzer(base_folder=self.base_folder)
+            count, global_filtered_path = analyzer.execute_filtering(self.ruta_imagen)
+            # Emitimos la señal de que terminamos con éxito
+            self.terminado.emit(count, global_filtered_path)
+        except Exception as e:
+            # Emitimos la señal de error si algo falla
+            self.error.emit(str(e))
 
 class DialogoCarga(QDialog):
     """
@@ -638,9 +661,7 @@ class VentanaInvestigador(QMainWindow):
 
     def mostrar_ramas_morfologia(self):
         if not self.ruta_imagen_actual or not self.visor_imagen.boxes:
-            QMessageBox.warning(
-                self, "Advertencia", "Aplica el conteo y filtrado primero."
-            )
+            QMessageBox.warning(self, "Advertencia", "Aplica el conteo y filtrado primero.")
             return
 
         base_name = Path(self.ruta_imagen_actual).stem
@@ -658,27 +679,37 @@ class VentanaInvestigador(QMainWindow):
 
         count = 0
         try:
-            dialogo = DialogoCarga("Calculando morfología y ramas...\nPor favor, espera.", self)
+            # Implementación de tu DialogoCarga para evitar que la app truene/se congele
+            dialogo = DialogoCarga("Generando esqueletos topológicos...\nPor favor, espera.", self)
             dialogo.show()
             from PyQt6.QtWidgets import QApplication
             QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
             QApplication.processEvents()
-            for box in self.visor_imagen.boxes:
-                nombre = os.path.basename(box["crop_path"])
-                fil_path = os.path.join(filtradas_dir, nombre)
 
+            for box in self.visor_imagen.boxes:
+                crop_path = box["crop_path"]
+                nombre = os.path.basename(crop_path)
+                fil_path = os.path.join(filtradas_dir, nombre)
+                
                 if os.path.exists(fil_path):
+                    # Lectura segura con NumPy igual que en el filtrado
                     with open(fil_path, "rb") as f:
                         file_bytes = bytearray(f.read())
                     img_array = np.asarray(file_bytes, dtype=np.uint8)
                     img_raw = cv2.imdecode(img_array, cv2.IMREAD_GRAYSCALE)
-
+                    
                     if img_raw is not None:
-                        img_bool = img_raw > 0
+                        # Asegurarnos matemáticamente de que sea binaria antes del esqueleto
+                        _, bin_img = cv2.threshold(img_raw, 127, 255, cv2.THRESH_BINARY)
+                        img_bool = bin_img > 0
+                        
+                        # Generar el esqueleto topológico
                         skeleton = skeletonize(img_bool)
                         skeleton_img = (skeleton * 255).astype(np.uint8)
-
+                        
                         out_path = os.path.join(esqueletos_dir, nombre)
+                        
+                        # Escritura segura con NumPy
                         is_success, im_buf_arr = cv2.imencode(".png", skeleton_img)
                         if is_success:
                             im_buf_arr.tofile(out_path)
@@ -689,20 +720,16 @@ class VentanaInvestigador(QMainWindow):
                 self.pixmaps_globales["Esqueleto"] = pixmap_esqueleto
                 self.combo_vista.setCurrentText("Esqueleto")
                 QMessageBox.information(
-                    self,
-                    "3. Ramas Generadas",
-                    f"Se generaron {count} esqueletos topológicos.",
+                    self, "3. Ramas Generadas", f"Se generaron {count} esqueletos topológicos."
                 )
             else:
                 QMessageBox.warning(
-                    self,
-                    "Advertencia",
-                    "No se generaron esqueletos. Verifica la carpeta de filtrado.",
+                    self, "Advertencia", "No se generaron esqueletos. Verifica la carpeta de filtrado."
                 )
         except Exception as error:
-            QMessageBox.critical(
-                self, "Error de Procesamiento", f"Falló el cálculo:\n{str(error)}"
-            )
+            QMessageBox.critical(self, "Error de Procesamiento", f"Falló el cálculo:\n{str(error)}")
         finally:
+            # Restaurar la interfaz de forma segura
             dialogo.close()
             QApplication.restoreOverrideCursor()
+            
