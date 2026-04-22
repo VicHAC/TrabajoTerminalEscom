@@ -609,17 +609,17 @@ class VentanaInvestigador(QMainWindow):
         import numpy as np
 
         count = 0
+        from PyQt6.QtWidgets import QApplication
+        
         try:
             dialogo = DialogoCarga("Aplicando filtrado a las células...\nPor favor, espera.", self)
             dialogo.show()
-            from PyQt6.QtWidgets import QApplication
             QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
             QApplication.processEvents()
 
             for box in self.visor_imagen.boxes:
                 crop_path = box["crop_path"]
                 if os.path.exists(crop_path):
-                    # Lectura segura con NumPy
                     with open(crop_path, "rb") as f:
                         file_bytes = bytearray(f.read())
                     img_array = np.asarray(file_bytes, dtype=np.uint8)
@@ -634,11 +634,14 @@ class VentanaInvestigador(QMainWindow):
                         nombre = os.path.basename(crop_path)
                         out_path = os.path.join(filtradas_dir, nombre)
 
-                        # Escritura segura con NumPy
                         is_success, im_buf_arr = cv2.imencode(".png", bin_img)
                         if is_success:
                             im_buf_arr.tofile(out_path)
                             count += 1
+
+            # --- SOLUCIÓN: CERRAR Y RESTAURAR ANTES DEL MENSAJE ---
+            dialogo.close()
+            QApplication.restoreOverrideCursor()
 
             if count > 0:
                 pixmap_filtrada = self.construir_imagen_global("filtradas")
@@ -654,10 +657,10 @@ class VentanaInvestigador(QMainWindow):
                     "No se pudo procesar ninguna imagen. Las cajas de YOLO están vacías.",
                 )
         except Exception as error:
-            QMessageBox.critical(self, "Error", f"Falló el filtrado: {str(error)}")
-        finally:
+            # Restaurar también en caso de error
             dialogo.close()
             QApplication.restoreOverrideCursor()
+            QMessageBox.critical(self, "Error", f"Falló el filtrado: {str(error)}")
 
     def mostrar_ramas_morfologia(self):
         if not self.ruta_imagen_actual or not self.visor_imagen.boxes:
@@ -676,13 +679,12 @@ class VentanaInvestigador(QMainWindow):
         import cv2
         import numpy as np
         from skimage.morphology import skeletonize
+        from PyQt6.QtWidgets import QApplication
 
         count = 0
         try:
-            # Implementación de tu DialogoCarga para evitar que la app truene/se congele
             dialogo = DialogoCarga("Generando esqueletos topológicos...\nPor favor, espera.", self)
             dialogo.show()
-            from PyQt6.QtWidgets import QApplication
             QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
             QApplication.processEvents()
 
@@ -692,28 +694,28 @@ class VentanaInvestigador(QMainWindow):
                 fil_path = os.path.join(filtradas_dir, nombre)
                 
                 if os.path.exists(fil_path):
-                    # Lectura segura con NumPy igual que en el filtrado
                     with open(fil_path, "rb") as f:
                         file_bytes = bytearray(f.read())
                     img_array = np.asarray(file_bytes, dtype=np.uint8)
                     img_raw = cv2.imdecode(img_array, cv2.IMREAD_GRAYSCALE)
                     
                     if img_raw is not None:
-                        # Asegurarnos matemáticamente de que sea binaria antes del esqueleto
                         _, bin_img = cv2.threshold(img_raw, 127, 255, cv2.THRESH_BINARY)
                         img_bool = bin_img > 0
                         
-                        # Generar el esqueleto topológico
                         skeleton = skeletonize(img_bool)
                         skeleton_img = (skeleton * 255).astype(np.uint8)
                         
                         out_path = os.path.join(esqueletos_dir, nombre)
                         
-                        # Escritura segura con NumPy
                         is_success, im_buf_arr = cv2.imencode(".png", skeleton_img)
                         if is_success:
                             im_buf_arr.tofile(out_path)
                             count += 1
+
+            # --- SOLUCIÓN: CERRAR Y RESTAURAR ANTES DEL MENSAJE ---
+            dialogo.close()
+            QApplication.restoreOverrideCursor()
 
             if count > 0:
                 pixmap_esqueleto = self.construir_imagen_global("esqueletos")
@@ -727,9 +729,7 @@ class VentanaInvestigador(QMainWindow):
                     self, "Advertencia", "No se generaron esqueletos. Verifica la carpeta de filtrado."
                 )
         except Exception as error:
-            QMessageBox.critical(self, "Error de Procesamiento", f"Falló el cálculo:\n{str(error)}")
-        finally:
-            # Restaurar la interfaz de forma segura
             dialogo.close()
             QApplication.restoreOverrideCursor()
+            QMessageBox.critical(self, "Error de Procesamiento", f"Falló el cálculo:\n{str(error)}")
             

@@ -5,3 +5,5 @@ __pycache__/
 venv/
 vistas/__pycache__/
 bd/__pycache__/
+analisis_resultados/
+runs/
