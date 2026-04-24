@@ -4,8 +4,8 @@ import subprocess
 import uuid
 from pathlib import Path
 
-from PyQt6.QtCore import QThread, pyqtSignal, QRect, Qt
-from PyQt6.QtGui import QColor, QImage, QPainter, QPen, QPixmap
+from PyQt6.QtCore import pyqtSignal, QRect, Qt, QSize
+from PyQt6.QtGui import QColor, QImage, QPainter, QPen, QPixmap, QIcon
 from PyQt6.QtWidgets import (
     QComboBox,
     QDialog,
@@ -18,39 +18,20 @@ from PyQt6.QtWidgets import (
     QPushButton,
     QVBoxLayout,
     QWidget,
+    QSlider,
+    QCheckBox,
 )
 
 os.environ["QT_QPA_PLATFORM"] = "xcb"
 
+# Import de tu analizador morfológico
 from ia.morphology_analyzer import MorphologyAnalyzer
 
 logging.basicConfig(
     level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s"
 )
 
-class WorkerFiltrado(QThread):
-    terminado = pyqtSignal(int, str)
-    error = pyqtSignal(str)
-    
-    def __init__(self, ruta_imagen, base_folder):
-        super().__init__()
-        self.ruta_imagen = ruta_imagen
-        self.base_folder = base_folder
-        
-    def run(self):
-        try:
-            analyzer = MorphologyAnalyzer(base_folder=self.base_folder)
-            count, global_filtered_path = analyzer.execute_filtering(self.ruta_imagen)
-            self.terminado.emit(count, global_filtered_path)
-        except Exception as e:
-            self.error.emit(str(e))
-
-
 class DialogoCarga(QDialog):
-    """
-    Diálogo flotante estilizado para mostrar progreso
-    sin bloquear la UI pero impidiendo clics adicionales.
-    """
     def __init__(self, mensaje="Procesando...", parent=None):
         super().__init__(parent)
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog)
@@ -81,12 +62,7 @@ class DialogoCarga(QDialog):
         layout.addWidget(frame)
         self.setLayout(layout)
 
-
 class DialogoVistaCelular(QDialog):
-    """
-    Ventana emergente interna (dentro de la app) para visualizar
-    el recorte en alta resolución de una célula específica.
-    """
     def __init__(self, crop_path, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Vista Detallada de la Célula")
@@ -109,11 +85,7 @@ class DialogoVistaCelular(QDialog):
         layout.addWidget(label_imagen)
         self.setLayout(layout)
 
-
 class DialogoConfirmacion(QDialog):
-    """
-    Diálogo estilizado en español para confirmar la eliminación de células.
-    """
     def __init__(self, titulo, mensaje, parent=None):
         super().__init__(parent)
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog)
@@ -158,7 +130,6 @@ class DialogoConfirmacion(QDialog):
         """)
 
         flayout = QVBoxLayout(frame)
-
         lbl_titulo = QLabel(f"<b>{titulo}</b>")
         lbl_titulo.setStyleSheet("color: #cc0000; font-size: 18px; border: none;")
         lbl_titulo.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -169,7 +140,6 @@ class DialogoConfirmacion(QDialog):
         lbl_mensaje.setStyleSheet("border: none;")
 
         btn_layout = QHBoxLayout()
-        
         btn_mantener = QPushButton("Mantener")
         btn_mantener.setObjectName("btn_mantener")
         btn_mantener.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -198,14 +168,10 @@ class DialogoConfirmacion(QDialog):
         self.resultado = False
         self.reject()
 
-
 class InteractiveImageViewer(QLabel):
-    """
-    A custom QLabel that tracks mouse movement to highlight YOLO
-    bounding boxes and open cropped images upon clicking within the app.
-    """
     conteo_actualizado = pyqtSignal(int)
     nueva_caja_dibujada = pyqtSignal(int, int, int, int)
+    nivel_zoom_cambiado = pyqtSignal(int)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -217,14 +183,28 @@ class InteractiveImageViewer(QLabel):
         self.hovered_index = -1
         self.view_mode = "Original"
 
+        # Herramientas: "pointer", "draw", "delete"
+        self.current_tool = "pointer" 
+        
         self.is_drawing = False
         self.draw_start_pos = None
         self.draw_current_pos = None
+        
+        # Panning (movimiento)
+        self.is_panning = False
+        self.pan_start_pos = None
+        self.pan_x = 0
+        self.pan_y = 0
+        
+        self.zoom_level = 100
+        self.zoom_locked = False
 
     def set_image_and_boxes(self, pixmap, bounding_boxes):
         self.original_pixmap = pixmap
         self.boxes = bounding_boxes
         self.hovered_index = -1
+        self.pan_x = 0
+        self.pan_y = 0
         self.draw_current_state()
         self.conteo_actualizado.emit(len(self.boxes))
 
@@ -236,23 +216,73 @@ class InteractiveImageViewer(QLabel):
     def map_mouse_to_original(self, mouse_pos):
         if not self.original_pixmap or self.original_pixmap.isNull():
             return None
-        lbl_w, lbl_h = self.width(), self.height()
+        
         pix_w, pix_h = self.original_pixmap.width(), self.original_pixmap.height()
-        scaled_pix = self.original_pixmap.scaled(
-            lbl_w, lbl_h, Qt.AspectRatioMode.KeepAspectRatio
-        )
-        sw, sh = scaled_pix.width(), scaled_pix.height()
-        dx = (lbl_w - sw) / 2
-        dy = (lbl_h - sh) / 2
+        zoom_factor = self.zoom_level / 100.0
+        
+        scaled_w = int(pix_w * zoom_factor)
+        scaled_h = int(pix_h * zoom_factor)
+        
+        draw_x = (self.width() - scaled_w) // 2 + self.pan_x
+        draw_y = (self.height() - scaled_h) // 2 + self.pan_y
+        
         mx, my = mouse_pos.x(), mouse_pos.y()
-        if dx <= mx <= dx + sw and dy <= my <= dy + sh:
-            orig_x = (mx - dx) * (pix_w / sw)
-            orig_y = (my - dy) * (pix_h / sh)
+        
+        if draw_x <= mx <= draw_x + scaled_w and draw_y <= my <= draw_y + scaled_h:
+            orig_x = (mx - draw_x) / zoom_factor
+            orig_y = (my - draw_y) / zoom_factor
             return orig_x, orig_y
         return None
 
+    def mousePressEvent(self, event):
+        if not self.original_pixmap:
+            return
+
+        if event.button() == Qt.MouseButton.LeftButton:
+            if self.current_tool == "pointer":
+                if self.hovered_index != -1:
+                    # VER DETALLE CÉLULA
+                    crop_path = self.boxes[self.hovered_index]["crop_path"]
+                    if self.view_mode == "Filtrada":
+                        crop_path = crop_path.replace("/crops/", "/filtradas/").replace("\\crops\\", "\\filtradas\\")
+                    elif self.view_mode == "Esqueleto":
+                        crop_path = crop_path.replace("/crops/", "/esqueletos/").replace("\\crops\\", "\\esqueletos\\")
+                    if os.path.exists(crop_path):
+                        dialogo = DialogoVistaCelular(crop_path, self.window())
+                        dialogo.exec()
+                else:
+                    # NAVEGAR/MOVERSE EN LA IMAGEN
+                    self.is_panning = True
+                    self.pan_start_pos = event.pos()
+                    self.setCursor(Qt.CursorShape.ClosedHandCursor)
+
+            elif self.current_tool == "draw":
+                # INICIAR DIBUJO
+                self.is_drawing = True
+                self.draw_start_pos = event.pos()
+                self.draw_current_pos = event.pos()
+
+            elif self.current_tool == "delete":
+                # ELIMINAR CÉLULA
+                if self.hovered_index != -1:
+                    dialogo = DialogoConfirmacion("Eliminar Detección", "¿Estás seguro de descartar esta célula del análisis?")
+                    dialogo.exec()
+                    if dialogo.resultado:
+                        self.boxes.pop(self.hovered_index)
+                        self.hovered_index = -1
+                        self.draw_current_state()
+                        self.conteo_actualizado.emit(len(self.boxes))
+
     def mouseMoveEvent(self, event):
         if not self.original_pixmap:
+            return
+
+        if self.is_panning:
+            delta = event.pos() - self.pan_start_pos
+            self.pan_x += delta.x()
+            self.pan_y += delta.y()
+            self.pan_start_pos = event.pos()
+            self.update() 
             return
 
         if self.is_drawing:
@@ -268,98 +298,83 @@ class InteractiveImageViewer(QLabel):
         if orig_coords:
             ox, oy = orig_coords
             for i, box in enumerate(self.boxes):
-                if (
-                    box["x"] <= ox <= box["x"] + box["w"]
-                    and box["y"] <= oy <= box["y"] + box["h"]
-                ):
+                if box["x"] <= ox <= box["x"] + box["w"] and box["y"] <= oy <= box["y"] + box["h"]:
                     new_hovered_index = i
                     break
+        
         if new_hovered_index != self.hovered_index:
             self.hovered_index = new_hovered_index
             self.draw_current_state()
 
-    def mousePressEvent(self, event):
-        if not self.original_pixmap:
-            return
-
-        if event.button() == Qt.MouseButton.LeftButton:
-            if self.hovered_index != -1:
-                crop_path = self.boxes[self.hovered_index]["crop_path"]
-                if self.view_mode == "Filtrada":
-                    crop_path = crop_path.replace("/crops/", "/filtradas/").replace(
-                        "\\crops\\", "\\filtradas\\"
-                    )
-                elif self.view_mode == "Esqueleto":
-                    crop_path = crop_path.replace("/crops/", "/esqueletos/").replace(
-                        "\\crops\\", "\\esqueletos\\"
-                    )
-                if os.path.exists(crop_path):
-                    dialogo = DialogoVistaCelular(crop_path, self.window())
-                    dialogo.exec()
-                else:
-                    QMessageBox.warning(
-                        self, "Error", f"Aún no se ha procesado esta imagen:\n{crop_path}"
-                    )
-            else:
-                self.is_drawing = True
-                self.draw_start_pos = event.pos()
-                self.draw_current_pos = event.pos()
-
-        elif event.button() == Qt.MouseButton.RightButton:
-            if self.hovered_index != -1:
-                dialogo = DialogoConfirmacion(
-                    "Eliminar Detección", 
-                    "¿Estás seguro de descartar esta célula del análisis?"
-                )
-                dialogo.exec()
-                
-                if dialogo.resultado:
-                    self.boxes.pop(self.hovered_index)
-                    self.hovered_index = -1
-                    self.draw_current_state()
-                    self.conteo_actualizado.emit(len(self.boxes))
-
     def mouseReleaseEvent(self, event):
-        if event.button() == Qt.MouseButton.LeftButton and self.is_drawing:
-            self.is_drawing = False
-            orig_start = self.map_mouse_to_original(self.draw_start_pos)
-            orig_end = self.map_mouse_to_original(self.draw_current_pos)
-            if orig_start and orig_end:
-                x1, y1 = orig_start
-                x2, y2 = orig_end
-                x = min(x1, x2)
-                y = min(y1, y2)
-                w = abs(x2 - x1)
-                h = abs(y2 - y1)
-                if w > 15 and h > 15:
-                    self.nueva_caja_dibujada.emit(int(x), int(y), int(w), int(h))
-            
-            self.draw_start_pos = None
-            self.draw_current_pos = None
+        if event.button() == Qt.MouseButton.LeftButton:
+            if self.is_panning:
+                self.is_panning = False
+                self.setCursor(Qt.CursorShape.ArrowCursor)
+                
+            elif self.is_drawing:
+                self.is_drawing = False
+                orig_start = self.map_mouse_to_original(self.draw_start_pos)
+                orig_end = self.map_mouse_to_original(self.draw_current_pos)
+                if orig_start and orig_end:
+                    x1, y1 = orig_start
+                    x2, y2 = orig_end
+                    x = min(x1, x2)
+                    y = min(y1, y2)
+                    w = abs(x2 - x1)
+                    h = abs(y2 - y1)
+                    if w > 15 and h > 15:
+                        self.nueva_caja_dibujada.emit(int(x), int(y), int(w), int(h))
+                
+                self.draw_start_pos = None
+                self.draw_current_pos = None
+                self.draw_current_state()
+
+    def set_zoom(self, value):
+        if not self.original_pixmap or self.original_pixmap.isNull():
+            return
+        if not self.zoom_locked:
+            self.zoom_level = value
             self.draw_current_state()
+            self.nivel_zoom_cambiado.emit(value)
+
+    def lock_zoom(self, locked):
+        self.zoom_locked = locked
 
     def draw_current_state(self):
         if not self.original_pixmap:
             return
-        temp_pixmap = self.original_pixmap.copy()
-        painter = QPainter(temp_pixmap)
+            
+        pix_w, pix_h = self.original_pixmap.width(), self.original_pixmap.height()
+        zoom_factor = self.zoom_level / 100.0
         
+        scaled_pix = self.original_pixmap.scaled(
+            int(pix_w * zoom_factor),
+            int(pix_h * zoom_factor),
+            Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.SmoothTransformation
+        )
+        
+        temp_pixmap = scaled_pix.copy()
+        painter = QPainter(temp_pixmap)
+
         if self.hovered_index == -1:
             pen = QPen(QColor(0, 255, 0, 120))
-            pen.setWidth(max(1, int(temp_pixmap.width() * 0.0015)))
+            pen.setWidth(max(1, int(pix_w * 0.0015 * zoom_factor)))
             painter.setPen(pen)
             painter.setBrush(Qt.BrushStyle.NoBrush)
             for box in self.boxes:
-                rect = QRect(box["x"], box["y"], box["w"], box["h"])
+                rect = QRect(int(box["x"] * zoom_factor), int(box["y"] * zoom_factor), int(box["w"] * zoom_factor), int(box["h"] * zoom_factor))
                 painter.drawRect(rect)
         else:
             painter.fillRect(temp_pixmap.rect(), QColor(0, 0, 0, 180))
             box = self.boxes[self.hovered_index]
-            rect = QRect(box["x"], box["y"], box["w"], box["h"])
-            cell_snippet = self.original_pixmap.copy(rect)
+            rect = QRect(int(box["x"] * zoom_factor), int(box["y"] * zoom_factor), int(box["w"] * zoom_factor), int(box["h"] * zoom_factor))
+            cell_snippet = scaled_pix.copy(rect)
             painter.drawPixmap(rect.topLeft(), cell_snippet)
-            pen = QPen(QColor(0, 255, 0))
-            pen.setWidth(max(2, int(temp_pixmap.width() * 0.003)))
+            
+            pen = QPen(QColor(0, 255, 0)) 
+            pen.setWidth(max(2, int(pix_w * 0.003 * zoom_factor)))
             painter.setPen(pen)
             painter.setBrush(Qt.BrushStyle.NoBrush)
             painter.drawRect(rect)
@@ -375,10 +390,10 @@ class InteractiveImageViewer(QLabel):
                 rw = abs(ox2 - ox1)
                 rh = abs(oy2 - oy1)
                 pen_draw = QPen(QColor(0, 150, 255))
-                pen_draw.setWidth(max(2, int(temp_pixmap.width() * 0.003)))
+                pen_draw.setWidth(max(2, int(pix_w * 0.003 * zoom_factor)))
                 painter.setPen(pen_draw)
                 painter.setBrush(Qt.BrushStyle.NoBrush)
-                painter.drawRect(int(rx), int(ry), int(rw), int(rh))
+                painter.drawRect(int(rx * zoom_factor), int(ry * zoom_factor), int(rw * zoom_factor), int(rh * zoom_factor))
 
         painter.end()
         self._current_pixmap = temp_pixmap
@@ -387,14 +402,9 @@ class InteractiveImageViewer(QLabel):
     def paintEvent(self, event):
         if self._current_pixmap and not self._current_pixmap.isNull():
             painter = QPainter(self)
-            scaled_pix = self._current_pixmap.scaled(
-                self.size(),
-                Qt.AspectRatioMode.KeepAspectRatio,
-                Qt.TransformationMode.SmoothTransformation,
-            )
-            x = (self.width() - scaled_pix.width()) // 2
-            y = (self.height() - scaled_pix.height()) // 2
-            painter.drawPixmap(x, y, scaled_pix)
+            x = (self.width() - self._current_pixmap.width()) // 2 + self.pan_x
+            y = (self.height() - self._current_pixmap.height()) // 2 + self.pan_y
+            painter.drawPixmap(x, y, self._current_pixmap)
             painter.end()
         else:
             super().paintEvent(event)
@@ -402,8 +412,7 @@ class InteractiveImageViewer(QLabel):
     def resizeEvent(self, event):
         super().resizeEvent(event)
         if self.original_pixmap:
-            self.update()
-
+            self.draw_current_state()
 
 class VentanaInvestigador(QMainWindow):
     def __init__(self, id_usuario, rol):
@@ -423,9 +432,7 @@ class VentanaInvestigador(QMainWindow):
         menu_lateral.setAlignment(Qt.AlignmentFlag.AlignTop)
         
         label_bienvenida = QLabel(f"Sesión: {self.rol}")
-        label_bienvenida.setStyleSheet(
-            "font-weight: bold; font-size: 16px; margin-bottom: 20px;"
-        )
+        label_bienvenida.setStyleSheet("font-weight: bold; font-size: 16px; margin-bottom: 20px;")
         menu_lateral.addWidget(label_bienvenida)
         
         self.btn_cargar = QPushButton("Cargar Imagen")
@@ -443,46 +450,19 @@ class VentanaInvestigador(QMainWindow):
         self.btn_guardar_img = QPushButton("Guardar Imagen")
         
         estilo_btn_menu = """
-            QPushButton {
-                background-color: transparent;
-                text-align: left;
-                padding: 10px;
-                font-weight: normal;
-                color: #333333;
-            }
-            QPushButton:hover {
-                background-color: #F0F0F0;
-                border-radius: 5px;
-            }
+            QPushButton { background-color: transparent; text-align: left; padding: 10px; font-weight: normal; color: #333333; border: none;}
+            QPushButton:hover { background-color: #F0F0F0; border-radius: 5px; }
+            QPushButton:disabled { color: #aaaaaa; }
         """
-        for btn in [
-            self.btn_cargar,
-            self.btn_historial,
-            self.btn_conteo,
-            self.btn_filtrar,
-            self.btn_ramas,
-            self.btn_reporte,
-            self.btn_guardar_img,
-        ]:
+        for btn in [self.btn_cargar, self.btn_historial, self.btn_conteo, self.btn_filtrar, self.btn_ramas, self.btn_reporte, self.btn_guardar_img]:
             btn.setStyleSheet(estilo_btn_menu)
             menu_lateral.addWidget(btn)
             
         menu_lateral.addStretch()
         self.btn_cerrar_sesion = QPushButton("Cerrar Sesión")
         self.btn_cerrar_sesion.setStyleSheet("""
-            QPushButton {
-                background-color: transparent;
-                border: 2px solid #cc0000;
-                color: #cc0000;
-                font-weight: bold;
-                border-radius: 8px;
-                padding: 10px;
-                margin-top: 20px;
-            }
-            QPushButton:hover {
-                background-color: #cc0000;
-                color: white;
-            }
+            QPushButton { background-color: transparent; border: 2px solid #cc0000; color: #cc0000; font-weight: bold; border-radius: 8px; padding: 10px; margin-top: 20px; }
+            QPushButton:hover { background-color: #cc0000; color: white; }
         """)
         menu_lateral.addWidget(self.btn_cerrar_sesion)
         frame_menu = QFrame()
@@ -493,27 +473,107 @@ class VentanaInvestigador(QMainWindow):
         area_imagen = QVBoxLayout()
         controles_superiores = QHBoxLayout()
         
+        # --- COMBO BOX (UX) ---
         self.combo_vista = QComboBox()
         self.combo_vista.addItems(["Original", "Filtrada", "Esqueleto"])
-        self.combo_vista.setStyleSheet("padding: 5px; font-size: 14px; font-weight: bold;")
+        self.combo_vista.setStyleSheet("""
+    QPushButton { background-color: #f0f0f0; border: 1px solid #ccc; border-radius: 4px; padding: 4px 10px; font-weight: bold; color:#007bff;}
+    QPushButton:hover { background-color: #e0e0e0; }
+    QPushButton:disabled { color:#aaa; }
+""")
         self.combo_vista.setEnabled(False)
         self.combo_vista.currentTextChanged.connect(self.cambiar_vista_global)
-        
-        self.lbl_info_conteo = QLabel("Microglías: 0 | Ver: Clic Izq | Quitar: Clic Der | Agregar: Arrastrar")
-        self.lbl_info_conteo.setStyleSheet("font-size: 13px; color: #555;")
-        self.lbl_info_conteo.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-        
+
         controles_superiores.addWidget(self.combo_vista)
-        controles_superiores.addWidget(self.lbl_info_conteo)
+        controles_superiores.addStretch()
         
+        # --- CONTADOR ---
+        self.lbl_info_conteo = QLabel("Microglías detectadas: 0")
+        self.lbl_info_conteo.setStyleSheet("font-size: 15px; font-weight: bold; color: #003366;")
+        self.lbl_info_conteo.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        controles_superiores.addWidget(self.lbl_info_conteo)
+        controles_superiores.addSpacing(15)
+
+        # --- HERRAMIENTAS CON IMÁGENES ---
+        estilo_herramienta = """
+            QPushButton { background-color: transparent; border: none; padding: 2px; }
+            QPushButton:hover { background-color: #e0e0e0; border-radius: 4px; }
+            QPushButton:checked { background-color: #cce5ff; border: 1px solid #007bff; border-radius: 4px; }
+            QPushButton:disabled { opacity: 0.5; }
+        """
+        
+        self.btn_herramienta_caja = QPushButton()
+        self.btn_herramienta_caja.setIcon(QIcon("assets/seleccionar.png"))
+        self.btn_herramienta_caja.setIconSize(QSize(28, 28))
+        self.btn_herramienta_caja.setToolTip("Crear seleccion")
+        self.btn_herramienta_caja.setStyleSheet(estilo_herramienta)
+        self.btn_herramienta_caja.setCheckable(True)
+        self.btn_herramienta_caja.setEnabled(False)
+        
+        self.btn_herramienta_eliminar = QPushButton()
+        self.btn_herramienta_eliminar.setIcon(QIcon("assets/borrar.png"))
+        self.btn_herramienta_eliminar.setIconSize(QSize(28, 28))
+        self.btn_herramienta_eliminar.setToolTip("Eliminar seleccion")
+        self.btn_herramienta_eliminar.setStyleSheet(estilo_herramienta)
+        self.btn_herramienta_eliminar.setCheckable(True)
+        self.btn_herramienta_eliminar.setEnabled(False)
+        
+        self.btn_herramienta_caja.clicked.connect(self.toggle_herramienta_caja)
+        self.btn_herramienta_eliminar.clicked.connect(self.toggle_herramienta_eliminar)
+
+        controles_superiores.addWidget(self.btn_herramienta_caja)
+        controles_superiores.addWidget(self.btn_herramienta_eliminar)
+        controles_superiores.addSpacing(15)
+
+        # --- ZOOM Y BLOQUEO INTERACTIVO ---
+        lbl_minus = QLabel("-")
+        lbl_minus.setStyleSheet("font-size: 24px; font-weight: bold; color: #555;")
+        
+        lbl_plus = QLabel("+")
+        lbl_plus.setStyleSheet("font-size: 20px; font-weight: bold; color: #555;")
+        
+        self.sld_nivel_zoom = QSlider(Qt.Orientation.Horizontal)
+        self.sld_nivel_zoom.setRange(50, 400)
+        self.sld_nivel_zoom.setValue(100)
+        self.sld_nivel_zoom.setFixedWidth(120)
+        self.sld_nivel_zoom.setEnabled(False)
+        
+        self.btn_zoom_reset = QPushButton("Reset")
+        self.btn_zoom_reset.setStyleSheet("""
+            QPushButton { background-color: #f0f0f0; border: 1px solid #ccc; border-radius: 4px; padding: 4px 10px; font-weight: bold; color:#007bff;}
+            QPushButton:hover { background-color: #e0e0e0; }
+            QPushButton:disabled { color:#aaa; }
+        """)
+        self.btn_zoom_reset.setEnabled(False)
+
+        # Botón para bloquear/desbloquear zoom interactivo
+        self.btn_bloquear_zoom = QPushButton()
+        self.btn_bloquear_zoom.setIcon(QIcon("assets/desbloqueado.png"))
+        self.btn_bloquear_zoom.setIconSize(QSize(24, 24))
+        self.btn_bloquear_zoom.setToolTip("Bloquear zoom")
+        self.btn_bloquear_zoom.setStyleSheet(estilo_herramienta)
+        self.btn_bloquear_zoom.setCheckable(True)
+        self.btn_bloquear_zoom.setEnabled(False)
+        self.btn_bloquear_zoom.toggled.connect(self.toggle_bloqueo_zoom)
+        
+        controles_superiores.addWidget(lbl_minus)
+        controles_superiores.addWidget(self.sld_nivel_zoom)
+        controles_superiores.addWidget(lbl_plus)
+        controles_superiores.addSpacing(5)
+        controles_superiores.addWidget(self.btn_zoom_reset)
+        controles_superiores.addWidget(self.btn_bloquear_zoom)
+        
+        # --- VISOR IMAGEN ---
         self.visor_imagen = InteractiveImageViewer()
         self.visor_imagen.setText("Sube una imagen .tiff para empezar el análisis...")
-        self.visor_imagen.setStyleSheet(
-            "border: 2px dashed #aaa; background-color: #f0f0f0; font-size: 18px; color: #666;"
-        )
+        self.visor_imagen.setStyleSheet("border: 2px dashed #aaa; background-color: #f0f0f0; font-size: 18px; color: #666;")
         
         self.visor_imagen.conteo_actualizado.connect(self.actualizar_etiqueta_conteo)
         self.visor_imagen.nueva_caja_dibujada.connect(self.agregar_microglia_manual)
+        self.visor_imagen.nivel_zoom_cambiado.connect(self.sld_nivel_zoom.setValue)
+        
+        self.sld_nivel_zoom.valueChanged.connect(self.visor_imagen.set_zoom)
+        self.btn_zoom_reset.clicked.connect(self.reset_zoom)
 
         area_imagen.addLayout(controles_superiores)
         area_imagen.addWidget(self.visor_imagen, stretch=1)
@@ -528,29 +588,108 @@ class VentanaInvestigador(QMainWindow):
         self.btn_conteo.clicked.connect(self.execute_microglia_counting)
         self.btn_filtrar.clicked.connect(self.ejecutar_filtrado)
         self.btn_ramas.clicked.connect(self.mostrar_ramas_morfologia)
-        self.alternar_botones_analisis(False)
-        if self.rol == "Invitado":
+        
+        self.actualizar_estado_flujo(0)
+        
+        if self.rol == "Invitado" or self.rol == "Guest":
             self.btn_historial.hide()
             self.btn_reporte.hide()
             self.btn_guardar_img.hide()
 
-    def alternar_botones_analisis(self, estado):
-        self.btn_conteo.setEnabled(estado)
-        self.btn_filtrar.setEnabled(estado)
-        self.btn_ramas.setEnabled(estado)
-        self.btn_reporte.setEnabled(estado)
-        self.btn_guardar_img.setEnabled(estado)
+    def toggle_herramienta_caja(self, checked):
+        if checked:
+            self.btn_herramienta_eliminar.setChecked(False)
+            self.visor_imagen.current_tool = "draw"
+        else:
+            self.visor_imagen.current_tool = "pointer"
+
+    def toggle_herramienta_eliminar(self, checked):
+        if checked:
+            self.btn_herramienta_caja.setChecked(False)
+            self.visor_imagen.current_tool = "delete"
+        else:
+            self.visor_imagen.current_tool = "pointer"
+
+    def reset_zoom(self):
+        self.sld_nivel_zoom.setValue(100)
+        self.visor_imagen.pan_x = 0
+        self.visor_imagen.pan_y = 0
+        self.visor_imagen.update()
+
+    def toggle_bloqueo_zoom(self, checked):
+        if checked:
+            self.btn_bloquear_zoom.setIcon(QIcon("assets/bloqueado.png"))
+            self.btn_bloquear_zoom.setToolTip("Desbloquear zoom")
+        else:
+            self.btn_bloquear_zoom.setIcon(QIcon("assets/desbloqueado.png"))
+            self.btn_bloquear_zoom.setToolTip("Bloquear zoom")
+            
+        self.sld_nivel_zoom.setEnabled(not checked)
+        self.btn_zoom_reset.setEnabled(not checked)
+        self.visor_imagen.lock_zoom(checked)
+
+    def actualizar_estado_flujo(self, paso):
+        if paso == 0:
+            self.btn_cargar.setEnabled(True)
+            self.btn_conteo.setEnabled(False)
+            self.btn_filtrar.setEnabled(False)
+            self.btn_ramas.setEnabled(False)
+            self.btn_reporte.setEnabled(False)
+            self.btn_guardar_img.setEnabled(False)
+            self.combo_vista.setEnabled(False)
+            self.btn_herramienta_caja.setEnabled(False)
+            self.btn_herramienta_eliminar.setEnabled(False)
+        elif paso == 1:
+            self.btn_cargar.setEnabled(True)
+            self.btn_conteo.setEnabled(True)
+            self.btn_filtrar.setEnabled(False)
+            self.btn_ramas.setEnabled(False)
+            self.btn_reporte.setEnabled(False)
+            self.btn_guardar_img.setEnabled(True)
+            self.combo_vista.setEnabled(False)
+            self.btn_herramienta_caja.setEnabled(False)
+            self.btn_herramienta_eliminar.setEnabled(False)
+        elif paso == 2:
+            self.btn_cargar.setEnabled(False)
+            self.btn_conteo.setEnabled(False)
+            self.btn_filtrar.setEnabled(True)
+            self.btn_ramas.setEnabled(False)
+            self.combo_vista.setEnabled(True)
+            
+            # Habilitar herramientas de edición manual SOLAMENTE al contar
+            self.btn_herramienta_caja.setEnabled(True)
+            self.btn_herramienta_eliminar.setEnabled(True)
+            
+            self.sld_nivel_zoom.setEnabled(True)
+            self.btn_zoom_reset.setEnabled(True)
+            self.btn_bloquear_zoom.setEnabled(True)
+        elif paso == 3:
+            self.btn_cargar.setEnabled(False)
+            self.btn_conteo.setEnabled(False)
+            self.btn_filtrar.setEnabled(False)
+            self.btn_ramas.setEnabled(True)
+            
+            # Se bloquean para no corromper el análisis posterior
+            self.btn_herramienta_caja.setEnabled(False)
+            self.btn_herramienta_caja.setChecked(False)
+            self.btn_herramienta_eliminar.setEnabled(False)
+            self.btn_herramienta_eliminar.setChecked(False)
+            self.visor_imagen.current_tool = "pointer"
+        elif paso == 4:
+            self.btn_cargar.setEnabled(True)
+            self.btn_conteo.setEnabled(False)
+            self.btn_filtrar.setEnabled(False)
+            self.btn_ramas.setEnabled(False)
+            self.btn_reporte.setEnabled(True)
+            
+            self.btn_herramienta_caja.setEnabled(False)
+            self.btn_herramienta_eliminar.setEnabled(False)
 
     def actualizar_etiqueta_conteo(self, conteo):
-        self.lbl_info_conteo.setText(f"Microglías: {conteo} | Ver: Clic Derecho | Quitar: Clic Izquierdo | Agregar: Arrastrar")
+        self.lbl_info_conteo.setText(f"Microglías detectadas: {conteo}")
 
     def cargar_imagen(self):
-        ruta_archivo, _ = QFileDialog.getOpenFileName(
-            self,
-            "Seleccionar imagen de Microglías",
-            "",
-            "Imágenes TIFF (*.tiff *.tif);;Todas las imágenes (*.png *.jpg *.jpeg)",
-        )
+        ruta_archivo, _ = QFileDialog.getOpenFileName(self, "Seleccionar imagen", "", "Imágenes TIFF (*.tiff *.tif);;Todas las imágenes (*.png *.jpg *.jpeg)")
         if ruta_archivo:
             self.ruta_imagen_actual = ruta_archivo
             pixmap = QPixmap(ruta_archivo)
@@ -572,11 +711,21 @@ class VentanaInvestigador(QMainWindow):
                         pixmap = QPixmap.fromImage(qimg)
                 except Exception as e:
                     logging.error(f"Error al cargar imagen: {e}")
+            
             if not pixmap.isNull():
                 self.pixmaps_globales["Original"] = pixmap
+                self.pixmaps_globales["Filtrada"] = None
+                self.pixmaps_globales["Esqueleto"] = None
+                
+                self.btn_herramienta_caja.setChecked(False)
+                self.btn_herramienta_eliminar.setChecked(False)
+                self.visor_imagen.current_tool = "pointer"
+                self.btn_bloquear_zoom.setChecked(False)
+                self.reset_zoom()
+                
                 self.visor_imagen.set_image_and_boxes(pixmap, [])
-                self.alternar_botones_analisis(True)
-                self.combo_vista.setEnabled(False)
+                self.actualizar_estado_flujo(1)
+                
                 self.combo_vista.blockSignals(True)
                 self.combo_vista.setCurrentText("Original")
                 self.combo_vista.blockSignals(False)
@@ -606,34 +755,45 @@ class VentanaInvestigador(QMainWindow):
         if not self.ruta_imagen_actual:
             QMessageBox.warning(self, "Advertencia", "Por favor, carga una imagen primero.")
             return
+        
         dialogo = DialogoCarga("Cargando IA y aplicando conteo...\nPor favor, espera.", self)
         dialogo.show()
         from PyQt6.QtWidgets import QApplication
         QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
         QApplication.processEvents()
+        
         try:
             from ia.modelo_yolo import MicrogliaProcessor
             model_path = os.path.join(os.getcwd(), "ia", "entrenamiento_resultados", "modelo_microglias5", "weights", "best.pt")
             output_dir = os.path.join(os.getcwd(), "analisis_resultados")
+            
             processor = MicrogliaProcessor(model_path=model_path)
             resultado = processor.process_and_crop(self.ruta_imagen_actual, base_output_folder=output_dir)
+            
             if len(resultado) == 3:
                 crops_folder, count, boxes_data = resultado
                 self.visor_imagen.set_image_and_boxes(self.pixmaps_globales["Original"], boxes_data)
-                self.combo_vista.setEnabled(True)
             else:
                 crops_folder, count = resultado
                 self.visor_imagen.set_image_and_boxes(self.pixmaps_globales["Original"], [])
             
             dialogo.close()
             QApplication.restoreOverrideCursor()
+            
+            self.actualizar_estado_flujo(2)
+            
+            QMessageBox.information(
+                self,
+                "1. Conteo completado",
+                f"Se detectaron {count} posibles microglías.\n\n"
+            )
+            
         except Exception as e:
             dialogo.close()
             QApplication.restoreOverrideCursor()
             QMessageBox.critical(self, "Error", str(e))
 
     def agregar_microglia_manual(self, x, y, w, h):
-        """Genera el recorte de la caja manual y lo agrega al análisis"""
         if not self.ruta_imagen_actual:
             return
             
@@ -696,6 +856,7 @@ class VentanaInvestigador(QMainWindow):
         if not self.ruta_imagen_actual or not self.visor_imagen.boxes:
             QMessageBox.warning(self, "Advertencia", "Aplica el conteo primero.")
             return
+            
         base_name = Path(self.ruta_imagen_actual).stem
         filtradas_dir = os.path.join(os.getcwd(), "analisis_resultados", base_name, "filtradas")
         os.makedirs(filtradas_dir, exist_ok=True)
@@ -709,6 +870,7 @@ class VentanaInvestigador(QMainWindow):
             dialogo.show()
             QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
             QApplication.processEvents()
+            
             for box in self.visor_imagen.boxes:
                 crop_path = box["crop_path"]
                 if os.path.exists(crop_path):
@@ -728,9 +890,13 @@ class VentanaInvestigador(QMainWindow):
                             
             dialogo.close()
             QApplication.restoreOverrideCursor()
+            
             if count > 0:
                 pixmap_filtrada = self.construir_imagen_global("filtradas")
                 self.pixmaps_globales["Filtrada"] = pixmap_filtrada
+                
+                self.actualizar_estado_flujo(3)
+                
                 self.combo_vista.setCurrentText("Filtrada")
                 QMessageBox.information(self, "2. Filtrado", f"Se binarizaron {count} microglías.")
             else:
@@ -744,10 +910,12 @@ class VentanaInvestigador(QMainWindow):
         if not self.ruta_imagen_actual or not self.visor_imagen.boxes:
             QMessageBox.warning(self, "Advertencia", "Aplica el conteo y filtrado primero.")
             return
+            
         base_name = Path(self.ruta_imagen_actual).stem
         filtradas_dir = os.path.join(os.getcwd(), "analisis_resultados", base_name, "filtradas")
         esqueletos_dir = os.path.join(os.getcwd(), "analisis_resultados", base_name, "esqueletos")
         os.makedirs(esqueletos_dir, exist_ok=True)
+        
         import cv2
         import numpy as np
         from skimage.morphology import skeletonize
@@ -758,6 +926,7 @@ class VentanaInvestigador(QMainWindow):
             dialogo.show()
             QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
             QApplication.processEvents()
+            
             for box in self.visor_imagen.boxes:
                 crop_path = box["crop_path"]
                 nombre = os.path.basename(crop_path)
@@ -782,15 +951,18 @@ class VentanaInvestigador(QMainWindow):
                             
             dialogo.close()
             QApplication.restoreOverrideCursor()
+            
             if count > 0:
                 pixmap_esqueleto = self.construir_imagen_global("esqueletos")
                 self.pixmaps_globales["Esqueleto"] = pixmap_esqueleto
+                
+                self.actualizar_estado_flujo(4)
+                
                 self.combo_vista.setCurrentText("Esqueleto")
-                QMessageBox.information(self, "3. Ramas Generadas", f"Se generaron {count} esqueletos topológicos.")
+                QMessageBox.information(self, "3. Ramas Generadas", f"Se generaron {count} esqueletos topológicos.\n\nYa puedes avanzar a los Reportes o Cargar una imagen nueva.")
             else:
                 QMessageBox.warning(self, "Advertencia", "No se generaron esqueletos. Verifica la carpeta de filtrado.")
         except Exception as error:
             dialogo.close()
             QApplication.restoreOverrideCursor()
             QMessageBox.critical(self, "Error de Procesamiento", f"Falló el cálculo:\n{str(error)}")
-            
