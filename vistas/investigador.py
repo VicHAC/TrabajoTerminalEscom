@@ -5,7 +5,7 @@ import uuid
 from pathlib import Path
 
 from PyQt6.QtCore import pyqtSignal, QRect, Qt, QSize
-from PyQt6.QtGui import QColor, QImage, QPainter, QPen, QPixmap, QIcon
+from PyQt6.QtGui import QColor, QImage, QPainter, QPen, QPixmap, QIcon, QIntValidator
 from PyQt6.QtWidgets import (
     QComboBox,
     QDialog,
@@ -20,6 +20,7 @@ from PyQt6.QtWidgets import (
     QWidget,
     QSlider,
     QCheckBox,
+    QLineEdit,
 )
 
 os.environ["QT_QPA_PLATFORM"] = "xcb"
@@ -31,6 +32,236 @@ logging.basicConfig(
     level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s"
 )
 
+# =========================================================
+# ZONA DE ARRASTRAR Y SOLTAR (DRAG & DROP) CORREGIDA
+# =========================================================
+class DropZone(QFrame):
+    file_selected = pyqtSignal(str)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setAcceptDrops(True)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        
+        self.setObjectName("DropZoneObj")
+        
+        self.layout = QVBoxLayout(self)
+        self.layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.layout.setContentsMargins(10, 10, 10, 10)
+        
+        self.lbl_icono = QLabel()
+        self.lbl_icono.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.lbl_icono.setStyleSheet("border: none; background: transparent;")
+        self.lbl_icono.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        
+        self.lbl_texto = QLabel("Haz clic para cargar una imagen o arrástrala aquí")
+        self.lbl_texto.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.lbl_texto.setStyleSheet("color: #888888; font-size: 12px; font-weight: normal; border: none; background: transparent;")
+        self.lbl_texto.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        
+        self.layout.addWidget(self.lbl_icono, stretch=1)
+        self.layout.addWidget(self.lbl_texto)
+        
+        self.pixmap_original = None
+        self.is_preview = False
+        
+        self.mostrar_placeholder()
+
+    def mostrar_placeholder(self):
+        self.is_preview = False
+        self.pixmap_original = QPixmap("assets/cargar.png")
+        self.lbl_texto.show()
+        # Fondo blanco desde el inicio
+        self.setStyleSheet("""
+            #DropZoneObj {
+                border: 2px dashed #007bff;
+                border-radius: 8px;
+                background-color: #ffffff;
+            }
+            #DropZoneObj:hover {
+                background-color: #f4f8fb;
+                border: 2px dashed #0056b3;
+            }
+        """)
+        self.actualizar_imagen()
+
+    def mostrar_imagen(self, pixmap):
+        self.is_preview = True
+        self.pixmap_original = pixmap
+        self.lbl_texto.hide()
+        
+        # Borde verde de éxito y fondo totalmente blanco para rellenar vacíos
+        self.setStyleSheet("""
+            #DropZoneObj {
+                border: 2px solid #28a745;
+                border-radius: 8px;
+                background-color: #ffffff;
+            }
+        """)
+        self.actualizar_imagen()
+
+    def actualizar_imagen(self):
+        """Escala la imagen al tamaño máximo disponible del contenedor"""
+        if self.pixmap_original and not self.pixmap_original.isNull():
+            # Si estamos en preview, podemos usar todo el alto, si no, restamos el espacio del texto
+            w = self.width() - 20
+            h = self.height() - (40 if not self.is_preview else 20)
+            
+            if w > 0 and h > 0:
+                self.lbl_icono.setPixmap(self.pixmap_original.scaled(
+                    w, h, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation
+                ))
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self.actualizar_imagen()
+
+    def dragEnterEvent(self, event):
+        if event.mimeData().hasUrls():
+            event.accept()
+        else:
+            event.ignore()
+
+    def dragMoveEvent(self, event):
+        if event.mimeData().hasUrls():
+            event.accept()
+        else:
+            event.ignore()
+
+    def dropEvent(self, event):
+        if event.mimeData().hasUrls():
+            event.setDropAction(Qt.DropAction.CopyAction)
+            event.accept()
+            urls = event.mimeData().urls()
+            if urls and urls[0].isLocalFile():
+                file_path = urls[0].toLocalFile()
+                ext = Path(file_path).suffix.lower()
+                if ext in [".tif", ".tiff", ".png", ".jpg", ".jpeg"]:
+                    self.file_selected.emit(file_path)
+                else:
+                    QMessageBox.warning(self, "Archivo inválido", "Por favor, arrastra una imagen válida (.tif, .png, .jpg).")
+        else:
+            event.ignore()
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            ruta_archivo, _ = QFileDialog.getOpenFileName(
+                self, "Seleccionar imagen", "", "Imágenes TIFF (*.tiff *.tif);;Todas las imágenes (*.png *.jpg *.jpeg)"
+            )
+            if ruta_archivo:
+                self.file_selected.emit(ruta_archivo)
+
+
+# =========================================================
+# DIÁLOGO INTERMEDIO PARA CARGA DE DATOS CORREGIDO
+# =========================================================
+class DialogoCargarImagen(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Detalles de la Muestra")
+        self.setFixedSize(550, 500)
+        self.setModal(True)
+        
+        self.ruta_seleccionada = None
+        self.campo_val = ""
+        self.tiempo_val = ""
+
+        layout = QVBoxLayout(self)
+
+        # --- DISEÑO HORIZONTAL PARA CAMPOS ---
+        layout_campos = QHBoxLayout()
+        
+        layout_campo = QVBoxLayout()
+        lbl_campo = QLabel("Muestra:")
+        lbl_campo.setStyleSheet("font-weight: bold; font-size: 13px;")
+        self.input_campo = QLineEdit()
+        self.input_campo.setPlaceholderText("Ej. 1, 2, 3...")
+        self.input_campo.setValidator(QIntValidator())
+        self.input_campo.setStyleSheet("padding: 8px; font-size: 14px; border: 1px solid #ccc; border-radius: 4px;")
+        layout_campo.addWidget(lbl_campo)
+        layout_campo.addWidget(self.input_campo)
+
+        layout_tiempo = QVBoxLayout()
+        lbl_tiempo = QLabel("Tiempo de la muestra:")
+        lbl_tiempo.setStyleSheet("font-weight: bold; font-size: 13px;")
+        self.input_tiempo = QLineEdit()
+        self.input_tiempo.setPlaceholderText("Ej. 1hr, 2hrs, 1 semana...")
+        self.input_tiempo.setStyleSheet("padding: 8px; font-size: 14px; border: 1px solid #ccc; border-radius: 4px;")
+        layout_tiempo.addWidget(lbl_tiempo)
+        layout_tiempo.addWidget(self.input_tiempo)
+
+        layout_campos.addLayout(layout_campo)
+        layout_campos.addSpacing(15)
+        layout_campos.addLayout(layout_tiempo)
+        
+        layout.addLayout(layout_campos)
+        layout.addSpacing(15)
+
+        # --- Área Drag & Drop ---
+        self.drop_zone = DropZone(self)
+        self.drop_zone.file_selected.connect(self.procesar_archivo)
+        layout.addWidget(self.drop_zone, stretch=1)
+        layout.addSpacing(10)
+
+        # --- BOTONES DE ACCIÓN ---
+        layout_botones = QHBoxLayout()
+        
+        btn_cancelar = QPushButton("Cancelar")
+        btn_cancelar.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_cancelar.setStyleSheet("""
+            QPushButton { padding: 8px; background-color: #e0e0e0; border-radius: 4px; font-weight: bold; color: #333;}
+            QPushButton:hover { background-color: #cccccc; }
+        """)
+        btn_cancelar.clicked.connect(self.reject)
+        
+        btn_continuar = QPushButton("Continuar")
+        btn_continuar.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_continuar.setStyleSheet("""
+            QPushButton { padding: 8px; background-color: #007bff; border-radius: 4px; font-weight: bold; color: white;}
+            QPushButton:hover { background-color: #0056b3; }
+        """)
+        btn_continuar.clicked.connect(self.validar_y_continuar)
+        
+        layout_botones.addWidget(btn_cancelar)
+        layout_botones.addWidget(btn_continuar)
+        
+        layout.addLayout(layout_botones)
+
+    def procesar_archivo(self, ruta):
+        self.ruta_seleccionada = ruta
+        
+        try:
+            import cv2
+            import numpy as np
+            cv_img = cv2.imread(ruta, cv2.IMREAD_UNCHANGED)
+            if cv_img is not None:
+                if cv_img.dtype == np.uint16:
+                    cv_img = ((cv_img - cv_img.min()) / (cv_img.max() - cv_img.min()) * 255).astype(np.uint8)
+                if len(cv_img.shape) == 2:
+                    h, w = cv_img.shape
+                    qimg = QImage(cv_img.data, w, h, w, QImage.Format.Format_Grayscale8)
+                else:
+                    cv_img = cv2.cvtColor(cv_img, cv2.COLOR_BGR2RGB)
+                    h, w, ch = cv_img.shape
+                    qimg = QImage(cv_img.data, w, h, ch * w, QImage.Format.Format_RGB888)
+                pixmap_preview = QPixmap.fromImage(qimg)
+            else:
+                pixmap_preview = QPixmap(ruta)
+        except Exception as e:
+            logging.error(f"Error al previsualizar: {e}")
+            pixmap_preview = QPixmap(ruta)
+
+        if not pixmap_preview.isNull():
+            self.drop_zone.mostrar_imagen(pixmap_preview)
+
+    def validar_y_continuar(self):
+        if not self.input_campo.text().strip() or not self.input_tiempo.text().strip() or not self.ruta_seleccionada:
+            QMessageBox.warning(self, "Error", "campos incompletos")
+            return
+        
+        self.campo_val = self.input_campo.text().strip()
+        self.tiempo_val = self.input_tiempo.text().strip()
+        self.accept()
 class DialogoCarga(QDialog):
     def __init__(self, mensaje="Procesando...", parent=None):
         super().__init__(parent)
@@ -263,7 +494,7 @@ class InteractiveImageViewer(QLabel):
                 self.draw_current_pos = event.pos()
 
             elif self.current_tool == "delete":
-                # ELIMINAR CÉLULA
+                # ELIMINAR DETERMINADA CÉLULA
                 if self.hovered_index != -1:
                     dialogo = DialogoConfirmacion("Eliminar Detección", "¿Estás seguro de descartar esta célula del análisis?")
                     dialogo.exec()
@@ -421,6 +652,9 @@ class VentanaInvestigador(QMainWindow):
         self.rol = rol
         self.ruta_imagen_actual = None
         self.pixmaps_globales = {"Original": None, "Filtrada": None, "Esqueleto": None}
+        
+        self.metadatos_imagen = {"campo": "", "tiempo": ""}
+        
         self.setWindowTitle(f"Prototipo Microglías - Panel ({self.rol})")
         self.resize(1100, 700)
         self.inicializar_ui()
@@ -473,17 +707,13 @@ class VentanaInvestigador(QMainWindow):
         area_imagen = QVBoxLayout()
         controles_superiores = QHBoxLayout()
         
-        # --- COMBO BOX (UX) ---
+        # --- COMBO BOX (Izquierda) ---
         self.combo_vista = QComboBox()
         self.combo_vista.addItems(["Original", "Filtrada", "Esqueleto"])
-        self.combo_vista.setStyleSheet("""
-    QPushButton { background-color: #f0f0f0; border: 1px solid #ccc; border-radius: 4px; padding: 4px 10px; font-weight: bold; color:#007bff;}
-    QPushButton:hover { background-color: #e0e0e0; }
-    QPushButton:disabled { color:#aaa; }
-""")
+        self.combo_vista.setStyleSheet("padding: 5px; font-size: 14px; font-weight: bold;")
         self.combo_vista.setEnabled(False)
         self.combo_vista.currentTextChanged.connect(self.cambiar_vista_global)
-
+        
         controles_superiores.addWidget(self.combo_vista)
         controles_superiores.addStretch()
         
@@ -689,50 +919,56 @@ class VentanaInvestigador(QMainWindow):
         self.lbl_info_conteo.setText(f"Microglías detectadas: {conteo}")
 
     def cargar_imagen(self):
-        ruta_archivo, _ = QFileDialog.getOpenFileName(self, "Seleccionar imagen", "", "Imágenes TIFF (*.tiff *.tif);;Todas las imágenes (*.png *.jpg *.jpeg)")
-        if ruta_archivo:
-            self.ruta_imagen_actual = ruta_archivo
-            pixmap = QPixmap(ruta_archivo)
-            if pixmap.isNull():
-                try:
-                    import cv2
-                    import numpy as np
-                    cv_img = cv2.imread(ruta_archivo, cv2.IMREAD_UNCHANGED)
-                    if cv_img is not None:
-                        if cv_img.dtype == np.uint16:
-                            cv_img = ((cv_img - cv_img.min()) / (cv_img.max() - cv_img.min()) * 255).astype(np.uint8)
-                        if len(cv_img.shape) == 2:
-                            h, w = cv_img.shape
-                            qimg = QImage(cv_img.data, w, h, w, QImage.Format.Format_Grayscale8)
-                        else:
-                            cv_img = cv2.cvtColor(cv_img, cv2.COLOR_BGR2RGB)
-                            h, w, ch = cv_img.shape
-                            qimg = QImage(cv_img.data, w, h, ch * w, QImage.Format.Format_RGB888)
-                        pixmap = QPixmap.fromImage(qimg)
-                except Exception as e:
-                    logging.error(f"Error al cargar imagen: {e}")
+        dialogo_intermedio = DialogoCargarImagen(self)
+        if dialogo_intermedio.exec():
+            ruta_archivo = dialogo_intermedio.ruta_seleccionada
             
-            if not pixmap.isNull():
-                self.pixmaps_globales["Original"] = pixmap
-                self.pixmaps_globales["Filtrada"] = None
-                self.pixmaps_globales["Esqueleto"] = None
+            self.metadatos_imagen["campo"] = dialogo_intermedio.campo_val
+            self.metadatos_imagen["tiempo"] = dialogo_intermedio.tiempo_val
+
+            if ruta_archivo:
+                self.ruta_imagen_actual = ruta_archivo
+                pixmap = QPixmap(ruta_archivo)
+                if pixmap.isNull():
+                    try:
+                        import cv2
+                        import numpy as np
+                        cv_img = cv2.imread(ruta_archivo, cv2.IMREAD_UNCHANGED)
+                        if cv_img is not None:
+                            if cv_img.dtype == np.uint16:
+                                cv_img = ((cv_img - cv_img.min()) / (cv_img.max() - cv_img.min()) * 255).astype(np.uint8)
+                            if len(cv_img.shape) == 2:
+                                h, w = cv_img.shape
+                                qimg = QImage(cv_img.data, w, h, w, QImage.Format.Format_Grayscale8)
+                            else:
+                                cv_img = cv2.cvtColor(cv_img, cv2.COLOR_BGR2RGB)
+                                h, w, ch = cv_img.shape
+                                qimg = QImage(cv_img.data, w, h, ch * w, QImage.Format.Format_RGB888)
+                            pixmap = QPixmap.fromImage(qimg)
+                    except Exception as e:
+                        logging.error(f"Error al cargar imagen: {e}")
                 
-                self.btn_herramienta_caja.setChecked(False)
-                self.btn_herramienta_eliminar.setChecked(False)
-                self.visor_imagen.current_tool = "pointer"
-                self.btn_bloquear_zoom.setChecked(False)
-                self.reset_zoom()
-                
-                self.visor_imagen.set_image_and_boxes(pixmap, [])
-                self.actualizar_estado_flujo(1)
-                
-                self.combo_vista.blockSignals(True)
-                self.combo_vista.setCurrentText("Original")
-                self.combo_vista.blockSignals(False)
-                self.visor_imagen.view_mode = "Original"
-                QMessageBox.information(self, "Imagen cargada", "Imagen lista para el análisis.")
-            else:
-                QMessageBox.critical(self, "Error", "El archivo está corrupto o no es válido.")
+                if not pixmap.isNull():
+                    self.pixmaps_globales["Original"] = pixmap
+                    self.pixmaps_globales["Filtrada"] = None
+                    self.pixmaps_globales["Esqueleto"] = None
+                    
+                    self.btn_herramienta_caja.setChecked(False)
+                    self.btn_herramienta_eliminar.setChecked(False)
+                    self.visor_imagen.current_tool = "pointer"
+                    self.btn_bloquear_zoom.setChecked(False)
+                    self.reset_zoom()
+                    
+                    self.visor_imagen.set_image_and_boxes(pixmap, [])
+                    self.actualizar_estado_flujo(1)
+                    
+                    self.combo_vista.blockSignals(True)
+                    self.combo_vista.setCurrentText("Original")
+                    self.combo_vista.blockSignals(False)
+                    self.visor_imagen.view_mode = "Original"
+                    QMessageBox.information(self, "Imagen cargada", "Imagen lista para el análisis.")
+                else:
+                    QMessageBox.critical(self, "Error", "El archivo está corrupto o no es válido.")
 
     def cambiar_vista_global(self, texto_vista):
         pixmap_guardado = self.pixmaps_globales.get(texto_vista)
@@ -786,6 +1022,7 @@ class VentanaInvestigador(QMainWindow):
                 self,
                 "1. Conteo completado",
                 f"Se detectaron {count} posibles microglías.\n\n"
+                "Usa las herramientas superiores si necesitas agregar o eliminar selecciones."
             )
             
         except Exception as e:
