@@ -6,6 +6,9 @@ import tifffile as tiff
 import torch
 from ultralytics.models.yolo.model import YOLO
 
+# Minimal microglia size (width and height) in pixels to consider a detection or manual box valid
+MIN_MICROGLIA_SIZE = 15
+
 # Fix for loading YOLO models in some environments
 _original_load = torch.load
 
@@ -129,10 +132,12 @@ class MicrogliaProcessor:
         if len(results) > 0 and results[0].boxes is not None:
             for box in results[0].boxes:
                 x1, y1, x2, y2 = map(int, box.xyxy[0])
-                area = (x2 - x1) * (y2 - y1)
-                raw_boxes.append({
-                    'x1': x1, 'y1': y1, 'x2': x2, 'y2': y2, 'area': area
-                })
+                w, h = x2 - x1, y2 - y1
+                if w >= MIN_MICROGLIA_SIZE and h >= MIN_MICROGLIA_SIZE:
+                    area = w * h
+                    raw_boxes.append({
+                        'x1': x1, 'y1': y1, 'x2': x2, 'y2': y2, 'area': area
+                    })
 
         final_boxes = self._filter_inner_boxes(raw_boxes, ioa_threshold=0.40)
         detected_boxes_data = []

@@ -4,6 +4,8 @@ import subprocess
 import uuid
 from pathlib import Path
 
+from ia.modelo_yolo import MIN_MICROGLIA_SIZE
+
 from PyQt6.QtCore import pyqtSignal, QRect, Qt, QSize, QEvent, QPoint
 from PyQt6.QtGui import QColor, QImage, QPainter, QPen, QPixmap, QIcon, QIntValidator
 from PyQt6.QtWidgets import (
@@ -573,7 +575,7 @@ class InteractiveImageViewer(QLabel):
                     x1, y1 = orig_start; x2, y2 = orig_end
                     x = min(x1, x2); y = min(y1, y2)
                     w = abs(x2 - x1); h = abs(y2 - y1)
-                    if w > 15 and h > 15: self.nueva_caja_dibujada.emit(int(x), int(y), int(w), int(h))
+                    if w >= MIN_MICROGLIA_SIZE and h >= MIN_MICROGLIA_SIZE: self.nueva_caja_dibujada.emit(int(x), int(y), int(w), int(h))
                 self.draw_start_pos = None; self.draw_current_pos = None
                 self.draw_current_state()
 
