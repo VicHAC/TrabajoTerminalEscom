@@ -480,13 +480,15 @@ class InteractiveImageViewer(QLabel):
                 self.draw_current_pos = event.pos()
             elif self.current_tool == "delete":
                 if self.hovered_index != -1:
+                    index_to_delete = self.hovered_index
                     diag = DialogoConfirmacion("Eliminar Detección", "¿Estás seguro de descartar esta célula?")
                     diag.exec()
                     if diag.resultado:
-                        self.boxes.pop(self.hovered_index)
-                        self.hovered_index = -1
-                        self.draw_current_state()
-                        self.conteo_actualizado.emit(len(self.boxes))
+                        if index_to_delete < len(self.boxes):
+                            self.boxes.pop(index_to_delete)
+                            self.hovered_index = -1
+                            self.draw_current_state()
+                            self.conteo_actualizado.emit(len(self.boxes))
 
     def mouseMoveEvent(self, event):
         if not self.original_pixmap: return
@@ -511,7 +513,8 @@ class InteractiveImageViewer(QLabel):
         new_hovered_index = -1
         if orig_coords:
             ox, oy = orig_coords
-            for i, box in enumerate(self.boxes):
+            for i in range(len(self.boxes)-1, -1, -1):
+                box = self.boxes[i]
                 if box["x"] <= ox <= box["x"] + box["w"] and box["y"] <= oy <= box["y"] + box["h"]:
                     new_hovered_index = i
                     break
@@ -787,6 +790,16 @@ class VentanaInvestigador(QMainWindow):
         orig_pixmap = self.pixmaps_globales["Original"]
         if not orig_pixmap: return
         rect_recorte = QRect(x, y, w, h); pixmap_recorte = orig_pixmap.copy(rect_recorte); nombre_archivo = f"manual_{uuid.uuid4().hex[:6]}.png"; ruta_guardado = os.path.join(crops_folder, nombre_archivo); pixmap_recorte.save(ruta_guardado, "PNG")
+        import cv2
+        crop_img = cv2.imread(ruta_guardado)
+        if crop_img is not None:
+            hsv_img = cv2.cvtColor(crop_img, cv2.COLOR_BGR2HSV)
+            h_c, s_c, v_c = cv2.split(hsv_img)
+            clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+            v_clahe = clahe.apply(v_c)
+            hsv_img_clahe = cv2.merge((h_c, s_c, v_clahe))
+            crop_img = cv2.cvtColor(hsv_img_clahe, cv2.COLOR_HSV2BGR)
+            cv2.imwrite(ruta_guardado, crop_img)
         nueva_caja = {"x": x, "y": y, "w": w, "h": h, "crop_path": ruta_guardado}; self.visor_imagen.boxes.append(nueva_caja); self.visor_imagen.draw_current_state(); self.actualizar_etiqueta_conteo(len(self.visor_imagen.boxes))
 
     def construir_imagen_global(self, carpeta_origen):
