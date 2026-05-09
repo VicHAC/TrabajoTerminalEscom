@@ -184,6 +184,7 @@ class DialogoCargarImagen(QDialog):
         super().__init__(parent)
         self.setWindowTitle("Detalles de la Muestra")
         self.setFixedSize(580, 520) 
+        self.setWindowFlags(self.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
         self.setModal(True)
         
         self.ruta_seleccionada = None
@@ -248,6 +249,15 @@ class DialogoCargarImagen(QDialog):
         
         layout.addLayout(layout_botones)
 
+    def showEvent(self, event):
+        super().showEvent(event)
+        if self.parent():
+            p_geom = self.parent().geometry()
+            self.move(p_geom.x() + (p_geom.width() - self.width()) // 2, p_geom.y() + (p_geom.height() - self.height()) // 2)
+        else:
+            screen = QApplication.primaryScreen().geometry()
+            self.move((screen.width() - self.width()) // 2, (screen.height() - self.height()) // 2)
+
     def procesar_archivo(self, ruta):
         self.ruta_seleccionada = ruta
         nombre_archivo = os.path.basename(ruta)
@@ -292,7 +302,7 @@ class DialogoCargarImagen(QDialog):
 class DialogoCarga(QDialog):
     def __init__(self, mensaje="Procesando...", parent=None):
         super().__init__(parent)
-        self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog)
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog | Qt.WindowType.WindowStaysOnTopHint)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setModal(True)
         
@@ -309,6 +319,15 @@ class DialogoCarga(QDialog):
         layout.addWidget(frame)
         self.setLayout(layout)
 
+    def showEvent(self, event):
+        super().showEvent(event)
+        if self.parent():
+            p_geom = self.parent().geometry()
+            self.move(p_geom.x() + (p_geom.width() - self.width()) // 2, p_geom.y() + (p_geom.height() - self.height()) // 2)
+        else:
+            screen = QApplication.primaryScreen().geometry()
+            self.move((screen.width() - self.width()) // 2, (screen.height() - self.height()) // 2)
+
 
 class DialogoVistaCelular(QDialog):
     """
@@ -319,6 +338,7 @@ class DialogoVistaCelular(QDialog):
         super().__init__(parent)
         self.setWindowTitle("Vista Detallada de la Célula")
         self.resize(400, 440) # Ligeramente más alto para acomodar el texto
+        self.setWindowFlags(self.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
         layout = QVBoxLayout()
         
         # 1. Extraemos el nombre del archivo
@@ -342,11 +362,20 @@ class DialogoVistaCelular(QDialog):
         layout.addWidget(label_imagen)
         self.setLayout(layout)
 
+    def showEvent(self, event):
+        super().showEvent(event)
+        if self.parent():
+            p_geom = self.parent().geometry()
+            self.move(p_geom.x() + (p_geom.width() - self.width()) // 2, p_geom.y() + (p_geom.height() - self.height()) // 2)
+        else:
+            screen = QApplication.primaryScreen().geometry()
+            self.move((screen.width() - self.width()) // 2, (screen.height() - self.height()) // 2)
+
 
 class DialogoConfirmacion(QDialog):
     def __init__(self, titulo, mensaje, parent=None):
         super().__init__(parent)
-        self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog)
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog | Qt.WindowType.WindowStaysOnTopHint)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setModal(True)
         self.resultado = False
@@ -390,6 +419,15 @@ class DialogoConfirmacion(QDialog):
         flayout.addLayout(btn_layout)
         layout.addWidget(frame)
         self.setLayout(layout)
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        if self.parent():
+            p_geom = self.parent().geometry()
+            self.move(p_geom.x() + (p_geom.width() - self.width()) // 2, p_geom.y() + (p_geom.height() - self.height()) // 2)
+        else:
+            screen = QApplication.primaryScreen().geometry()
+            self.move((screen.width() - self.width()) // 2, (screen.height() - self.height()) // 2)
 
     def aceptar(self): self.resultado = True; self.accept()
     def cancelar(self): self.resultado = False; self.reject()
