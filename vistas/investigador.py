@@ -17,7 +17,6 @@ from PyQt6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QMainWindow,
-    QMessageBox,
     QPushButton,
     QVBoxLayout,
     QWidget,
@@ -186,14 +185,24 @@ class DialogoCargarImagen(QDialog):
         super().__init__(parent)
         self.setWindowTitle("Detalles de la Muestra")
         self.setFixedSize(580, 520) 
-        self.setWindowFlags(self.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog | Qt.WindowType.WindowStaysOnTopHint)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setModal(True)
         
         self.ruta_seleccionada = None
         self.campo_val = ""
         self.tiempo_val = ""
 
-        layout = QVBoxLayout(self)
+        main_layout = QVBoxLayout(self)
+        frame = QFrame(self)
+        frame.setStyleSheet("QFrame { background-color: #FFFFFF; border-radius: 12px; border: 2px solid #003366; } QLabel { border: none; }")
+        layout = QVBoxLayout(frame)
+        
+        lbl_titulo = QLabel("Detalles de la Muestra")
+        lbl_titulo.setStyleSheet("font-size: 18px; font-weight: bold; color: #003366;")
+        lbl_titulo.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(lbl_titulo)
+        layout.addSpacing(10)
 
         layout_campos = QHBoxLayout()
         
@@ -250,6 +259,7 @@ class DialogoCargarImagen(QDialog):
         layout_botones.addWidget(btn_continuar)
         
         layout.addLayout(layout_botones)
+        main_layout.addWidget(frame)
 
     def showEvent(self, event):
         super().showEvent(event)
@@ -290,7 +300,8 @@ class DialogoCargarImagen(QDialog):
 
     def validar_y_continuar(self):
         if not self.input_campo.text().strip() or not self.input_tiempo.text().strip() or not self.ruta_seleccionada:
-            QMessageBox.warning(self, "Error", "campos incompletos")
+            from vistas.utilidades import DialogoNotificacion
+            DialogoNotificacion("Error", "Campos incompletos", "warning", self).exec()
             return
         
         self.campo_val = self.input_campo.text().strip()
@@ -339,9 +350,14 @@ class DialogoVistaCelular(QDialog):
     def __init__(self, crop_path, pixmap_mem=None, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Vista Detallada de la Célula")
-        self.resize(400, 440) # Ligeramente más alto para acomodar el texto
-        self.setWindowFlags(self.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
-        layout = QVBoxLayout()
+        self.resize(400, 480) 
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog | Qt.WindowType.WindowStaysOnTopHint)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        
+        main_layout = QVBoxLayout(self)
+        frame = QFrame(self)
+        frame.setStyleSheet("QFrame { background-color: #FFFFFF; border-radius: 12px; border: 2px solid #003366; } QLabel { border: none; }")
+        layout = QVBoxLayout(frame)
         
         # 1. Extraemos el nombre del archivo
         nombre_archivo = os.path.basename(crop_path)
@@ -362,7 +378,19 @@ class DialogoVistaCelular(QDialog):
             label_imagen.setText("No se pudo cargar la imagen recortada.")
             
         layout.addWidget(label_imagen)
-        self.setLayout(layout)
+        layout.addSpacing(10)
+        
+        btn_cerrar = QPushButton("Cerrar")
+        btn_cerrar.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_cerrar.setStyleSheet("""
+            QPushButton { padding: 8px 20px; background-color: #dc3545; border-radius: 6px; font-weight: bold; color: white; font-size: 14px;}
+            QPushButton:hover { background-color: #c82333; }
+        """)
+        btn_cerrar.clicked.connect(self.accept)
+        layout.addWidget(btn_cerrar, alignment=Qt.AlignmentFlag.AlignCenter)
+        
+        main_layout.addWidget(frame)
+        self.setLayout(main_layout)
 
     def showEvent(self, event):
         super().showEvent(event)
@@ -655,6 +683,10 @@ class InteractiveImageViewer(QLabel):
         if self.original_pixmap: self.draw_current_state()
 
 class VentanaInvestigador(QMainWindow):
+    def mostrar_notificacion(self, titulo, mensaje, tipo="info"):
+        from vistas.utilidades import DialogoNotificacion
+        DialogoNotificacion(titulo, mensaje, tipo, self).exec()
+
     def __init__(self, id_usuario, rol):
         super().__init__()
         self.id_usuario = id_usuario; self.rol = rol
@@ -832,20 +864,20 @@ class VentanaInvestigador(QMainWindow):
                             pixmap = QPixmap.fromImage(qimg)
                     except Exception as e: logging.error(f"Error al cargar imagen: {e}")
                 if not pixmap.isNull():
-                    self.pixmaps_globales["Original"] = pixmap; self.pixmaps_globales["Filtrada"] = None; self.pixmaps_globales["Esqueleto"] = None; self.btn_herramienta_caja.setChecked(False); self.btn_herramienta_eliminar.setChecked(False); self.visor_imagen.current_tool = "pointer"; self.btn_bloquear_zoom.setChecked(False); self.reset_zoom(); self.visor_imagen.set_image_and_boxes(pixmap, []); self.actualizar_estado_flujo(1); self.combo_vista.blockSignals(True); self.combo_vista.clear(); self.combo_vista.addItem("Original"); self.combo_vista.setCurrentText("Original"); self.combo_vista.blockSignals(False); self.visor_imagen.view_mode = "Original"; QMessageBox.information(self, "Imagen cargada", "Imagen lista para el análisis.")
-                else: QMessageBox.critical(self, "Error", "El archivo está corrupto o no es válido.")
+                    self.pixmaps_globales["Original"] = pixmap; self.pixmaps_globales["Filtrada"] = None; self.pixmaps_globales["Esqueleto"] = None; self.btn_herramienta_caja.setChecked(False); self.btn_herramienta_eliminar.setChecked(False); self.visor_imagen.current_tool = "pointer"; self.btn_bloquear_zoom.setChecked(False); self.reset_zoom(); self.visor_imagen.set_image_and_boxes(pixmap, []); self.actualizar_estado_flujo(1); self.combo_vista.blockSignals(True); self.combo_vista.clear(); self.combo_vista.addItem("Original"); self.combo_vista.setCurrentText("Original"); self.combo_vista.blockSignals(False); self.visor_imagen.view_mode = "Original"; self.mostrar_notificacion("Imagen cargada", "Imagen lista para el análisis.", "info")
+                else: self.mostrar_notificacion("Error", "El archivo está corrupto o no es válido.", "error")
 
     def cambiar_vista_global(self, texto_vista):
         pixmap_guardado = self.pixmaps_globales.get(texto_vista)
         if pixmap_guardado: self.visor_imagen.set_view_mode(texto_vista, pixmap_guardado)
-        else: QMessageBox.warning(self, "Aviso", f"Aún no has generado el paso: {texto_vista}."); self.combo_vista.blockSignals(True); self.combo_vista.setCurrentText(self.visor_imagen.view_mode); self.combo_vista.blockSignals(False)
+        else: self.mostrar_notificacion("Aviso", f"Aún no has generado el paso: {texto_vista}.", "warning"); self.combo_vista.blockSignals(True); self.combo_vista.setCurrentText(self.visor_imagen.view_mode); self.combo_vista.blockSignals(False)
 
     def cerrar_sesion(self):
         from vistas.login import VentanaLogin
         self.ventana_login = VentanaLogin(); self.ventana_login.setObjectName("ventana_login"); self.ventana_login.show(); self.close()
 
     def execute_microglia_counting(self):
-        if not self.ruta_imagen_actual: QMessageBox.warning(self, "Advertencia", "Por favor, carga una imagen primero."); return
+        if not self.ruta_imagen_actual: self.mostrar_notificacion("Advertencia", "Por favor, carga una imagen primero.", "warning"); return
         dialogo = DialogoCarga("Cargando IA y aplicando conteo...\nPor favor, espera.", self); dialogo.show()
         from PyQt6.QtWidgets import QApplication; QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor); QApplication.processEvents()
         try:
@@ -854,8 +886,8 @@ class VentanaInvestigador(QMainWindow):
             processor = MicrogliaProcessor(model_path=model_path); resultado = processor.process_and_crop(self.ruta_imagen_actual, base_output_folder=output_dir)
             if len(resultado) == 3: crops_folder, count, boxes_data = resultado; self.visor_imagen.set_image_and_boxes(self.pixmaps_globales["Original"], boxes_data)
             else: crops_folder, count = resultado; self.visor_imagen.set_image_and_boxes(self.pixmaps_globales["Original"], [])
-            dialogo.close(); QApplication.restoreOverrideCursor(); self.actualizar_estado_flujo(2); QMessageBox.information(self, "1. Conteo completado", f"Se detectaron {count} posibles microglías.\n\nUsa las herramientas superiores si necesitas agregar o eliminar selecciones.")
-        except Exception as e: dialogo.close(); QApplication.restoreOverrideCursor(); QMessageBox.critical(self, "Error", str(e))
+            dialogo.close(); QApplication.restoreOverrideCursor(); self.actualizar_estado_flujo(2); self.mostrar_notificacion("1. Conteo completado", f"Se detectaron {count} posibles microglías.\n\nUsa las herramientas superiores si necesitas agregar o eliminar selecciones.", "info")
+        except Exception as e: dialogo.close(); QApplication.restoreOverrideCursor(); self.mostrar_notificacion("Error", str(e), "error")
 
     def agregar_microglia_manual(self, x, y, w, h):
         if not self.ruta_imagen_actual: return
@@ -864,7 +896,7 @@ class VentanaInvestigador(QMainWindow):
             bx, by, bw, bh = box["x"], box["y"], box["w"], box["h"]; ix1 = max(x, bx); iy1 = max(y, by); ix2 = min(x + w, bx + bw); iy2 = min(y + h, by + bh); iw_inter = max(0, ix2 - ix1); ih_inter = max(0, iy2 - iy1); inter_area = iw_inter * ih_inter
             if inter_area > 0:
                 ioa_nueva = inter_area / area_nueva; ioa_existente = inter_area / (bw * bh)
-                if ioa_nueva >= 0.40 or ioa_existente >= 0.40: QMessageBox.warning(self, "Acción bloqueada", "No puedes crear una microglía que esté contenida dentro de otra existente o que se superponga fuertemente."); return
+                if ioa_nueva >= 0.40 or ioa_existente >= 0.40: self.mostrar_notificacion("Acción bloqueada", "No puedes crear una microglía que esté contenida dentro de otra existente o que se superponga fuertemente.", "warning"); return
         base_name = Path(self.ruta_imagen_actual).stem; crops_folder = os.path.join(os.getcwd(), "analisis_resultados", base_name, "crops"); os.makedirs(crops_folder, exist_ok=True)
         orig_pixmap = self.pixmaps_globales["Original"]
         if not orig_pixmap: return
@@ -897,7 +929,7 @@ class VentanaInvestigador(QMainWindow):
         return QPixmap.fromImage(qimg)
 
     def ejecutar_filtrado(self):
-        if not self.ruta_imagen_actual or not self.visor_imagen.boxes: QMessageBox.warning(self, "Advertencia", "Aplica el conteo primero."); return
+        if not self.ruta_imagen_actual or not self.visor_imagen.boxes: self.mostrar_notificacion("Advertencia", "Aplica el conteo primero.", "warning"); return
         import cv2; import numpy as np
         self.crops_en_memoria.clear()
         self.crops_filtrados_temp.clear()
@@ -987,9 +1019,9 @@ class VentanaInvestigador(QMainWindow):
                 
                 self.frame_filtros.hide()
                 self.actualizar_estado_flujo(3)
-                QMessageBox.information(self, "2. Filtrado", f"Se aplicaron los filtros a {count} microglías.")
-            else: QMessageBox.warning(self, "Error", "No se guardó ninguna imagen.")
-        except Exception as error: dialogo.close(); QApplication.restoreOverrideCursor(); QMessageBox.critical(self, "Error", f"Falló el guardado: {str(error)}")
+                self.mostrar_notificacion("2. Filtrado", f"Se aplicaron los filtros a {count} microglías.", "info")
+            else: self.mostrar_notificacion("Error", "No se guardó ninguna imagen.", "error")
+        except Exception as error: dialogo.close(); QApplication.restoreOverrideCursor(); self.mostrar_notificacion("Error", f"Falló el guardado: {str(error)}", "error")
 
     def cancelar_filtrado(self):
         self.crops_en_memoria.clear()
@@ -1006,7 +1038,7 @@ class VentanaInvestigador(QMainWindow):
         self.actualizar_estado_flujo(1) # Reactivar botones principales
 
     def mostrar_ramas_morfologia(self):
-        if not self.ruta_imagen_actual or not self.visor_imagen.boxes: QMessageBox.warning(self, "Advertencia", "Aplica el conteo y filtrado primero."); return
+        if not self.ruta_imagen_actual or not self.visor_imagen.boxes: self.mostrar_notificacion("Advertencia", "Aplica el conteo y filtrado primero.", "warning"); return
         base_name = Path(self.ruta_imagen_actual).stem; filtradas_dir = os.path.join(os.getcwd(), "analisis_resultados", base_name, "filtradas"); esqueletos_dir = os.path.join(os.getcwd(), "analisis_resultados", base_name, "esqueletos"); os.makedirs(esqueletos_dir, exist_ok=True); import cv2; import numpy as np; from skimage.morphology import skeletonize
         from PyQt6.QtWidgets import QApplication; count = 0
         try:
@@ -1019,6 +1051,6 @@ class VentanaInvestigador(QMainWindow):
                     if img_raw is not None: _, bin_img = cv2.threshold(img_raw, 127, 255, cv2.THRESH_BINARY); img_bool = bin_img > 0; skeleton = skeletonize(img_bool); skeleton_img = (skeleton * 255).astype(np.uint8); out_path = os.path.join(esqueletos_dir, nombre); is_success, im_buf_arr = cv2.imencode(".png", skeleton_img)
                     if is_success: im_buf_arr.tofile(out_path); count += 1
             dialogo.close(); QApplication.restoreOverrideCursor()
-            if count > 0: pixmap_esqueleto = self.construir_imagen_global("esqueletos"); self.pixmaps_globales["Esqueleto"] = pixmap_esqueleto; self.actualizar_estado_flujo(4); self.combo_vista.addItem("Esqueleto"); self.combo_vista.setCurrentText("Esqueleto"); QMessageBox.information(self, "3. Ramas Generadas", f"Se generaron {count} esqueletos topológicos.\n\nYa puedes avanzar a los Reportes o Cargar una imagen nueva.")
-            else: QMessageBox.warning(self, "Advertencia", "No se generaron esqueletos. Verifica la carpeta de filtrado.")
-        except Exception as error: dialogo.close(); QApplication.restoreOverrideCursor(); QMessageBox.critical(self, "Error de Procesamiento", f"Falló el cálculo:\n{str(error)}")
+            if count > 0: pixmap_esqueleto = self.construir_imagen_global("esqueletos"); self.pixmaps_globales["Esqueleto"] = pixmap_esqueleto; self.actualizar_estado_flujo(4); self.combo_vista.addItem("Esqueleto"); self.combo_vista.setCurrentText("Esqueleto"); self.mostrar_notificacion("3. Ramas Generadas", f"Se generaron {count} esqueletos topológicos.\n\nYa puedes avanzar a los Reportes o Cargar una imagen nueva.", "info")
+            else: self.mostrar_notificacion("Advertencia", "No se generaron esqueletos. Verifica la carpeta de filtrado.", "warning")
+        except Exception as error: dialogo.close(); QApplication.restoreOverrideCursor(); self.mostrar_notificacion("Error de Procesamiento", f"Falló el cálculo:\n{str(error)}", "error")

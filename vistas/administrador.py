@@ -3,7 +3,7 @@ import hashlib
 import os
 from PyQt6.QtWidgets import (QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, 
                              QPushButton, QLabel, QTableWidget, QTableWidgetItem, 
-                             QHeaderView, QFrame, QDialog, QLineEdit, QComboBox, QMessageBox,
+                             QHeaderView, QFrame, QDialog, QLineEdit, QComboBox,
                              QStackedWidget)
 from PyQt6.QtCore import Qt
 
@@ -44,7 +44,8 @@ class DialogoCrearUsuario(QDialog):
         rol = self.combo_rol.currentText()
         
         if not usuario or not password:
-            QMessageBox.warning(self, "Llena todos los campos.")
+            from vistas.utilidades import DialogoNotificacion
+            DialogoNotificacion("Atención", "Llena todos los campos.", "warning", self).exec()
             return
             
         pass_hash = hashlib.sha256(password.encode()).hexdigest()
@@ -56,12 +57,15 @@ class DialogoCrearUsuario(QDialog):
                            (usuario, pass_hash, rol))
             conexion.commit()
             conexion.close()
-            QMessageBox.information(self, "Éxito", "Usuario registrado.")
+            from vistas.utilidades import DialogoNotificacion
+            DialogoNotificacion("Éxito", "Usuario registrado.", "info", self).exec()
             self.accept()
         except sqlite3.IntegrityError:
-            QMessageBox.critical(self, "Error", "Ese usuario ya existe.")
+            from vistas.utilidades import DialogoNotificacion
+            DialogoNotificacion("Error", "Ese usuario ya existe.", "error", self).exec()
         except Exception as e:
-            QMessageBox.critical(self, "Error", f"Tronó la BD: {e}")
+            from vistas.utilidades import DialogoNotificacion
+            DialogoNotificacion("Error", f"Tronó la BD: {e}", "error", self).exec()
 
 # ==========================================
 # POP-UP: EDITAR USUARIO 
@@ -102,7 +106,8 @@ class DialogoEditarUsuario(QDialog):
         nuevo_rol = self.combo_rol.currentText()
         
         if not nuevo_nombre:
-            QMessageBox.warning(self, "El nombre no puede estar vacío.")
+            from vistas.utilidades import DialogoNotificacion
+            DialogoNotificacion("Atención", "El nombre no puede estar vacío.", "warning", self).exec()
             return
             
         try:
@@ -119,12 +124,15 @@ class DialogoEditarUsuario(QDialog):
                                
             conexion.commit()
             conexion.close()
-            QMessageBox.information(self, "Éxito", "Usuario actualizado.")
+            from vistas.utilidades import DialogoNotificacion
+            DialogoNotificacion("Éxito", "Usuario actualizado.", "info", self).exec()
             self.accept()
         except sqlite3.IntegrityError:
-            QMessageBox.critical(self, "Error", "Ese nombre de usuario ya está ocupado.")
+            from vistas.utilidades import DialogoNotificacion
+            DialogoNotificacion("Error", "Ese nombre de usuario ya está ocupado.", "error", self).exec()
         except Exception as e:
-            QMessageBox.critical(self, "Error", f"Murio la BD: {e}")
+            from vistas.utilidades import DialogoNotificacion
+            DialogoNotificacion("Error", f"Murio la BD: {e}", "error", self).exec()
 
 # ==========================================
 # VENTANA PRINCIPAL DEL ADMINISTRADOR
@@ -291,7 +299,8 @@ class VentanaAdministrador(QMainWindow):
         fila_seleccionada = self.tabla_usuarios.currentRow()
         
         if fila_seleccionada < 0:
-            QMessageBox.warning(self, "Ey", "Selecciona a una persona de la tabla primero.")
+            from vistas.utilidades import DialogoNotificacion
+            DialogoNotificacion("Atención", "Selecciona a una persona de la tabla primero.", "warning", self).exec()
             return
             
         id_usuario = self.tabla_usuarios.item(fila_seleccionada, 0).text()
@@ -307,30 +316,34 @@ class VentanaAdministrador(QMainWindow):
         fila_seleccionada = self.tabla_usuarios.currentRow()
         
         if fila_seleccionada < 0:
-            QMessageBox.warning(self, "Ey", "Selecciona a una persona de la tabla primero para darle cuello.")
+            from vistas.utilidades import DialogoNotificacion
+            DialogoNotificacion("Atención", "Selecciona a una persona de la tabla primero para darle cuello.", "warning", self).exec()
             return
             
         id_usuario_eliminar = self.tabla_usuarios.item(fila_seleccionada, 0).text()
         nombre_usuario = self.tabla_usuarios.item(fila_seleccionada, 1).text()
         
         if str(self.id_usuario) == id_usuario_eliminar:
-            QMessageBox.critical(self, "Error", "No te puedes borrar a ti mismo.")
+            from vistas.utilidades import DialogoNotificacion
+            DialogoNotificacion("Error", "No te puedes borrar a ti mismo.", "error", self).exec()
             return
 
-        respuesta = QMessageBox.question(self, "Confirmar", f"¿Seguro que quieres borrar a {nombre_usuario}?", 
-                                         QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        from vistas.utilidades import DialogoConfirmacion
+        dialogo = DialogoConfirmacion("Confirmar", f"¿Seguro que quieres borrar a {nombre_usuario}?", self)
         
-        if respuesta == QMessageBox.StandardButton.Yes:
+        if dialogo.exec() and dialogo.resultado:
             try:
                 conexion = sqlite3.connect("bd/database.db")
                 cursor = conexion.cursor()
                 cursor.execute("DELETE FROM Usuario WHERE id_usuario = ?", (id_usuario_eliminar,))
                 conexion.commit()
                 conexion.close()
-                QMessageBox.information(self, "Sobres", "Usuario eliminado.")
+                from vistas.utilidades import DialogoNotificacion
+                DialogoNotificacion("Sobres", "Usuario eliminado.", "info", self).exec()
                 self.cargar_usuarios_bd()
             except Exception as e:
-                QMessageBox.critical(self, "Error", f"Tronó la BD al eliminar: {e}")
+                from vistas.utilidades import DialogoNotificacion
+                DialogoNotificacion("Error", f"Tronó la BD al eliminar: {e}", "error", self).exec()
 
     def cargar_reportes_bd(self):
         self.tabla_reportes.setRowCount(0)
@@ -352,16 +365,17 @@ class VentanaAdministrador(QMainWindow):
         fila_seleccionada = self.tabla_reportes.currentRow()
         
         if fila_seleccionada < 0:
-            QMessageBox.warning(self, "Ey", "Selecciona un reporte de la tabla primero.")
+            from vistas.utilidades import DialogoNotificacion
+            DialogoNotificacion("Atención", "Selecciona un reporte de la tabla primero.", "warning", self).exec()
             return
             
         id_reporte = self.tabla_reportes.item(fila_seleccionada, 0).text()
         ruta_archivo = self.tabla_reportes.item(fila_seleccionada, 2).text()
 
-        respuesta = QMessageBox.question(self, "Confirmar", "¿Seguro que quieres borrar este reporte? Se eliminará físicamente.", 
-                                         QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        from vistas.utilidades import DialogoConfirmacion
+        dialogo = DialogoConfirmacion("Confirmar", "¿Seguro que quieres borrar este reporte? Se eliminará físicamente.", self)
         
-        if respuesta == QMessageBox.StandardButton.Yes:
+        if dialogo.exec() and dialogo.resultado:
             try:
                 conexion = sqlite3.connect("bd/database.db")
                 cursor = conexion.cursor()
@@ -372,10 +386,12 @@ class VentanaAdministrador(QMainWindow):
                 if os.path.exists(ruta_archivo):
                     os.remove(ruta_archivo)
                 
-                QMessageBox.information(self, "Listo", "Reporte eliminado de la BD y del disco.")
+                from vistas.utilidades import DialogoNotificacion
+                DialogoNotificacion("Listo", "Reporte eliminado de la BD y del disco.", "info", self).exec()
                 self.cargar_reportes_bd()
             except Exception as e:
-                QMessageBox.critical(self, "Error", f"Hubo un pedo al eliminar: {e}")
+                from vistas.utilidades import DialogoNotificacion
+                DialogoNotificacion("Error", f"Hubo un pedo al eliminar: {e}", "error", self).exec()
 
     def cerrar_sesion(self):
         from vistas.login import VentanaLogin

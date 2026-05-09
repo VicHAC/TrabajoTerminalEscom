@@ -1,6 +1,6 @@
 import hashlib
 import sqlite3
-from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QLabel, QLineEdit, QPushButton, QMessageBox)
+from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QLabel, QLineEdit, QPushButton)
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QPixmap
 
@@ -65,7 +65,8 @@ class VentanaLogin(QWidget):
         password = self.input_password.text()
 
         if not usuario or not password:
-            QMessageBox.warning(self, "Llena los campos.")
+            from vistas.utilidades import DialogoNotificacion
+            DialogoNotificacion("Atención", "Llena los campos.", "warning", self).exec()
             return
 
         pass_hash = hashlib.sha256(password.encode()).hexdigest()
@@ -90,9 +91,11 @@ class VentanaLogin(QWidget):
                 self.dashboard.show()
                 self.close()
             else:
-                QMessageBox.critical(self, "Error", "Usuario o contraseña incorrectos.")
+                from vistas.utilidades import DialogoNotificacion
+                DialogoNotificacion("Error", "Usuario o contraseña incorrectos.", "error", self).exec()
         except Exception as e:
-            QMessageBox.critical(self, "Error", f"Falla en (BD): {e}")
+            from vistas.utilidades import DialogoNotificacion
+            DialogoNotificacion("Error", f"Falla en (BD): {e}", "error", self).exec()
 
     def login_invitado(self):
         from vistas.investigador import VentanaInvestigador
