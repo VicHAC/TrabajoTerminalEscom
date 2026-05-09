@@ -787,7 +787,7 @@ class VentanaInvestigador(QMainWindow):
         orig_pixmap = self.pixmaps_globales["Original"]
         if not orig_pixmap: return
         rect_recorte = QRect(x, y, w, h); pixmap_recorte = orig_pixmap.copy(rect_recorte); nombre_archivo = f"manual_{uuid.uuid4().hex[:6]}.png"; ruta_guardado = os.path.join(crops_folder, nombre_archivo); pixmap_recorte.save(ruta_guardado, "PNG")
-        nueva_caja = {"x": x, "y": y, "w": w, "h": h, "crop_path": ruta_guardado}; self.visor_imagen.boxes.append(nueva_caja); self.visor_imagen.draw_current_state(); self.conteo_actualizado.emit(len(self.visor_imagen.boxes))
+        nueva_caja = {"x": x, "y": y, "w": w, "h": h, "crop_path": ruta_guardado}; self.visor_imagen.boxes.append(nueva_caja); self.visor_imagen.draw_current_state(); self.actualizar_etiqueta_conteo(len(self.visor_imagen.boxes))
 
     def construir_imagen_global(self, carpeta_origen):
         import cv2; import numpy as np
