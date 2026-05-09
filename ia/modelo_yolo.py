@@ -146,14 +146,6 @@ class MicrogliaProcessor:
             x1, y1, x2, y2 = b['x1'], b['y1'], b['x2'], b['y2']
 
             crop_img = bgr_image[y1:y2, x1:x2]
-            
-            # Aplicar filtro CLAHE al canal V (Value/Brillo)
-            hsv_img = cv2.cvtColor(crop_img, cv2.COLOR_BGR2HSV)
-            h, s, v = cv2.split(hsv_img)
-            clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-            v_clahe = clahe.apply(v)
-            hsv_img_clahe = cv2.merge((h, s, v_clahe))
-            crop_img = cv2.cvtColor(hsv_img_clahe, cv2.COLOR_HSV2BGR)
 
             crop_filename = f"microglia_{i+1}.png"
             crop_path = os.path.join(crops_folder, crop_filename)

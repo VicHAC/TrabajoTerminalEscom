@@ -336,7 +336,7 @@ class DialogoVistaCelular(QDialog):
     Modificado: Ahora extrae el nombre del archivo (crop_path)
     y lo muestra en la parte superior como identificador.
     """
-    def __init__(self, crop_path, parent=None):
+    def __init__(self, crop_path, pixmap_mem=None, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Vista Detallada de la Célula")
         self.resize(400, 440) # Ligeramente más alto para acomodar el texto
@@ -355,7 +355,7 @@ class DialogoVistaCelular(QDialog):
         # 3. Agregamos la imagen
         label_imagen = QLabel()
         label_imagen.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        pixmap = QPixmap(crop_path)
+        pixmap = pixmap_mem if pixmap_mem and not pixmap_mem.isNull() else QPixmap(crop_path)
         if not pixmap.isNull():
             label_imagen.setPixmap(pixmap.scaled(380, 380, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
         else:
@@ -507,9 +507,19 @@ class InteractiveImageViewer(QLabel):
             if self.current_tool == "pointer":
                 if self.hovered_index != -1:
                     crop_path = self.boxes[self.hovered_index]["crop_path"]
+                    pixmap_mem = None
+                    if hasattr(self.window(), 'crops_filtrados_temp'):
+                        nombre_base = os.path.basename(crop_path)
+                        if self.view_mode == "Filtrada" or self.view_mode == "Previsualización":
+                            arr = self.window().crops_filtrados_temp.get(nombre_base)
+                            if arr is not None:
+                                h, w = arr.shape
+                                qimg = QImage(arr.data, w, h, w, QImage.Format.Format_Grayscale8)
+                                pixmap_mem = QPixmap.fromImage(qimg)
+                    
                     if self.view_mode == "Filtrada": crop_path = crop_path.replace("/crops/", "/filtradas/")
                     elif self.view_mode == "Esqueleto": crop_path = crop_path.replace("/crops/", "/esqueletos/")
-                    if os.path.exists(crop_path): DialogoVistaCelular(crop_path, self.window()).exec()
+                    if os.path.exists(crop_path) or pixmap_mem: DialogoVistaCelular(crop_path, pixmap_mem, self.window()).exec()
                 else:
                     self.is_panning = True
                     self.pan_start_pos = event.pos()
@@ -650,6 +660,8 @@ class VentanaInvestigador(QMainWindow):
         self.id_usuario = id_usuario; self.rol = rol
         self.ruta_imagen_actual = None
         self.pixmaps_globales = {"Original": None, "Filtrada": None, "Esqueleto": None}
+        self.crops_en_memoria = {}
+        self.crops_filtrados_temp = {}
         self.metadatos_imagen = {"campo": "", "tiempo": ""}
         self.setWindowTitle(f"Prototipo Microglías - Panel ({self.rol})")
         
@@ -667,6 +679,33 @@ class VentanaInvestigador(QMainWindow):
         self.btn_reporte = QPushButton("Generar Reporte"); self.btn_guardar_img = QPushButton("Guardar Imagen")
         estilo_btn_menu = "QPushButton { background-color: transparent; text-align: left; padding: 10px; font-weight: normal; color: #333333; border: none;} QPushButton:hover { background-color: #F0F0F0; border-radius: 5px; } QPushButton:disabled { color: #aaaaaa; }"
         for btn in [self.btn_cargar, self.btn_historial, self.btn_conteo, self.btn_filtrar, self.btn_ramas, self.btn_reporte, self.btn_guardar_img]: btn.setStyleSheet(estilo_btn_menu); menu_lateral.addWidget(btn)
+        
+        self.frame_filtros = QFrame()
+        self.frame_filtros.hide()
+        layout_filtros = QVBoxLayout(self.frame_filtros)
+        layout_filtros.setContentsMargins(0, 10, 0, 10)
+        lbl_f_titulo = QLabel("Ajuste de Filtros"); lbl_f_titulo.setStyleSheet("font-weight: bold; color: #003366;")
+        layout_filtros.addWidget(lbl_f_titulo)
+        lbl_clahe = QLabel("Contraste (CLAHE):")
+        self.sld_clahe = QSlider(Qt.Orientation.Horizontal); self.sld_clahe.setRange(0, 10); self.sld_clahe.setValue(2)
+        layout_filtros.addWidget(lbl_clahe); layout_filtros.addWidget(self.sld_clahe)
+        lbl_gauss = QLabel("Suavizado Gaussiano:")
+        self.sld_gauss = QSlider(Qt.Orientation.Horizontal); self.sld_gauss.setRange(1, 15); self.sld_gauss.setSingleStep(2); self.sld_gauss.setValue(5)
+        layout_filtros.addWidget(lbl_gauss); layout_filtros.addWidget(self.sld_gauss)
+        lbl_otsu = QLabel("Umbral Binarización:")
+        self.sld_otsu = QSlider(Qt.Orientation.Horizontal); self.sld_otsu.setRange(-50, 50); self.sld_otsu.setValue(0)
+        layout_filtros.addWidget(lbl_otsu); layout_filtros.addWidget(self.sld_otsu)
+        btn_aceptar_filtro = QPushButton("Aceptar"); btn_aceptar_filtro.setStyleSheet("background-color: #28a745; color: white; font-weight: bold; padding: 5px;")
+        btn_cancelar_filtro = QPushButton("Cancelar"); btn_cancelar_filtro.setStyleSheet("background-color: #dc3545; color: white; font-weight: bold; padding: 5px;")
+        layout_filtros.addWidget(btn_aceptar_filtro); layout_filtros.addWidget(btn_cancelar_filtro)
+        menu_lateral.addWidget(self.frame_filtros)
+        
+        self.sld_clahe.valueChanged.connect(self.previsualizar_filtrado)
+        self.sld_gauss.valueChanged.connect(self.previsualizar_filtrado)
+        self.sld_otsu.valueChanged.connect(self.previsualizar_filtrado)
+        btn_aceptar_filtro.clicked.connect(self.confirmar_filtrado)
+        btn_cancelar_filtro.clicked.connect(self.cancelar_filtrado)
+
         menu_lateral.addStretch()
         self.btn_cerrar_sesion = QPushButton("Cerrar Sesión"); self.btn_cerrar_sesion.setStyleSheet("QPushButton { background-color: transparent; border: 2px solid #cc0000; color: #cc0000; font-weight: bold; border-radius: 8px; padding: 10px; margin-top: 20px; } QPushButton:hover { background-color: #cc0000; color: white; }"); menu_lateral.addWidget(self.btn_cerrar_sesion)
         frame_menu = QFrame(); frame_menu.setObjectName("menu_lateral"); frame_menu.setFixedWidth(200); frame_menu.setLayout(menu_lateral)
@@ -830,16 +869,6 @@ class VentanaInvestigador(QMainWindow):
         orig_pixmap = self.pixmaps_globales["Original"]
         if not orig_pixmap: return
         rect_recorte = QRect(x, y, w, h); pixmap_recorte = orig_pixmap.copy(rect_recorte); nombre_archivo = f"manual_{uuid.uuid4().hex[:6]}.png"; ruta_guardado = os.path.join(crops_folder, nombre_archivo); pixmap_recorte.save(ruta_guardado, "PNG")
-        import cv2
-        crop_img = cv2.imread(ruta_guardado)
-        if crop_img is not None:
-            hsv_img = cv2.cvtColor(crop_img, cv2.COLOR_BGR2HSV)
-            h_c, s_c, v_c = cv2.split(hsv_img)
-            clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-            v_clahe = clahe.apply(v_c)
-            hsv_img_clahe = cv2.merge((h_c, s_c, v_clahe))
-            crop_img = cv2.cvtColor(hsv_img_clahe, cv2.COLOR_HSV2BGR)
-            cv2.imwrite(ruta_guardado, crop_img)
         nueva_caja = {"x": x, "y": y, "w": w, "h": h, "crop_path": ruta_guardado}; self.visor_imagen.boxes.append(nueva_caja); self.visor_imagen.draw_current_state(); self.actualizar_etiqueta_conteo(len(self.visor_imagen.boxes))
 
     def construir_imagen_global(self, carpeta_origen):
@@ -854,23 +883,127 @@ class VentanaInvestigador(QMainWindow):
         qimg = QImage(lienzo.data, orig_w, orig_h, orig_w, QImage.Format.Format_Grayscale8).copy()
         return QPixmap.fromImage(qimg)
 
+    def construir_imagen_global_memoria(self):
+        import numpy as np
+        orig_pixmap = self.pixmaps_globales["Original"]; orig_w = orig_pixmap.width(); orig_h = orig_pixmap.height(); lienzo = np.zeros((orig_h, orig_w), dtype=np.uint8)
+        for box in self.visor_imagen.boxes:
+            x, y, w, h = int(box["x"]), int(box["y"]), int(box["w"]), int(box["h"])
+            nombre_archivo = os.path.basename(box["crop_path"])
+            recorte = self.crops_filtrados_temp.get(nombre_archivo)
+            if recorte is not None:
+                rh, rw = recorte.shape; y_fin = min(y + rh, orig_h); x_fin = min(x + rw, orig_w); h_real = y_fin - y; w_real = x_fin - x
+                lienzo[y:y_fin, x:x_fin] = recorte[:h_real, :w_real]
+        qimg = QImage(lienzo.data, orig_w, orig_h, orig_w, QImage.Format.Format_Grayscale8).copy()
+        return QPixmap.fromImage(qimg)
+
     def ejecutar_filtrado(self):
         if not self.ruta_imagen_actual or not self.visor_imagen.boxes: QMessageBox.warning(self, "Advertencia", "Aplica el conteo primero."); return
-        base_name = Path(self.ruta_imagen_actual).stem; filtradas_dir = os.path.join(os.getcwd(), "analisis_resultados", base_name, "filtradas"); os.makedirs(filtradas_dir, exist_ok=True); import cv2; import numpy as np; count = 0
+        import cv2; import numpy as np
+        self.crops_en_memoria.clear()
+        self.crops_filtrados_temp.clear()
+        
+        from PyQt6.QtWidgets import QApplication
+        dialogo = DialogoCarga("Cargando imágenes a memoria...\nPor favor, espera.", self); dialogo.show(); QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor); QApplication.processEvents()
+        
+        for box in self.visor_imagen.boxes:
+            crop_path = box["crop_path"]
+            if os.path.exists(crop_path):
+                with open(crop_path, "rb") as f: file_bytes = bytearray(f.read())
+                img_array = np.asarray(file_bytes, dtype=np.uint8)
+                img = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
+                if img is not None:
+                    nombre = os.path.basename(crop_path)
+                    self.crops_en_memoria[nombre] = img
+                    
+        dialogo.close(); QApplication.restoreOverrideCursor()
+        
+        self.frame_filtros.show()
+        for btn in [self.btn_cargar, self.btn_historial, self.btn_conteo, self.btn_filtrar, self.btn_ramas, self.btn_reporte, self.btn_guardar_img]: btn.setEnabled(False)
+        self.combo_vista.setEnabled(True)
+        items_combo = [self.combo_vista.itemText(i) for i in range(self.combo_vista.count())]
+        if "Previsualización" not in items_combo:
+            self.combo_vista.addItem("Previsualización")
+        
+        self.combo_vista.blockSignals(True)
+        self.combo_vista.setCurrentText("Previsualización")
+        self.combo_vista.blockSignals(False)
+        self.visor_imagen.view_mode = "Previsualización"
+        
+        self.previsualizar_filtrado()
+
+    def previsualizar_filtrado(self, *args):
+        if not self.crops_en_memoria: return
+        import cv2; import numpy as np
+        clahe_clip = self.sld_clahe.value()
+        k_val = self.sld_gauss.value()
+        k = k_val if k_val % 2 != 0 else k_val + 1
+        otsu_offset = self.sld_otsu.value()
+        
+        clahe = cv2.createCLAHE(clipLimit=float(clahe_clip), tileGridSize=(8, 8)) if clahe_clip > 0 else None
+        
+        for nombre, img in self.crops_en_memoria.items():
+            if clahe is not None:
+                hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+                h_c, s_c, v_c = cv2.split(hsv)
+                v_clahe = clahe.apply(v_c)
+                hsv_clahe = cv2.merge((h_c, s_c, v_clahe))
+                bgr_proc = cv2.cvtColor(hsv_clahe, cv2.COLOR_HSV2BGR)
+            else:
+                bgr_proc = img
+                
+            gray = cv2.cvtColor(bgr_proc, cv2.COLOR_BGR2GRAY)
+            blur = cv2.GaussianBlur(gray, (k, k), 0)
+            ret, _ = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+            threshold_val = max(0, min(255, ret + otsu_offset))
+            _, bin_img = cv2.threshold(blur, threshold_val, 255, cv2.THRESH_BINARY)
+            
+            self.crops_filtrados_temp[nombre] = bin_img
+            
+        pixmap_filtrada = self.construir_imagen_global_memoria()
+        self.pixmaps_globales["Previsualización"] = pixmap_filtrada
+        self.visor_imagen.set_view_mode("Previsualización", pixmap_filtrada)
+
+    def confirmar_filtrado(self):
+        base_name = Path(self.ruta_imagen_actual).stem; filtradas_dir = os.path.join(os.getcwd(), "analisis_resultados", base_name, "filtradas"); os.makedirs(filtradas_dir, exist_ok=True); import cv2; count = 0
         from PyQt6.QtWidgets import QApplication
         try:
-            dialogo = DialogoCarga("Aplicando filtrado a las células...\nPor favor, espera.", self); dialogo.show(); QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor); QApplication.processEvents()
-            for box in self.visor_imagen.boxes:
-                crop_path = box["crop_path"]
-                if os.path.exists(crop_path):
-                    with open(crop_path, "rb") as f: file_bytes = bytearray(f.read())
-                    img_array = np.asarray(file_bytes, dtype=np.uint8); img = cv2.imdecode(img_array, cv2.IMREAD_GRAYSCALE)
-                    if img is not None: blur = cv2.GaussianBlur(img, (5, 5), 0); _, bin_img = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU); nombre = os.path.basename(crop_path); out_path = os.path.join(filtradas_dir, nombre); is_success, im_buf_arr = cv2.imencode(".png", bin_img)
-                    if is_success: im_buf_arr.tofile(out_path); count += 1
+            dialogo = DialogoCarga("Guardando filtros aplicados...\nPor favor, espera.", self); dialogo.show(); QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor); QApplication.processEvents()
+            for nombre, bin_img in self.crops_filtrados_temp.items():
+                out_path = os.path.join(filtradas_dir, nombre)
+                is_success, im_buf_arr = cv2.imencode(".png", bin_img)
+                if is_success: im_buf_arr.tofile(out_path); count += 1
             dialogo.close(); QApplication.restoreOverrideCursor()
-            if count > 0: pixmap_filtrada = self.construir_imagen_global("filtradas"); self.pixmaps_globales["Filtrada"] = pixmap_filtrada; self.actualizar_estado_flujo(3); self.combo_vista.addItem("Filtrada"); self.combo_vista.setCurrentText("Filtrada"); QMessageBox.information(self, "2. Filtrado", f"Se binarizaron {count} microglías.")
-            else: QMessageBox.warning(self, "Error", "No se pudo procesar ninguna imagen. Las cajas de YOLO están vacías.")
-        except Exception as error: dialogo.close(); QApplication.restoreOverrideCursor(); QMessageBox.critical(self, "Error", f"Falló el filtrado: {str(error)}")
+            
+            if count > 0:
+                self.pixmaps_globales["Filtrada"] = self.pixmaps_globales["Previsualización"]
+                self.combo_vista.blockSignals(True)
+                items_combo = [self.combo_vista.itemText(i) for i in range(self.combo_vista.count())]
+                if "Filtrada" not in items_combo: self.combo_vista.addItem("Filtrada")
+                idx = self.combo_vista.findText("Previsualización")
+                if idx >= 0: self.combo_vista.removeItem(idx)
+                self.combo_vista.setCurrentText("Filtrada")
+                self.combo_vista.blockSignals(False)
+                self.visor_imagen.view_mode = "Filtrada"
+                
+                self.frame_filtros.hide()
+                self.actualizar_estado_flujo(3)
+                QMessageBox.information(self, "2. Filtrado", f"Se aplicaron los filtros a {count} microglías.")
+            else: QMessageBox.warning(self, "Error", "No se guardó ninguna imagen.")
+        except Exception as error: dialogo.close(); QApplication.restoreOverrideCursor(); QMessageBox.critical(self, "Error", f"Falló el guardado: {str(error)}")
+
+    def cancelar_filtrado(self):
+        self.crops_en_memoria.clear()
+        self.crops_filtrados_temp.clear()
+        self.frame_filtros.hide()
+        
+        self.combo_vista.blockSignals(True)
+        idx = self.combo_vista.findText("Previsualización")
+        if idx >= 0: self.combo_vista.removeItem(idx)
+        self.combo_vista.setCurrentText("Original")
+        self.combo_vista.blockSignals(False)
+        self.cambiar_vista_global("Original")
+        
+        self.actualizar_estado_flujo(1) # Reactivar botones principales
 
     def mostrar_ramas_morfologia(self):
         if not self.ruta_imagen_actual or not self.visor_imagen.boxes: QMessageBox.warning(self, "Advertencia", "Aplica el conteo y filtrado primero."); return
