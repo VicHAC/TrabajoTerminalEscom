@@ -158,7 +158,7 @@ class MicrogliaProcessor:
 
 if __name__ == "__main__":
     # Test execution block
-    model_path = "ia/entrenamiento_resultados/modelo_microglias5/weights/best.pt"
+    model_path = "ia/entrenamiento_resultados/modelo_microglias5/weights/best_(5).pt"
     test_image = "imagenes_microscopio_raw/x5/Sin título-22.tif"
     results_folder = "./resultados_seleccion"
     
