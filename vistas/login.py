@@ -1,13 +1,25 @@
 import hashlib
 import sqlite3
+import os
+import sys
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QLabel, QLineEdit, QPushButton)
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QPixmap
+from PyQt6.QtGui import QPixmap, QIcon
 
 class VentanaLogin(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Prototipo Microglías - Inicio de Sesión")
+        
+        # Resolver ruta para PyInstaller
+        try:
+            base_path = sys._MEIPASS
+        except Exception:
+            base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            
+        self.logo_path = os.path.join(base_path, "assets", "logo.png")
+        
+        self.setWindowIcon(QIcon(self.logo_path))
         self.resize(400, 550)
         
         layout = QVBoxLayout()
@@ -17,7 +29,8 @@ class VentanaLogin(QWidget):
         # 1. EL LOGO
         self.logo = QLabel("Aquí va tu logo (assets/logo.png)")
         self.logo.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        pixmap = QPixmap("assets/logo.png")
+        
+        pixmap = QPixmap(self.logo_path)
         if not pixmap.isNull():
             self.logo.setPixmap(pixmap.scaled(150, 150, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
         else:

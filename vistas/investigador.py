@@ -189,6 +189,9 @@ class DialogoCargarImagen(QDialog):
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setModal(True)
         
+        from vistas.utilidades import set_app_icon
+        set_app_icon(self)
+        
         self.ruta_seleccionada = None
         self.campo_val = ""
         self.tiempo_val = ""
@@ -319,6 +322,9 @@ class DialogoCarga(QDialog):
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setModal(True)
         
+        from vistas.utilidades import set_app_icon
+        set_app_icon(self)
+        
         layout = QVBoxLayout(self)
         frame = QFrame(self)
         frame.setStyleSheet("""
@@ -353,6 +359,9 @@ class DialogoVistaCelular(QDialog):
         self.resize(400, 480) 
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog | Qt.WindowType.WindowStaysOnTopHint)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        
+        from vistas.utilidades import set_app_icon
+        set_app_icon(self)
         
         main_layout = QVBoxLayout(self)
         frame = QFrame(self)
@@ -409,6 +418,9 @@ class DialogoConfirmacion(QDialog):
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setModal(True)
         self.resultado = False
+        
+        from vistas.utilidades import set_app_icon
+        set_app_icon(self)
 
         layout = QVBoxLayout(self)
         frame = QFrame(self)
@@ -696,6 +708,9 @@ class VentanaInvestigador(QMainWindow):
         self.crops_filtrados_temp = {}
         self.metadatos_imagen = {"campo": "", "tiempo": ""}
         self.setWindowTitle(f"Prototipo Microglías - Panel ({self.rol})")
+        
+        from vistas.utilidades import set_app_icon
+        set_app_icon(self)
         
         screen_geom = QApplication.primaryScreen().geometry()
         self.resize(int(screen_geom.width() * 0.8), int(screen_geom.height() * 0.8))

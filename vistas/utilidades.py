@@ -1,5 +1,18 @@
+import sys
+import os
 from PyQt6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QFrame, QLabel, QPushButton
 from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QIcon
+
+def get_logo_path():
+    try:
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    return os.path.join(base_path, "assets", "logo.png")
+
+def set_app_icon(window):
+    window.setWindowIcon(QIcon(get_logo_path()))
 
 class DialogoNotificacion(QDialog):
     def __init__(self, titulo, mensaje, tipo="info", parent=None):
@@ -7,6 +20,7 @@ class DialogoNotificacion(QDialog):
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog | Qt.WindowType.WindowStaysOnTopHint)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setModal(True)
+        set_app_icon(self)
 
         layout = QVBoxLayout(self)
         frame = QFrame(self)
@@ -70,6 +84,7 @@ class DialogoConfirmacion(QDialog):
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setModal(True)
         self.resultado = False
+        set_app_icon(self)
 
         layout = QVBoxLayout(self)
         frame = QFrame(self)

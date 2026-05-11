@@ -16,6 +16,9 @@ class DialogoCrearUsuario(QDialog):
         self.setWindowTitle("Registrar Nuevo Usuario")
         self.resize(300, 250)
         
+        from vistas.utilidades import set_app_icon
+        set_app_icon(self)
+        
         layout = QVBoxLayout()
         self.input_usuario = QLineEdit()
         self.input_usuario.setPlaceholderText("Nombre de Usuario")
@@ -76,6 +79,9 @@ class DialogoEditarUsuario(QDialog):
         self.id_usuario = id_usuario
         self.setWindowTitle("Editar Usuario")
         self.resize(300, 250)
+        
+        from vistas.utilidades import set_app_icon
+        set_app_icon(self)
         
         layout = QVBoxLayout()
         self.input_usuario = QLineEdit(nombre_actual)
@@ -143,6 +149,10 @@ class VentanaAdministrador(QMainWindow):
         self.id_usuario = id_usuario
         self.setWindowTitle("Prototipo Microglías - Panel de Administración")
         self.resize(1000, 600)
+        
+        from vistas.utilidades import set_app_icon
+        set_app_icon(self)
+        
         self.inicializar_ui()
 
     def inicializar_ui(self):

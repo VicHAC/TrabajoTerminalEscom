@@ -1,14 +1,39 @@
 import sys
+import os
 
 from bd.database import inicializar_bd
 from PyQt6.QtWidgets import QApplication
+from PyQt6.QtGui import QIcon
 from vistas.login import VentanaLogin
 
 
+def resource_path(relative_path):
+    """Obtiene la ruta absoluta a un recurso, funciona tanto en desarrollo como en PyInstaller"""
+    try:
+        # PyInstaller extrae los archivos en una carpeta temporal en _MEIPASS
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.dirname(os.path.abspath(__file__))
+
+    return os.path.join(base_path, relative_path)
+
 def main():
+    # Código necesario para que Windows muestre el icono en la barra de tareas
+    # al ejecutarse como archivo compilado
+    if os.name == 'nt':
+        import ctypes
+        myappid = 'escom.tt.microglias.1'
+        try:
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
+        except Exception:
+            pass
+
     inicializar_bd()
 
     app = QApplication(sys.argv)
+    
+    icon_path = resource_path(os.path.join("assets", "logo.png"))
+    app.setWindowIcon(QIcon(icon_path))
     # ==========================================
     # Global QSS
     # ==========================================
