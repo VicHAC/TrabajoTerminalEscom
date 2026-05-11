@@ -23,6 +23,8 @@ from PyQt6.QtWidgets import (
     QSlider,
     QCheckBox,
     QLineEdit,
+    QGridLayout,
+
     QToolTip,
 )
 from PyQt6.QtCore import QTimer
@@ -493,18 +495,20 @@ class DialogoVistaCelular(QDialog):
     Ventana detallada que permite navegar entre las fases de procesamiento
     de una microglía específica (Original < Filtrado > Esqueletizado).
     """
-    def __init__(self, crop_path, pixmap_mem=None, modo_inicial="Original", parent=None):
+    def __init__(self, box, pixmap_mem=None, modo_inicial="Original", parent=None):
         super().__init__(parent)
         self.setWindowTitle("Vista Detallada de la Célula")
-        self.resize(450, 520) 
+        self.resize(500, 750) 
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog | Qt.WindowType.WindowStaysOnTopHint)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         
         from vistas.utilidades import set_app_icon
         set_app_icon(self)
         
-        self.crop_path = crop_path
+        self.box = box
+        self.crop_path = box["crop_path"]
         self.pixmap_mem_filtrado = pixmap_mem
+
         self.fases_disponibles = []
         self.preparar_fases()
         
@@ -522,7 +526,8 @@ class DialogoVistaCelular(QDialog):
         frame.setStyleSheet("QFrame { background-color: #FFFFFF; border-radius: 12px; border: 2px solid #003366; } QLabel { border: none; }")
         layout = QVBoxLayout(frame)
         
-        nombre_archivo = os.path.basename(crop_path)
+        nombre_archivo = os.path.basename(self.crop_path)
+
         lbl_nombre = QLabel(f"Identificador: <b>{nombre_archivo}</b>")
         lbl_nombre.setAlignment(Qt.AlignmentFlag.AlignCenter)
         lbl_nombre.setStyleSheet("font-size: 15px; color: #003366; margin-bottom: 5px;")
@@ -558,7 +563,57 @@ class DialogoVistaCelular(QDialog):
         layout_imagen_nav.addWidget(self.btn_sig)
         
         layout.addLayout(layout_imagen_nav)
+        
+        # Filtros Individuales (Offsets) - Solo si estamos en modo investigador y no es modo lectura
+        self.frame_offsets = QFrame()
+        self.frame_offsets.setStyleSheet("QFrame { background-color: #f9f9f9; border: 1px solid #ddd; border-radius: 8px; margin: 5px; } QLabel { color: #333; font-weight: bold; font-size: 11px; }")
+        layout_offsets = QVBoxLayout(self.frame_offsets)
+        
+        lbl_off_tit = QLabel("Ajuste de Filtros Individuales (Offsets)")
+        lbl_off_tit.setStyleSheet("color: #003366; font-size: 12px; margin-bottom: 5px;")
+        layout_offsets.addWidget(lbl_off_tit)
+        
+        grid_offsets = QGridLayout()
+        
+        # CLAHE Offset
+        grid_offsets.addWidget(QLabel("Contraste:"), 0, 0)
+        self.sld_o_clahe = QSlider(Qt.Orientation.Horizontal); self.sld_o_clahe.setRange(-5, 5)
+        self.sld_o_clahe.setValue(self.box["offsets"]["clahe"])
+        grid_offsets.addWidget(self.sld_o_clahe, 0, 1)
+        
+        # Gauss Offset
+        grid_offsets.addWidget(QLabel("Suavizado:"), 1, 0)
+        self.sld_o_gauss = QSlider(Qt.Orientation.Horizontal); self.sld_o_gauss.setRange(-6, 6)
+        self.sld_o_gauss.setValue(self.box["offsets"]["gauss"])
+        grid_offsets.addWidget(self.sld_o_gauss, 1, 1)
+        
+        # Otsu Offset
+        grid_offsets.addWidget(QLabel("Umbral:"), 2, 0)
+        self.sld_o_otsu = QSlider(Qt.Orientation.Horizontal); self.sld_o_otsu.setRange(-50, 50)
+        self.sld_o_otsu.setValue(self.box["offsets"]["otsu"])
+        grid_offsets.addWidget(self.sld_o_otsu, 2, 1)
+        
+        layout_offsets.addLayout(grid_offsets)
+        
+        # Estilo para sliders de offset
+        estilo_off = "QSlider::groove:horizontal { height: 4px; background: #ddd; } QSlider::handle:horizontal { background: #3a61a0; width: 12px; height: 12px; margin: -4px 0; border-radius: 6px; }"
+        for s in [self.sld_o_clahe, self.sld_o_gauss, self.sld_o_otsu]:
+            s.setStyleSheet(estilo_off)
+            s.valueChanged.connect(self.actualizar_offsets)
+            
+        layout.addWidget(self.frame_offsets)
+        
+        # Solo mostrar si el padre está en fase de filtrado (previsualización)
+        if hasattr(parent, "combo_vista") and parent.combo_vista.currentText() == "Previsualización":
+            self.frame_offsets.show()
+            self.resize(500, 750)
+        else:
+            self.frame_offsets.hide()
+            self.resize(450, 520)
+
         layout.addSpacing(10)
+
+
         
         # Botones inferiores
         layout_inferior = QHBoxLayout()
@@ -625,11 +680,45 @@ class DialogoVistaCelular(QDialog):
         else:
             self.label_imagen.setText(f"No se pudo cargar la imagen de {fase['nombre']}.")
             
-        # Unicamente en las imagenes detalladas quiero que los botones no se oculten, que se deshabiliten
+        # Actualizar visibilidad de offsets según la fase seleccionada en el diálogo
+        # self.frame_offsets.setVisible(fase["nombre"] == "FILTRADO")
+
+        # Actualizar estado de botones de navegación
         self.btn_ant.setEnabled(self.indice_fase > 0)
         self.btn_sig.setEnabled(self.indice_fase < len(self.fases_disponibles) - 1)
         self.btn_ant.show()
         self.btn_sig.show()
+
+
+    def actualizar_offsets(self):
+        # 1. Actualizar valores en el box
+        self.box["offsets"]["clahe"] = self.sld_o_clahe.value()
+        self.box["offsets"]["gauss"] = self.sld_o_gauss.value()
+        self.box["offsets"]["otsu"] = self.sld_o_otsu.value()
+        
+        # 2. Notificar al padre para que reprocese globalmente
+        if hasattr(self.parent(), "previsualizar_filtrado"):
+            self.parent().previsualizar_filtrado()
+            
+            # 3. Obtener el nuevo pixmap filtrado para este crop
+            nombre = os.path.basename(self.crop_path)
+            if nombre in self.parent().crops_filtrados_temp:
+                bin_img = self.parent().crops_filtrados_temp[nombre]
+                import cv2; from PyQt6.QtGui import QImage
+                h, w = bin_img.shape
+                qimg = QImage(bin_img.data, w, h, w, QImage.Format.Format_Grayscale8)
+                nuevo_pixmap = QPixmap.fromImage(qimg)
+                
+                # Actualizar en fases_disponibles
+                for f in self.fases_disponibles:
+                    if f["nombre"] == "FILTRADO":
+                        f["pixmap"] = nuevo_pixmap
+                        break
+                
+                # Si estamos viendo la fase filtrado, refrescar
+                if self.fases_disponibles[self.indice_fase]["nombre"] == "FILTRADO":
+                    self.actualizar_vista()
+
 
     def mostrar_anterior(self):
         if self.indice_fase > 0:
@@ -806,7 +895,8 @@ class InteractiveImageViewer(QLabel):
                     elif self.view_mode == "Esqueleto": crop_path = crop_path.replace("/crops/", "/esqueletos/").replace("\\crops\\", "\\esqueletos\\")
 
                     if os.path.exists(crop_path) or pixmap_mem:
-                        DialogoVistaCelular(crop_path_base, pixmap_mem, self.view_mode, self.window()).exec()
+                        DialogoVistaCelular(self.boxes[self.hovered_index], pixmap_mem, self.view_mode, self.window()).exec()
+
                 else:
                     self.is_panning = True
                     self.pan_start_pos = event.pos()
@@ -910,16 +1000,30 @@ class InteractiveImageViewer(QLabel):
         
         for i, box in enumerate(self.boxes):
             rect = QRect(int(box["x"] * actual_scale), int(box["y"] * actual_scale), int(box["w"] * actual_scale), int(box["h"] * actual_scale))
+            
+            # Detectar si tiene offsets (solo en modo previsualización)
+            has_offset = False
+            if self.view_mode == "Previsualización":
+                offs = box.get("offsets", {})
+                if offs.get("clahe", 0) != 0 or offs.get("gauss", 0) != 0 or offs.get("otsu", 0) != 0:
+                    has_offset = True
+
             if i == self.hovered_index and self.current_tool != "draw":
-                pen = QPen(QColor(0, 255, 0)) 
+                color = QColor(255, 165, 0) if has_offset else QColor(0, 255, 0)
+                pen = QPen(color)
                 pen.setWidth(max(2, int(pix_w * 0.003 * actual_scale)))
             else:
-                pen = QPen(QColor(0, 255, 0, 120))
+                color = QColor(255, 165, 0, 180) if has_offset else QColor(0, 255, 0, 120)
+                pen = QPen(color)
                 pen.setWidth(max(1, int(pix_w * 0.0015 * actual_scale)))
                 
             painter.setPen(pen)
             painter.setBrush(Qt.BrushStyle.NoBrush)
             painter.drawRect(rect)
+            
+            if has_offset:
+                painter.drawText(rect.x() + 2, rect.y() + 12, "*")
+
             
         if self.is_drawing and self.draw_start_pos and self.draw_current_pos:
             orig_start = self.map_mouse_to_original(self.draw_start_pos); orig_end = self.map_mouse_to_original(self.draw_current_pos)
@@ -1049,14 +1153,20 @@ class VentanaInvestigador(QMainWindow):
         self.btn_cargar = QPushButton("Cargar Imagen"); self.btn_historial = QPushButton("Historial"); label_caract = QLabel("Caracterización:"); label_caract.setStyleSheet("font-weight: bold; margin-top: 15px;")
         self.btn_conteo = QPushButton("1. Aplicar Conteo"); self.btn_filtrar = QPushButton("2. Aplicar Filtrado"); self.btn_ramas = QPushButton("3. Mostrar Ramas"); label_reporte = QLabel("Reportes:"); label_reporte.setStyleSheet("font-weight: bold; margin-top: 15px;")
         self.btn_reporte = QPushButton("Generar Reporte"); self.btn_guardar_img = QPushButton("Guardar Imagen")
+        self.btn_corregir_filtrado = QPushButton("Corregir Filtrado")
+
         estilo_btn_menu = "QPushButton { background-color: transparent; text-align: left; padding: 10px; font-weight: normal; color: #333333; border: none;} QPushButton:hover { background-color: #F0F0F0; border-radius: 5px; } QPushButton:disabled { color: #aaaaaa; }"
-        for btn in [self.btn_cargar, self.btn_historial, self.btn_conteo, self.btn_filtrar, self.btn_ramas, self.btn_reporte, self.btn_guardar_img]: btn.setStyleSheet(estilo_btn_menu); menu_lateral.addWidget(btn)
+        for btn in [self.btn_cargar, self.btn_historial, self.btn_conteo, self.btn_filtrar, self.btn_ramas, self.btn_reporte, self.btn_guardar_img, self.btn_corregir_filtrado]: btn.setStyleSheet(estilo_btn_menu); menu_lateral.addWidget(btn)
+        self.btn_corregir_filtrado.hide()
+        self.btn_corregir_filtrado.setStyleSheet(estilo_btn_menu + "QPushButton { color: #dc3545; font-weight: bold; }")
+
         
         self.frame_filtros = QFrame()
         self.frame_filtros.hide()
         layout_filtros = QVBoxLayout(self.frame_filtros)
         layout_filtros.setContentsMargins(0, 10, 0, 10)
-        lbl_f_titulo = QLabel("Ajuste de Filtros"); lbl_f_titulo.setStyleSheet("font-weight: bold; color: #003366;")
+        lbl_f_titulo = QLabel("Ajuste de Filtros Globales"); lbl_f_titulo.setStyleSheet("font-weight: bold; color: #003366;")
+
         layout_filtros.addWidget(lbl_f_titulo)
         lbl_clahe = QLabel("Contraste (CLAHE):")
         self.sld_clahe = QSlider(Qt.Orientation.Horizontal); self.sld_clahe.setRange(0, 10); self.sld_clahe.setValue(2)
@@ -1067,6 +1177,10 @@ class VentanaInvestigador(QMainWindow):
         lbl_otsu = QLabel("Umbral Binarización:")
         self.sld_otsu = QSlider(Qt.Orientation.Horizontal); self.sld_otsu.setRange(-50, 50); self.sld_otsu.setValue(0)
         layout_filtros.addWidget(lbl_otsu); layout_filtros.addWidget(self.sld_otsu)
+        estilo_slider = "QSlider::groove:horizontal { border: 1px solid #bbb; height: 6px; background: #eee; margin: 2px 0; border-radius: 3px; } QSlider::handle:horizontal { background: #3a61a0; border: 1px solid #3a61a0; width: 16px; height: 16px; margin: -5px 0; border-radius: 8px; } QSlider::handle:horizontal:hover { background: #2a4d80; border: 1px solid #2a4d80; }"
+        self.sld_clahe.setStyleSheet(estilo_slider); self.sld_gauss.setStyleSheet(estilo_slider); self.sld_otsu.setStyleSheet(estilo_slider)
+
+
         btn_aceptar_filtro = QPushButton("Aceptar"); btn_aceptar_filtro.setStyleSheet("background-color: #28a745; color: white; font-weight: bold; padding: 5px;")
         btn_cancelar_filtro = QPushButton("Cancelar"); btn_cancelar_filtro.setStyleSheet("background-color: #dc3545; color: white; font-weight: bold; padding: 5px;")
         layout_filtros.addWidget(btn_aceptar_filtro); layout_filtros.addWidget(btn_cancelar_filtro)
@@ -1134,6 +1248,8 @@ class VentanaInvestigador(QMainWindow):
         
         lbl_minus = QLabel("-"); lbl_minus.setStyleSheet("font-size: 24px; font-weight: bold; color: #555;"); lbl_plus = QLabel("+"); lbl_plus.setStyleSheet("font-size: 20px; font-weight: bold; color: #555;")
         self.sld_nivel_zoom = QSlider(Qt.Orientation.Horizontal); self.sld_nivel_zoom.setRange(50, 400); self.sld_nivel_zoom.setValue(100); self.sld_nivel_zoom.setFixedWidth(120); self.sld_nivel_zoom.setEnabled(False)
+        self.sld_nivel_zoom.setStyleSheet("QSlider::groove:horizontal { border: 1px solid #bbb; height: 4px; background: #eee; margin: 2px 0; border-radius: 2px; } QSlider::handle:horizontal { background: #3a61a0; border: 1px solid #3a61a0; width: 14px; height: 14px; margin: -5px 0; border-radius: 7px; }")
+
         
         self.btn_zoom_reset = QPushButton("Reset")
         self.btn_zoom_reset.setStyleSheet("QPushButton { background-color: #f0f0f0; border: 1px solid #ccc; border-radius: 4px; padding: 4px 10px; font-weight: bold; color:#007bff;} QPushButton:hover { background-color: #e0e0e0; } QPushButton:disabled { color:#aaa; }")
@@ -1157,7 +1273,8 @@ class VentanaInvestigador(QMainWindow):
         area_imagen.addLayout(controles_superiores); area_imagen.addWidget(self.visor_imagen, stretch=1)
         layout_principal.addWidget(frame_menu); layout_principal.addLayout(area_imagen, stretch=1); widget_central.setLayout(layout_principal); self.setCentralWidget(widget_central)
         
-        self.btn_cargar.clicked.connect(self.cargar_imagen); self.btn_cerrar_sesion.clicked.connect(self.cerrar_sesion); self.btn_conteo.clicked.connect(self.execute_microglia_counting); self.btn_filtrar.clicked.connect(self.ejecutar_filtrado); self.btn_ramas.clicked.connect(self.mostrar_ramas_morfologia); self.btn_reporte.clicked.connect(self.generar_reporte)
+        self.btn_cargar.clicked.connect(self.cargar_imagen); self.btn_cerrar_sesion.clicked.connect(self.cerrar_sesion); self.btn_conteo.clicked.connect(self.execute_microglia_counting); self.btn_filtrar.clicked.connect(self.ejecutar_filtrado); self.btn_ramas.clicked.connect(self.mostrar_ramas_morfologia); self.btn_reporte.clicked.connect(self.generar_reporte); self.btn_corregir_filtrado.clicked.connect(self.corregir_filtrado)
+
         self.actualizar_estado_flujo(0)
         
         if self.rol == "Invitado" or self.rol == "Guest": self.btn_historial.hide(); self.btn_guardar_img.hide()
@@ -1200,8 +1317,12 @@ class VentanaInvestigador(QMainWindow):
             self.btn_herramienta_eliminar.hide(); self.btn_herramienta_eliminar.setChecked(False)
             self.visor_imagen.current_tool = "pointer"
         elif paso == 4:
-            self.btn_cargar.setEnabled(True); self.btn_conteo.setEnabled(False); self.btn_filtrar.setEnabled(False); self.btn_ramas.setEnabled(False); self.btn_reporte.setEnabled(True)
+            self.btn_cargar.setEnabled(False); self.btn_conteo.setEnabled(False); self.btn_filtrar.setEnabled(False); self.btn_ramas.setEnabled(False); self.btn_reporte.setEnabled(True)
+            self.btn_corregir_filtrado.show()
             self.btn_herramienta_caja.hide(); self.btn_herramienta_eliminar.hide()
+        
+        if paso != 4: self.btn_corregir_filtrado.hide()
+
 
     def actualizar_etiqueta_conteo(self, conteo): self.lbl_info_conteo.setText(f"Microglías detectadas: {conteo}")
 
@@ -1277,8 +1398,14 @@ class VentanaInvestigador(QMainWindow):
             from ia.modelo_yolo import MicrogliaProcessor
             model_path = os.path.join(os.getcwd(), "ia", "entrenamiento_resultados", "modelo_microglias5", "weights", "best.pt"); output_dir = os.path.join(os.getcwd(), "analisis_resultados")
             processor = MicrogliaProcessor(model_path=model_path); resultado = processor.process_and_crop(self.ruta_imagen_actual, base_output_folder=output_dir)
-            if len(resultado) == 3: crops_folder, count, boxes_data = resultado; self.visor_imagen.set_image_and_boxes(self.pixmaps_globales["Original"], boxes_data)
-            else: crops_folder, count = resultado; self.visor_imagen.set_image_and_boxes(self.pixmaps_globales["Original"], [])
+            if len(resultado) == 3:
+                crops_folder, count, boxes_data = resultado
+                for box in boxes_data: box["offsets"] = {"clahe": 0, "gauss": 0, "otsu": 0}
+                self.visor_imagen.set_image_and_boxes(self.pixmaps_globales["Original"], boxes_data)
+            else:
+                crops_folder, count = resultado; self.visor_imagen.set_image_and_boxes(self.pixmaps_globales["Original"], [])
+
+
             dialogo.close(); QApplication.restoreOverrideCursor(); self.actualizar_estado_flujo(2); self.mostrar_notificacion("1. Conteo completado", f"Se detectaron {count} posibles microglías.\n\nUsa las herramientas superiores si necesitas agregar o eliminar selecciones.", "info")
         except Exception as e: dialogo.close(); QApplication.restoreOverrideCursor(); self.mostrar_notificacion("Error", str(e), "error")
 
@@ -1294,7 +1421,9 @@ class VentanaInvestigador(QMainWindow):
         orig_pixmap = self.pixmaps_globales["Original"]
         if not orig_pixmap: return
         rect_recorte = QRect(x, y, w, h); pixmap_recorte = orig_pixmap.copy(rect_recorte); nombre_archivo = f"manual_{uuid.uuid4().hex[:6]}.png"; ruta_guardado = os.path.join(crops_folder, nombre_archivo); pixmap_recorte.save(ruta_guardado, "PNG")
-        nueva_caja = {"x": x, "y": y, "w": w, "h": h, "crop_path": ruta_guardado}; self.visor_imagen.boxes.append(nueva_caja); self.visor_imagen.draw_current_state(); self.actualizar_etiqueta_conteo(len(self.visor_imagen.boxes))
+        nueva_caja = {"x": x, "y": y, "w": w, "h": h, "crop_path": ruta_guardado, "offsets": {"clahe": 0, "gauss": 0, "otsu": 0}}
+        self.visor_imagen.boxes.append(nueva_caja); self.visor_imagen.draw_current_state(); self.actualizar_etiqueta_conteo(len(self.visor_imagen.boxes))
+
 
     def construir_imagen_global(self, carpeta_origen):
         import cv2; import numpy as np
@@ -1359,14 +1488,27 @@ class VentanaInvestigador(QMainWindow):
     def previsualizar_filtrado(self, *args):
         if not self.crops_en_memoria: return
         import cv2; import numpy as np
-        clahe_clip = self.sld_clahe.value()
-        k_val = self.sld_gauss.value()
-        k = k_val if k_val % 2 != 0 else k_val + 1
-        otsu_offset = self.sld_otsu.value()
+        g_clahe_clip = self.sld_clahe.value()
+        g_k_val = self.sld_gauss.value()
+        g_otsu_offset = self.sld_otsu.value()
         
-        clahe = cv2.createCLAHE(clipLimit=float(clahe_clip), tileGridSize=(8, 8)) if clahe_clip > 0 else None
-        
+        # Mapa de nombre a offsets para eficiencia
+        mapa_offsets = {}
+        for box in self.visor_imagen.boxes:
+            nombre = os.path.basename(box["crop_path"])
+            mapa_offsets[nombre] = box.get("offsets", {"clahe":0, "gauss":0, "otsu":0})
+
         for nombre, img in self.crops_en_memoria.items():
+            offsets = mapa_offsets.get(nombre, {"clahe":0, "gauss":0, "otsu":0})
+            
+            # Aplicar Global + Offset
+            c_clip = max(0, min(10, g_clahe_clip + offsets["clahe"]))
+            k_val = max(1, min(15, g_k_val + offsets["gauss"]))
+            k = k_val if k_val % 2 != 0 else k_val + 1
+            o_offset = g_otsu_offset + offsets["otsu"]
+            
+            clahe = cv2.createCLAHE(clipLimit=float(c_clip), tileGridSize=(8, 8)) if c_clip > 0 else None
+            
             if clahe is not None:
                 hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
                 h_c, s_c, v_c = cv2.split(hsv)
@@ -1379,7 +1521,7 @@ class VentanaInvestigador(QMainWindow):
             gray = cv2.cvtColor(bgr_proc, cv2.COLOR_BGR2GRAY)
             blur = cv2.GaussianBlur(gray, (k, k), 0)
             ret, _ = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-            threshold_val = max(0, min(255, ret + otsu_offset))
+            threshold_val = max(0, min(255, ret + o_offset))
             _, bin_img = cv2.threshold(blur, threshold_val, 255, cv2.THRESH_BINARY)
             
             self.crops_filtrados_temp[nombre] = bin_img
@@ -1387,6 +1529,7 @@ class VentanaInvestigador(QMainWindow):
         pixmap_filtrada = self.construir_imagen_global_memoria()
         self.pixmaps_globales["Previsualización"] = pixmap_filtrada
         self.visor_imagen.set_view_mode("Previsualización", pixmap_filtrada)
+
 
     def confirmar_filtrado(self):
         base_name = Path(self.ruta_imagen_actual).stem; filtradas_dir = os.path.join(os.getcwd(), "analisis_resultados", base_name, "filtradas"); os.makedirs(filtradas_dir, exist_ok=True); import cv2; count = 0
@@ -1444,9 +1587,47 @@ class VentanaInvestigador(QMainWindow):
                     if img_raw is not None: _, bin_img = cv2.threshold(img_raw, 127, 255, cv2.THRESH_BINARY); img_bool = bin_img > 0; skeleton = skeletonize(img_bool); skeleton_img = (skeleton * 255).astype(np.uint8); out_path = os.path.join(esqueletos_dir, nombre); is_success, im_buf_arr = cv2.imencode(".png", skeleton_img)
                     if is_success: im_buf_arr.tofile(out_path); count += 1
             dialogo.close(); QApplication.restoreOverrideCursor()
-            if count > 0: pixmap_esqueleto = self.construir_imagen_global("esqueletos"); self.pixmaps_globales["Esqueleto"] = pixmap_esqueleto; self.actualizar_estado_flujo(4); self.combo_vista.addItem("Esqueleto"); self.combo_vista.setCurrentText("Esqueleto"); self.mostrar_notificacion("3. Ramas Generadas", f"Se generaron {count} esqueletos topológicos.\n\nYa puedes avanzar a los Reportes o Cargar una imagen nueva.", "info")
+            if count > 0: pixmap_esqueleto = self.construir_imagen_global("esqueletos"); self.pixmaps_globales["Esqueleto"] = pixmap_esqueleto; self.actualizar_estado_flujo(4); self.combo_vista.addItem("Esqueleto"); self.combo_vista.setCurrentText("Esqueleto"); self.mostrar_notificacion("3. Ramas Generadas", f"Se generaron {count} esqueletos topológicos.\n\nYa puedes avanzar a los Reportes para cargar una imagen nueva o exportar el reporte.", "info")
             else: self.mostrar_notificacion("Advertencia", "No se generaron esqueletos. Verifica la carpeta de filtrado.", "warning")
         except Exception as error: dialogo.close(); QApplication.restoreOverrideCursor(); self.mostrar_notificacion("Error de Procesamiento", f"Falló el cálculo:\n{str(error)}", "error")
+
+    def corregir_filtrado(self):
+        from vistas.utilidades import DialogoConfirmacion
+        diag = DialogoConfirmacion("Corregir Filtrado", "¿Estás seguro de que deseas eliminar el filtrado y esqueletizado actual para volver a ajustar los parámetros?")
+        if not diag.exec(): return
+        
+        self.pixmaps_globales["Filtrada"] = None
+        self.pixmaps_globales["Esqueleto"] = None
+        
+        self.combo_vista.blockSignals(True)
+        for label in ["Esqueleto", "Filtrada"]:
+            idx = self.combo_vista.findText(label)
+            if idx >= 0: self.combo_vista.removeItem(idx)
+        self.combo_vista.setCurrentText("Original")
+        self.combo_vista.blockSignals(False)
+        self.cambiar_vista_global("Original")
+        
+        if self.ruta_imagen_actual:
+            try:
+                import shutil
+                base_name = Path(self.ruta_imagen_actual).stem
+                base_dir = os.path.join(os.getcwd(), "analisis_resultados", base_name)
+                for sub in ["filtradas", "esqueletos"]:
+                    folder = os.path.join(base_dir, sub)
+                    if os.path.exists(folder): shutil.rmtree(folder); os.makedirs(folder, exist_ok=True)
+            except Exception as e: logging.error(f"Error al limpiar carpetas: {e}")
+            
+        # Resetear sliders globales y offsets individuales
+        self.sld_clahe.setValue(2)
+        self.sld_gauss.setValue(5)
+        self.sld_otsu.setValue(0)
+        for box in self.visor_imagen.boxes:
+            box["offsets"] = {"clahe": 0, "gauss": 0, "otsu": 0}
+            
+        self.actualizar_estado_flujo(2)
+
+        self.mostrar_notificacion("Corregir Filtrado", "Se han eliminado las fases anteriores. Puedes ajustar los filtros nuevamente.", "info")
+
 
     def generar_reporte(self):
         if not self.ruta_imagen_actual or not self.visor_imagen.boxes:
