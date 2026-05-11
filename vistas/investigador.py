@@ -31,8 +31,11 @@ os.environ["QT_QPA_PLATFORM"] = "xcb"
 from ia.morphology_analyzer import MorphologyAnalyzer
 
 logging.basicConfig(
-    level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s"
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
+# Silence chatty libraries
+logging.getLogger("PIL").setLevel(logging.WARNING)
+logging.getLogger("fpdf").setLevel(logging.WARNING)
 
 # =========================================================
 # BOTÓN PERSONALIZADO PARA TOOLTIPS SEGUROS (ANTI-CORTES)
