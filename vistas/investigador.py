@@ -183,7 +183,7 @@ class DropZone(QFrame):
 class DialogoCargarImagen(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Detalles de la Muestra")
+        self.setWindowTitle("Detalles del Campo")
         self.setFixedSize(580, 520) 
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog | Qt.WindowType.WindowStaysOnTopHint)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
@@ -198,7 +198,7 @@ class DialogoCargarImagen(QDialog):
         frame.setStyleSheet("QFrame { background-color: #FFFFFF; border-radius: 12px; border: 2px solid #003366; } QLabel { border: none; }")
         layout = QVBoxLayout(frame)
         
-        lbl_titulo = QLabel("Detalles de la Muestra")
+        lbl_titulo = QLabel("Detalles del Campo")
         lbl_titulo.setStyleSheet("font-size: 18px; font-weight: bold; color: #003366;")
         lbl_titulo.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(lbl_titulo)
@@ -207,7 +207,7 @@ class DialogoCargarImagen(QDialog):
         layout_campos = QHBoxLayout()
         
         layout_campo = QVBoxLayout()
-        lbl_campo = QLabel("Muestra:")
+        lbl_campo = QLabel("Campo:")
         lbl_campo.setStyleSheet("font-weight: bold; font-size: 13px;")
         self.input_campo = QLineEdit()
         self.input_campo.setPlaceholderText("Ej. 1, 2, 3...")
