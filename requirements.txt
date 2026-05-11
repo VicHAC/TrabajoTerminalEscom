@@ -18,3 +18,4 @@ imagecodecs==2023.9.18
 torch==2.6.0
 torchvision==0.21.0
 torchaudio==2.6.0
+fpdf2==2.8.7

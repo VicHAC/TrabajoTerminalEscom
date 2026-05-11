@@ -28,7 +28,6 @@ from PyQt6.QtWidgets import (
 
 os.environ["QT_QPA_PLATFORM"] = "xcb"
 
-# Import de tu analizador morfológico
 from ia.morphology_analyzer import MorphologyAnalyzer
 
 logging.basicConfig(
@@ -213,8 +212,7 @@ class DialogoCargarImagen(QDialog):
         lbl_campo = QLabel("Campo:")
         lbl_campo.setStyleSheet("font-weight: bold; font-size: 13px;")
         self.input_campo = QLineEdit()
-        self.input_campo.setPlaceholderText("Ej. 1, 2, 3...")
-        self.input_campo.setValidator(QIntValidator())
+        self.input_campo.setPlaceholderText("Ej. Campo A, Campo B, 1...")
         self.input_campo.setStyleSheet("padding: 8px; font-size: 14px; border: 1px solid #ccc; border-radius: 4px;")
         layout_campo.addWidget(lbl_campo)
         layout_campo.addWidget(self.input_campo)
@@ -643,7 +641,9 @@ class InteractiveImageViewer(QLabel):
 
     def draw_current_state(self):
         """Dibuja la imagen, las cajas normales y la caja resaltada."""
-        if not self.original_pixmap or self.original_pixmap.isNull(): return
+        if not self.original_pixmap or self.original_pixmap.isNull():
+            self.setPixmap(QPixmap())
+            return
         pix_w, pix_h = self.original_pixmap.width(), self.original_pixmap.height()
         lbl_w, lbl_h = self.width(), self.height()
         if lbl_w == 0 or lbl_h == 0: return
@@ -694,6 +694,80 @@ class InteractiveImageViewer(QLabel):
         super().resizeEvent(event)
         if self.original_pixmap: self.draw_current_state()
 
+class DialogoOpcionesReporte(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog | Qt.WindowType.WindowStaysOnTopHint)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.setModal(True)
+        self.resultado = None
+        
+        from vistas.utilidades import set_app_icon
+        set_app_icon(self)
+
+        layout = QVBoxLayout(self)
+        frame = QFrame(self)
+        frame.setStyleSheet("""
+            QFrame { background-color: #FFFFFF; border-radius: 12px; border: 2px solid #003366; }
+            QLabel { color: #333333; font-size: 15px; padding: 10px; border: none;}
+            QPushButton { border-radius: 6px; font-weight: bold; padding: 8px 15px; font-size: 14px; }
+            QPushButton#btn_agregar { background-color: #28a745; color: white; }
+            QPushButton#btn_agregar:hover { background-color: #218838; }
+            QPushButton#btn_finalizar { background-color: #007bff; color: white; }
+            QPushButton#btn_finalizar:hover { background-color: #0069d9; }
+            QPushButton#btn_cancelar { background-color: #e0e0e0; color: #333333; }
+        """)
+
+        flayout = QVBoxLayout(frame)
+        lbl_titulo = QLabel("<b>Métricas Extraídas</b>")
+        lbl_titulo.setStyleSheet("color: #003366; font-size: 18px; border: none;")
+        lbl_titulo.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        lbl_mensaje = QLabel("Métricas extraídas exitosamente y añadidas al reporte actual.\n¿Qué deseas hacer a continuación?")
+        lbl_mensaje.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        lbl_mensaje.setWordWrap(True)
+
+        btn_layout = QHBoxLayout()
+        btn_agregar = QPushButton("Agregar otra imagen")
+        btn_agregar.setObjectName("btn_agregar")
+        btn_agregar.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_agregar.clicked.connect(self.agregar)
+
+        btn_finalizar = QPushButton("Finalizar reporte")
+        btn_finalizar.setObjectName("btn_finalizar")
+        btn_finalizar.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_finalizar.clicked.connect(self.finalizar)
+
+        btn_cancelar = QPushButton("Cancelar")
+        btn_cancelar.setObjectName("btn_cancelar")
+        btn_cancelar.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_cancelar.clicked.connect(self.cancelar)
+
+        btn_layout.addWidget(btn_agregar)
+        btn_layout.addWidget(btn_finalizar)
+        btn_layout.addWidget(btn_cancelar)
+
+        flayout.addWidget(lbl_titulo)
+        flayout.addWidget(lbl_mensaje)
+        flayout.addLayout(btn_layout)
+        layout.addWidget(frame)
+        self.setLayout(layout)
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        if self.parent():
+            p_geom = self.parent().geometry()
+            self.move(p_geom.x() + (p_geom.width() - self.width()) // 2, p_geom.y() + (p_geom.height() - self.height()) // 2)
+        else:
+            from PyQt6.QtWidgets import QApplication
+            screen = QApplication.primaryScreen().geometry()
+            self.move((screen.width() - self.width()) // 2, (screen.height() - self.height()) // 2)
+
+    def agregar(self): self.resultado = "agregar"; self.accept()
+    def finalizar(self): self.resultado = "finalizar"; self.accept()
+    def cancelar(self): self.resultado = "cancelar"; self.reject()
+
+
 class VentanaInvestigador(QMainWindow):
     def mostrar_notificacion(self, titulo, mensaje, tipo="info"):
         from vistas.utilidades import DialogoNotificacion
@@ -707,6 +781,7 @@ class VentanaInvestigador(QMainWindow):
         self.crops_en_memoria = {}
         self.crops_filtrados_temp = {}
         self.metadatos_imagen = {"campo": "", "tiempo": ""}
+        self.metricas_reporte = []
         self.setWindowTitle(f"Prototipo Microglías - Panel ({self.rol})")
         
         from vistas.utilidades import set_app_icon
@@ -813,10 +888,10 @@ class VentanaInvestigador(QMainWindow):
         area_imagen.addLayout(controles_superiores); area_imagen.addWidget(self.visor_imagen, stretch=1)
         layout_principal.addWidget(frame_menu); layout_principal.addLayout(area_imagen, stretch=1); widget_central.setLayout(layout_principal); self.setCentralWidget(widget_central)
         
-        self.btn_cargar.clicked.connect(self.cargar_imagen); self.btn_cerrar_sesion.clicked.connect(self.cerrar_sesion); self.btn_conteo.clicked.connect(self.execute_microglia_counting); self.btn_filtrar.clicked.connect(self.ejecutar_filtrado); self.btn_ramas.clicked.connect(self.mostrar_ramas_morfologia)
+        self.btn_cargar.clicked.connect(self.cargar_imagen); self.btn_cerrar_sesion.clicked.connect(self.cerrar_sesion); self.btn_conteo.clicked.connect(self.execute_microglia_counting); self.btn_filtrar.clicked.connect(self.ejecutar_filtrado); self.btn_ramas.clicked.connect(self.mostrar_ramas_morfologia); self.btn_reporte.clicked.connect(self.generar_reporte)
         self.actualizar_estado_flujo(0)
         
-        if self.rol == "Invitado" or self.rol == "Guest": self.btn_historial.hide(); self.btn_reporte.hide(); self.btn_guardar_img.hide()
+        if self.rol == "Invitado" or self.rol == "Guest": self.btn_historial.hide(); self.btn_guardar_img.hide()
 
     def toggle_herramienta_caja(self, checked):
         if checked: self.btn_herramienta_eliminar.setChecked(False); self.visor_imagen.current_tool = "draw"; self.visor_imagen.hovered_index = -1; self.visor_imagen.draw_current_state()
@@ -865,7 +940,19 @@ class VentanaInvestigador(QMainWindow):
         dialogo_intermedio = DialogoCargarImagen(self)
         if dialogo_intermedio.exec():
             ruta_archivo = dialogo_intermedio.ruta_seleccionada
-            self.metadatos_imagen["campo"] = dialogo_intermedio.campo_val; self.metadatos_imagen["tiempo"] = dialogo_intermedio.tiempo_val
+            campo = dialogo_intermedio.campo_val
+            tiempo = dialogo_intermedio.tiempo_val
+            
+            # Check for duplicates in current session report
+            for item in self.metricas_reporte:
+                if item["campo"] == campo and item["tiempo"] == tiempo:
+                    from vistas.utilidades import DialogoConfirmacion
+                    diag = DialogoConfirmacion("Advertencia de Duplicado", f"Ya existen métricas guardadas para el Campo '{campo}' y Tiempo '{tiempo}'.\n\n¿Deseas continuar de todos modos?")
+                    if not diag.exec():
+                        return # User cancelled
+                    break
+                    
+            self.metadatos_imagen["campo"] = campo; self.metadatos_imagen["tiempo"] = tiempo
             if ruta_archivo:
                 self.ruta_imagen_actual = ruta_archivo; pixmap = QPixmap(ruta_archivo)
                 if pixmap.isNull():
@@ -1050,7 +1137,7 @@ class VentanaInvestigador(QMainWindow):
         self.combo_vista.blockSignals(False)
         self.cambiar_vista_global("Original")
         
-        self.actualizar_estado_flujo(1) # Reactivar botones principales
+        self.actualizar_estado_flujo(1) # Reactivate main buttons
 
     def mostrar_ramas_morfologia(self):
         if not self.ruta_imagen_actual or not self.visor_imagen.boxes: self.mostrar_notificacion("Advertencia", "Aplica el conteo y filtrado primero.", "warning"); return
@@ -1069,3 +1156,226 @@ class VentanaInvestigador(QMainWindow):
             if count > 0: pixmap_esqueleto = self.construir_imagen_global("esqueletos"); self.pixmaps_globales["Esqueleto"] = pixmap_esqueleto; self.actualizar_estado_flujo(4); self.combo_vista.addItem("Esqueleto"); self.combo_vista.setCurrentText("Esqueleto"); self.mostrar_notificacion("3. Ramas Generadas", f"Se generaron {count} esqueletos topológicos.\n\nYa puedes avanzar a los Reportes o Cargar una imagen nueva.", "info")
             else: self.mostrar_notificacion("Advertencia", "No se generaron esqueletos. Verifica la carpeta de filtrado.", "warning")
         except Exception as error: dialogo.close(); QApplication.restoreOverrideCursor(); self.mostrar_notificacion("Error de Procesamiento", f"Falló el cálculo:\n{str(error)}", "error")
+
+    def generar_reporte(self):
+        if not self.ruta_imagen_actual or not self.visor_imagen.boxes:
+            self.mostrar_notificacion("Advertencia", "No hay datos para extraer métricas.", "warning")
+            return
+            
+        base_name = Path(self.ruta_imagen_actual).stem
+        esqueletos_dir = os.path.join(os.getcwd(), "analisis_resultados", base_name, "esqueletos")
+        
+        if not os.path.exists(esqueletos_dir):
+            self.mostrar_notificacion("Advertencia", "No se encontraron esqueletos generados.", "warning")
+            return
+            
+        from ia.extract_microglia_metrics import extract_microglia_metrics
+        from PyQt6.QtWidgets import QApplication, QFileDialog
+        import logging
+        
+        dialogo = DialogoCarga("Extrayendo métricas morfológicas...\nPor favor, espera.", self)
+        dialogo.show()
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        QApplication.processEvents()
+        
+        metricas_imagen = []
+        for box in self.visor_imagen.boxes:
+            nombre = os.path.basename(box["crop_path"])
+            out_path = os.path.join(esqueletos_dir, nombre)
+            if os.path.exists(out_path):
+                try:
+                    met = extract_microglia_metrics(out_path)
+                    metricas_imagen.append(met)
+                except Exception as e:
+                    logging.error(f"Error extrayendo métricas de {nombre}: {e}")
+                    
+        dialogo.close()
+        QApplication.restoreOverrideCursor()
+        
+        if not metricas_imagen:
+            self.mostrar_notificacion("Error", "No se pudieron extraer métricas de ninguna microglía.", "error")
+            return
+            
+        self.metricas_reporte.append({
+            "campo": self.metadatos_imagen.get("campo", ""),
+            "tiempo": self.metadatos_imagen.get("tiempo", ""),
+            "metricas": metricas_imagen
+        })
+        
+        opciones = DialogoOpcionesReporte(self)
+        opciones.exec()
+        
+        if opciones.resultado == "agregar":
+            # Clean UI to load another image
+            self.visor_imagen.set_image_and_boxes(None, [])
+            self.ruta_imagen_actual = None
+            self.pixmaps_globales = {"Original": None, "Filtrada": None, "Esqueleto": None}
+            self.combo_vista.blockSignals(True)
+            self.combo_vista.clear()
+            self.combo_vista.blockSignals(False)
+            self.actualizar_estado_flujo(0)
+            self.mostrar_notificacion("Info", "Listo para cargar otra imagen y agregar al reporte.", "info")
+            
+        elif opciones.resultado == "finalizar":
+            from datetime import datetime
+            fecha_str = datetime.now().strftime("%Y%m%d_%H%M")
+            default_name = f"Reporte_{fecha_str}.xlsx"
+            
+            filepath, filter_selected = QFileDialog.getSaveFileName(self, "Guardar Reporte", default_name, "Excel Files (*.xlsx);;PDF Files (*.pdf);;Both Formats (*.xlsx *.pdf)")
+            if not filepath:
+                # If cancel, metrics are still saved.
+                return
+                
+            try:
+                # Group by time (common for both formats)
+                reporte_por_tiempo = {}
+                for img_data in self.metricas_reporte:
+                    t = str(img_data.get("tiempo", "X HORA")).upper()
+                    if t not in reporte_por_tiempo:
+                        reporte_por_tiempo[t] = []
+                    reporte_por_tiempo[t].append(img_data)
+
+                columnas_labels = [
+                    "No.", "Lines", "Junction Points", "End Points", "Junction Voxels",
+                    "Slab Voxels", "Avg. Branch Length", "Triple points", "Quadruple points",
+                    "Max Branch Length", "Longest Shortest path"
+                ]
+
+                metric_keys = [
+                    "lines", "junction points", "end points", "junction voxels",
+                    "slab voxels", "average branch length", "triple points", "quadruple points",
+                    "maximum branch length", "longest shortest path"
+                ]
+
+                save_xlsx = "Excel" in filter_selected or "Both" in filter_selected or filepath.endswith(".xlsx")
+                save_pdf = "PDF" in filter_selected or "Both" in filter_selected or filepath.endswith(".pdf")
+
+                # Handle XLSX generation
+                if save_xlsx:
+                    xlsx_path = filepath if filepath.endswith(".xlsx") else str(Path(filepath).with_suffix(".xlsx"))
+                    import openpyxl
+                    from openpyxl.styles import PatternFill, Font, Alignment
+                    from openpyxl.utils import get_column_letter
+                    wb = openpyxl.Workbook()
+                    wb.remove(wb.active) 
+                    
+                    yellow_fill = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid")
+                    header_bg_fill = PatternFill(start_color="3A61A0", end_color="3A61A0", fill_type="solid")
+                    light_gray_fill = PatternFill(start_color="F2F2F2", end_color="F2F2F2", fill_type="solid")
+                    bold_font = Font(bold=True)
+                    header_black_font = Font(color="000000", bold=True)
+                    center_alignment = Alignment(horizontal="center", vertical="center")
+                    anchos_fijos = [9.3, 18.0, 22.6, 18.6, 22.6, 16.6, 26.6, 20.0, 26.6, 26.6, 32.0]
+                    
+                    for tiempo, lista_campos in reporte_por_tiempo.items():
+                        ws = wb.create_sheet(title=tiempo[:31])
+                        for col_idx, width in enumerate(anchos_fijos, start=1):
+                            ws.column_dimensions[get_column_letter(col_idx)].width = width
+                        
+                        row_idx = 1
+                        for img_data in lista_campos:
+                            ws.merge_cells(start_row=row_idx, start_column=1, end_row=row_idx, end_column=len(columnas_labels))
+                            for c in range(1, len(columnas_labels) + 1):
+                                ws.cell(row=row_idx, column=c).fill = yellow_fill
+                            
+                            cell_title = ws.cell(row=row_idx, column=1, value=img_data['campo'])
+                            cell_title.font = bold_font
+                            cell_title.alignment = center_alignment
+                            row_idx += 1
+                            
+                            for col_idx, label in enumerate(columnas_labels, start=1):
+                                cell_h = ws.cell(row=row_idx, column=col_idx, value=label)
+                                cell_h.font = header_black_font
+                                cell_h.fill = header_bg_fill
+                                cell_h.alignment = center_alignment
+                            row_idx += 1
+                            
+                            for i, met in enumerate(img_data['metricas'], start=1):
+                                cell_num = ws.cell(row=row_idx, column=1, value=i)
+                                cell_num.alignment = center_alignment
+                                for col_idx, key in enumerate(metric_keys, start=2):
+                                    cell_m = ws.cell(row=row_idx, column=col_idx, value=met.get(key, ""))
+                                    cell_m.alignment = center_alignment
+                                if i % 2 != 0:
+                                    for c in range(1, len(columnas_labels) + 1):
+                                        ws.cell(row=row_idx, column=c).fill = light_gray_fill
+                                row_idx += 1
+                            row_idx += 1
+                    wb.save(xlsx_path)
+
+                # Handle PDF generation
+                if save_pdf:
+                    pdf_path = filepath if filepath.endswith(".pdf") else str(Path(filepath).with_suffix(".pdf"))
+                    try:
+                        from fpdf import FPDF
+                    except ImportError:
+                        if not save_xlsx: # Only error if PDF was the only target
+                            self.mostrar_notificacion("Librería faltante", "Por favor instala fpdf2:\n'pip install fpdf2'", "error")
+                            return
+                        else:
+                            logging.error("PDF generation skipped: fpdf2 not installed")
+                    else:
+                        class PDFReport(FPDF):
+                            def header(self):
+                                self.set_font('Arial', 'B', 14)
+                                self.cell(0, 10, 'Reporte de Métricas Morfológicas - Microglías', 0, 1, 'C')
+                                self.ln(5)
+
+                        pdf = PDFReport(orientation='L', unit='mm', format='A4')
+                        pdf.set_auto_page_break(auto=True, margin=15)
+                        pdf_widths = [12, 22, 26, 22, 26, 20, 31, 23, 31, 31, 36] 
+
+                        for tiempo, lista_campos in reporte_por_tiempo.items():
+                            pdf.add_page()
+                            pdf.set_font('Arial', 'B', 12)
+                            pdf.cell(0, 10, f"TIEMPO: {tiempo}", 0, 1, 'L')
+                            
+                            for img_data in lista_campos:
+                                pdf.set_fill_color(255, 255, 0)
+                                pdf.set_font('Arial', 'B', 10)
+                                pdf.cell(sum(pdf_widths), 8, f"Campo: {img_data['campo']}", 1, 1, 'C', True)
+                                
+                                pdf.set_fill_color(58, 97, 160)
+                                pdf.set_text_color(0, 0, 0)
+                                pdf.set_font('Arial', 'B', 7)
+                                for i, label in enumerate(columnas_labels):
+                                    pdf.cell(pdf_widths[i], 8, label, 1, 0, 'C', True)
+                                pdf.ln()
+                                
+                                pdf.set_font('Arial', '', 9)
+                                pdf.set_text_color(0, 0, 0)
+                                for idx, met in enumerate(img_data['metricas'], start=1):
+                                    if idx % 2 != 0: pdf.set_fill_color(242, 242, 242)
+                                    else: pdf.set_fill_color(255, 255, 255)
+                                    
+                                    pdf.cell(pdf_widths[0], 7, str(idx), 1, 0, 'C', True)
+                                    values = [
+                                        str(met.get("lines", "")), str(met.get("junction points", "")),
+                                        str(met.get("end points", "")), str(met.get("junction voxels", "")),
+                                        str(met.get("slab voxels", "")), str(met.get("average branch length", "")),
+                                        str(met.get("triple points", "")), str(met.get("quadruple points", "")),
+                                        str(met.get("maximum branch length", "")), str(met.get("longest shortest path", ""))
+                                    ]
+                                    for i, val in enumerate(values):
+                                        pdf.cell(pdf_widths[i+1], 7, val, 1, 0, 'C', True)
+                                    pdf.ln()
+                                pdf.ln(5)
+                        pdf.output(pdf_path)
+
+                self.metricas_reporte.clear()
+                msg = f"Reporte guardado correctamente en:\n{filepath}"
+                if "Both" in filter_selected: msg = "Ambos reportes (XLSX y PDF) han sido guardados."
+                self.mostrar_notificacion("Éxito", msg, "success")
+                
+                # Reset UI completely
+                self.visor_imagen.set_image_and_boxes(None, [])
+                self.ruta_imagen_actual = None
+                self.pixmaps_globales = {"Original": None, "Filtrada": None, "Esqueleto": None}
+                self.combo_vista.blockSignals(True)
+                self.combo_vista.clear()
+                self.combo_vista.blockSignals(False)
+                self.lbl_info_conteo.setText("Microglías detectadas: 0")
+                self.actualizar_estado_flujo(0)
+                
+            except Exception as e:
+                self.mostrar_notificacion("Error", f"Error al guardar el reporte: {str(e)}", "error")
