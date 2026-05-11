@@ -19,3 +19,5 @@ torch==2.6.0
 torchvision==0.21.0
 torchaudio==2.6.0
 fpdf2==2.8.7
+skan==0.13.1
+

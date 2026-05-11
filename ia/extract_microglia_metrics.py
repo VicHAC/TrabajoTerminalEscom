@@ -19,7 +19,8 @@ def extract_microglia_metrics(skeleton_image_path: str) -> dict:
     skeleton = Skeleton(image)
     
     try:
-        summary = summarize(skeleton)
+        summary = summarize(skeleton, separator='_')
+
     except Exception:
         summary = pd.DataFrame()
     

@@ -27,7 +27,8 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import QTimer
 
-os.environ["QT_QPA_PLATFORM"] = "xcb"
+# os.environ["QT_QPA_PLATFORM"] = "xcb"
+
 
 from ia.morphology_analyzer import MorphologyAnalyzer
 
@@ -598,14 +599,16 @@ class DialogoVistaCelular(QDialog):
         self.fases_disponibles.append({"nombre": "ORIGINAL", "path": self.crop_path, "pixmap": None})
         
         # Fase 1: Filtrado
-        path_filtrado = self.crop_path.replace("/crops/", "/filtradas/")
+        path_filtrado = self.crop_path.replace("/crops/", "/filtradas/").replace("\\crops\\", "\\filtradas\\")
+
         if self.pixmap_mem_filtrado:
             self.fases_disponibles.append({"nombre": "FILTRADO", "path": path_filtrado, "pixmap": self.pixmap_mem_filtrado})
         elif os.path.exists(path_filtrado):
             self.fases_disponibles.append({"nombre": "FILTRADO", "path": path_filtrado, "pixmap": None})
             
         # Fase 2: Esqueletizado
-        path_esqueleto = self.crop_path.replace("/crops/", "/esqueletos/")
+        path_esqueleto = self.crop_path.replace("/crops/", "/esqueletos/").replace("\\crops\\", "\\esqueletos\\")
+
         if os.path.exists(path_esqueleto):
             self.fases_disponibles.append({"nombre": "ESQUELETIZADO", "path": path_esqueleto, "pixmap": None})
 
@@ -799,8 +802,9 @@ class InteractiveImageViewer(QLabel):
                                 qimg = QImage(arr.data, w, h, w, QImage.Format.Format_Grayscale8)
                                 pixmap_mem = QPixmap.fromImage(qimg)
                     
-                    if self.view_mode == "Filtrada": crop_path = crop_path.replace("/crops/", "/filtradas/")
-                    elif self.view_mode == "Esqueleto": crop_path = crop_path.replace("/crops/", "/esqueletos/")
+                    if self.view_mode == "Filtrada": crop_path = crop_path.replace("/crops/", "/filtradas/").replace("\\crops\\", "\\filtradas\\")
+                    elif self.view_mode == "Esqueleto": crop_path = crop_path.replace("/crops/", "/esqueletos/").replace("\\crops\\", "\\esqueletos\\")
+
                     if os.path.exists(crop_path) or pixmap_mem:
                         DialogoVistaCelular(crop_path_base, pixmap_mem, self.view_mode, self.window()).exec()
                 else:
