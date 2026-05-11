@@ -25,6 +25,7 @@ from PyQt6.QtWidgets import (
     QLineEdit,
     QToolTip,
 )
+from PyQt6.QtCore import QTimer
 
 os.environ["QT_QPA_PLATFORM"] = "xcb"
 
@@ -349,46 +350,76 @@ class DialogoCarga(QDialog):
             self.move((screen.width() - self.width()) // 2, (screen.height() - self.height()) // 2)
 
 
-class DialogoVistaCelular(QDialog):
+class DialogoComparativo(QDialog):
     """
-    Modificado: Ahora extrae el nombre del archivo (crop_path)
-    y lo muestra en la parte superior como identificador.
+    Muestra las 3 fases del proceso lado a lado para una microglía,
+    o una versión sobrepuesta (esqueleto sobre original).
     """
-    def __init__(self, crop_path, pixmap_mem=None, parent=None):
+    def __init__(self, fases, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Vista Detallada de la Célula")
-        self.resize(400, 480) 
+        self.setWindowTitle("Proceso de la Microglía")
+        self.setFixedSize(950, 500) 
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog | Qt.WindowType.WindowStaysOnTopHint)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         
         from vistas.utilidades import set_app_icon
         set_app_icon(self)
         
+        self.fases = fases
+        self.modo_sobrepuesto = False
+        
         main_layout = QVBoxLayout(self)
-        frame = QFrame(self)
-        frame.setStyleSheet("QFrame { background-color: #FFFFFF; border-radius: 12px; border: 2px solid #003366; } QLabel { border: none; }")
-        layout = QVBoxLayout(frame)
+        self.frame = QFrame(self)
+        self.frame.setStyleSheet("QFrame { background-color: #FFFFFF; border-radius: 12px; border: 2px solid #003366; } QLabel { border: none; }")
+        self.layout_principal = QVBoxLayout(self.frame)
         
-        # 1. Extraemos el nombre del archivo
-        nombre_archivo = os.path.basename(crop_path)
-        
-        # 2. Agregamos el texto identificador
-        lbl_nombre = QLabel(f"Identificador: <b>{nombre_archivo}</b>")
-        lbl_nombre.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        lbl_nombre.setStyleSheet("font-size: 15px; color: #003366; margin-bottom: 5px;")
-        layout.addWidget(lbl_nombre)
+        self.lbl_titulo = QLabel("<b>Comparativa del Proceso de la Microglía</b>")
+        self.lbl_titulo.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.lbl_titulo.setStyleSheet("font-size: 18px; color: #003366; margin-bottom: 10px;")
+        self.layout_principal.addWidget(self.lbl_titulo)
 
-        # 3. Agregamos la imagen
-        label_imagen = QLabel()
-        label_imagen.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        pixmap = pixmap_mem if pixmap_mem and not pixmap_mem.isNull() else QPixmap(crop_path)
-        if not pixmap.isNull():
-            label_imagen.setPixmap(pixmap.scaled(380, 380, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
-        else:
-            label_imagen.setText("No se pudo cargar la imagen recortada.")
+        # Widget para vista lado a lado
+        self.widget_lado_lado = QWidget()
+        self.layout_lado_lado = QHBoxLayout(self.widget_lado_lado)
+        for fase in self.fases:
+            v_layout = QVBoxLayout()
+            lbl_nombre_fase = QLabel(fase["nombre"])
+            lbl_nombre_fase.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            lbl_nombre_fase.setStyleSheet("font-weight: bold; color: #555; margin-bottom: 5px;")
             
-        layout.addWidget(label_imagen)
-        layout.addSpacing(10)
+            lbl_img = QLabel()
+            lbl_img.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            pixmap = fase["pixmap"] if fase["pixmap"] else QPixmap(fase["path"])
+            if pixmap and not pixmap.isNull():
+                lbl_img.setPixmap(pixmap.scaled(280, 280, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+            else:
+                lbl_img.setText("N/D")
+            v_layout.addWidget(lbl_nombre_fase)
+            v_layout.addWidget(lbl_img)
+            self.layout_lado_lado.addLayout(v_layout)
+        
+        # Widget para vista sobrepuesta
+        self.widget_sobrepuesto = QWidget()
+        self.widget_sobrepuesto.hide()
+        layout_s = QVBoxLayout(self.widget_sobrepuesto)
+        self.lbl_img_sobrepuesto = QLabel()
+        self.lbl_img_sobrepuesto.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout_s.addWidget(self.lbl_img_sobrepuesto)
+        
+        self.layout_principal.addWidget(self.widget_lado_lado)
+        self.layout_principal.addWidget(self.widget_sobrepuesto)
+        
+        self.layout_principal.addSpacing(15)
+        
+        layout_botones = QHBoxLayout()
+        
+        self.btn_toggle = QPushButton("Ver Sobrepuesto")
+        self.btn_toggle.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_toggle.setStyleSheet("""
+            QPushButton { padding: 8px 20px; background-color: #007bff; border-radius: 6px; font-weight: bold; color: white; font-size: 13px;}
+            QPushButton:hover { background-color: #0069d9; }
+        """)
+        self.btn_toggle.clicked.connect(self.toggle_modo)
         
         btn_cerrar = QPushButton("Cerrar")
         btn_cerrar.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -397,10 +428,219 @@ class DialogoVistaCelular(QDialog):
             QPushButton:hover { background-color: #c82333; }
         """)
         btn_cerrar.clicked.connect(self.accept)
-        layout.addWidget(btn_cerrar, alignment=Qt.AlignmentFlag.AlignCenter)
         
+        layout_botones.addStretch()
+        layout_botones.addWidget(self.btn_toggle)
+        layout_botones.addSpacing(15)
+        layout_botones.addWidget(btn_cerrar)
+        layout_botones.addStretch()
+        
+        self.layout_principal.addLayout(layout_botones)
+        main_layout.addWidget(self.frame)
+        self.setLayout(main_layout)
+
+    def toggle_modo(self):
+        self.modo_sobrepuesto = not self.modo_sobrepuesto
+        if self.modo_sobrepuesto:
+            self.lbl_titulo.setText("<b>Esqueleto Sobrepuesto en Original</b>")
+            self.btn_toggle.setText("Ver Proceso Completo")
+            self.widget_lado_lado.hide()
+            self.widget_sobrepuesto.show()
+            self.setFixedSize(500, 500)
+            self.generar_sobrepuesto()
+        else:
+            self.lbl_titulo.setText("<b>Comparativa del Proceso de la Microglía</b>")
+            self.btn_toggle.setText("Ver Sobrepuesto")
+            self.widget_sobrepuesto.hide()
+            self.widget_lado_lado.show()
+            self.setFixedSize(950, 500)
+            
+        # Recentrar ventana
+        self.ajustar_posicion()
+
+    def ajustar_posicion(self):
+        if self.parent():
+            p_geom = self.parent().geometry()
+            self.move(p_geom.x() + (p_geom.width() - self.width()) // 2, p_geom.y() + (p_geom.height() - self.height()) // 2)
+
+    def generar_sobrepuesto(self):
+        # Original (Fase 0)
+        pix_orig = self.fases[0]["pixmap"] if self.fases[0]["pixmap"] else QPixmap(self.fases[0]["path"])
+        # Esqueleto (Fase 2)
+        pix_esq = self.fases[2]["pixmap"] if self.fases[2]["pixmap"] else QPixmap(self.fases[2]["path"])
+        
+        if pix_orig and pix_esq and not pix_orig.isNull() and not pix_esq.isNull():
+            final_pix = pix_orig.copy()
+            painter = QPainter(final_pix)
+            
+            # Usamos modo 'Screen' que es ideal para sobreponer blanco sobre fondos oscuros
+            # Ignora el negro (0) y resalta el blanco (1).
+            painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_Screen)
+            painter.setOpacity(0.9) # Alta opacidad para que las líneas blancas sean nítidas
+            
+            painter.drawPixmap(0, 0, pix_esq)
+            painter.end()
+            self.lbl_img_sobrepuesto.setPixmap(final_pix.scaled(380, 380, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        self.ajustar_posicion()
+
+
+class DialogoVistaCelular(QDialog):
+    """
+    Ventana detallada que permite navegar entre las fases de procesamiento
+    de una microglía específica (Original < Filtrado > Esqueletizado).
+    """
+    def __init__(self, crop_path, pixmap_mem=None, modo_inicial="Original", parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Vista Detallada de la Célula")
+        self.resize(450, 520) 
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog | Qt.WindowType.WindowStaysOnTopHint)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        
+        from vistas.utilidades import set_app_icon
+        set_app_icon(self)
+        
+        self.crop_path = crop_path
+        self.pixmap_mem_filtrado = pixmap_mem
+        self.fases_disponibles = []
+        self.preparar_fases()
+        
+        # Establecer índice inicial basado en el modo de la ventana principal
+        self.indice_fase = 0
+        mapping = {"Original": "ORIGINAL", "Filtrada": "FILTRADO", "Esqueleto": "ESQUELETIZADO", "Previsualización": "FILTRADO"}
+        nombre_buscado = mapping.get(modo_inicial, "ORIGINAL")
+        for i, f in enumerate(self.fases_disponibles):
+            if f["nombre"] == nombre_buscado:
+                self.indice_fase = i
+                break
+        
+        main_layout = QVBoxLayout(self)
+        frame = QFrame(self)
+        frame.setStyleSheet("QFrame { background-color: #FFFFFF; border-radius: 12px; border: 2px solid #003366; } QLabel { border: none; }")
+        layout = QVBoxLayout(frame)
+        
+        nombre_archivo = os.path.basename(crop_path)
+        lbl_nombre = QLabel(f"Identificador: <b>{nombre_archivo}</b>")
+        lbl_nombre.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        lbl_nombre.setStyleSheet("font-size: 15px; color: #003366; margin-bottom: 5px;")
+        layout.addWidget(lbl_nombre)
+
+        # Nombre de la fase actual
+        self.lbl_fase = QLabel("FASE: ORIGINAL")
+        self.lbl_fase.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.lbl_fase.setStyleSheet("font-size: 13px; font-weight: bold; color: #555; margin-bottom: 5px;")
+        layout.addWidget(self.lbl_fase)
+
+        # Contenedor de imagen con botones de navegación lateral
+        layout_imagen_nav = QHBoxLayout()
+        
+        self.btn_ant = QPushButton("<")
+        self.btn_ant.setFixedSize(30, 60)
+        self.btn_ant.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_ant.setStyleSheet("QPushButton { background-color: #f0f0f0; border: 1px solid #ccc; border-radius: 4px; font-size: 18px; font-weight: bold; color: #003366; } QPushButton:hover { background-color: #e0e0e0; } QPushButton:disabled { color: #ccc; }")
+        self.btn_ant.clicked.connect(self.mostrar_anterior)
+        
+        self.label_imagen = QLabel()
+        self.label_imagen.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.label_imagen.setFixedSize(380, 380)
+        
+        self.btn_sig = QPushButton(">")
+        self.btn_sig.setFixedSize(30, 60)
+        self.btn_sig.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_sig.setStyleSheet("QPushButton { background-color: #f0f0f0; border: 1px solid #ccc; border-radius: 4px; font-size: 18px; font-weight: bold; color: #003366; } QPushButton:hover { background-color: #e0e0e0; } QPushButton:disabled { color: #ccc; }")
+        self.btn_sig.clicked.connect(self.mostrar_siguiente)
+        
+        layout_imagen_nav.addWidget(self.btn_ant)
+        layout_imagen_nav.addWidget(self.label_imagen, stretch=1)
+        layout_imagen_nav.addWidget(self.btn_sig)
+        
+        layout.addLayout(layout_imagen_nav)
+        layout.addSpacing(10)
+        
+        # Botones inferiores
+        layout_inferior = QHBoxLayout()
+        
+        self.btn_comparativa = QPushButton("Ver Proceso Completo")
+        self.btn_comparativa.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_comparativa.setStyleSheet("""
+            QPushButton { padding: 8px 15px; background-color: #28a745; border-radius: 6px; font-weight: bold; color: white; font-size: 13px;}
+            QPushButton:hover { background-color: #218838; }
+            QPushButton:disabled { background-color: #ccc; }
+        """)
+        self.btn_comparativa.clicked.connect(self.mostrar_comparativa)
+        # Solo habilitar si el proceso está terminado (las 3 fases existen)
+        self.btn_comparativa.setEnabled(len(self.fases_disponibles) == 3)
+        
+        btn_cerrar = QPushButton("Cerrar")
+        btn_cerrar.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_cerrar.setStyleSheet("""
+            QPushButton { padding: 8px 20px; background-color: #dc3545; border-radius: 6px; font-weight: bold; color: white; font-size: 14px;}
+            QPushButton:hover { background-color: #c82333; }
+        """)
+        btn_cerrar.clicked.connect(self.accept)
+        
+        layout_inferior.addStretch()
+        layout_inferior.addWidget(self.btn_comparativa)
+        layout_inferior.addSpacing(10)
+        layout_inferior.addWidget(btn_cerrar)
+        layout_inferior.addStretch()
+        
+        layout.addLayout(layout_inferior)
         main_layout.addWidget(frame)
         self.setLayout(main_layout)
+        
+        self.actualizar_vista()
+
+    def preparar_fases(self):
+        # Fase 0: Original
+        self.fases_disponibles.append({"nombre": "ORIGINAL", "path": self.crop_path, "pixmap": None})
+        
+        # Fase 1: Filtrado
+        path_filtrado = self.crop_path.replace("/crops/", "/filtradas/")
+        if self.pixmap_mem_filtrado:
+            self.fases_disponibles.append({"nombre": "FILTRADO", "path": path_filtrado, "pixmap": self.pixmap_mem_filtrado})
+        elif os.path.exists(path_filtrado):
+            self.fases_disponibles.append({"nombre": "FILTRADO", "path": path_filtrado, "pixmap": None})
+            
+        # Fase 2: Esqueletizado
+        path_esqueleto = self.crop_path.replace("/crops/", "/esqueletos/")
+        if os.path.exists(path_esqueleto):
+            self.fases_disponibles.append({"nombre": "ESQUELETIZADO", "path": path_esqueleto, "pixmap": None})
+
+    def actualizar_vista(self):
+        fase = self.fases_disponibles[self.indice_fase]
+        self.lbl_fase.setText(f"FASE: {fase['nombre']}")
+        
+        pixmap = fase["pixmap"]
+        if not pixmap:
+            pixmap = QPixmap(fase["path"])
+            
+        if pixmap and not pixmap.isNull():
+            self.label_imagen.setPixmap(pixmap.scaled(380, 380, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+        else:
+            self.label_imagen.setText(f"No se pudo cargar la imagen de {fase['nombre']}.")
+            
+        # Unicamente en las imagenes detalladas quiero que los botones no se oculten, que se deshabiliten
+        self.btn_ant.setEnabled(self.indice_fase > 0)
+        self.btn_sig.setEnabled(self.indice_fase < len(self.fases_disponibles) - 1)
+        self.btn_ant.show()
+        self.btn_sig.show()
+
+    def mostrar_anterior(self):
+        if self.indice_fase > 0:
+            self.indice_fase -= 1
+            self.actualizar_vista()
+
+    def mostrar_siguiente(self):
+        if self.indice_fase < len(self.fases_disponibles) - 1:
+            self.indice_fase += 1
+            self.actualizar_vista()
+
+    def mostrar_comparativa(self):
+        diag = DialogoComparativo(self.fases_disponibles, self.parent())
+        diag.exec()
 
     def showEvent(self, event):
         super().showEvent(event)
@@ -547,7 +787,8 @@ class InteractiveImageViewer(QLabel):
         if event.button() == Qt.MouseButton.LeftButton:
             if self.current_tool == "pointer":
                 if self.hovered_index != -1:
-                    crop_path = self.boxes[self.hovered_index]["crop_path"]
+                    crop_path_base = self.boxes[self.hovered_index]["crop_path"]
+                    crop_path = crop_path_base
                     pixmap_mem = None
                     if hasattr(self.window(), 'crops_filtrados_temp'):
                         nombre_base = os.path.basename(crop_path)
@@ -560,7 +801,8 @@ class InteractiveImageViewer(QLabel):
                     
                     if self.view_mode == "Filtrada": crop_path = crop_path.replace("/crops/", "/filtradas/")
                     elif self.view_mode == "Esqueleto": crop_path = crop_path.replace("/crops/", "/esqueletos/")
-                    if os.path.exists(crop_path) or pixmap_mem: DialogoVistaCelular(crop_path, pixmap_mem, self.window()).exec()
+                    if os.path.exists(crop_path) or pixmap_mem:
+                        DialogoVistaCelular(crop_path_base, pixmap_mem, self.view_mode, self.window()).exec()
                 else:
                     self.is_panning = True
                     self.pan_start_pos = event.pos()
@@ -838,7 +1080,26 @@ class VentanaInvestigador(QMainWindow):
         
         area_imagen = QVBoxLayout(); controles_superiores = QHBoxLayout()
         self.combo_vista = QComboBox(); self.combo_vista.addItem("Original"); self.combo_vista.setMinimumWidth(160); self.combo_vista.setStyleSheet("padding: 5px; font-size: 13px; font-weight: bold; min-width: 160px;"); self.combo_vista.setEnabled(False); self.combo_vista.currentTextChanged.connect(self.cambiar_vista_global)
-        controles_superiores.addWidget(self.combo_vista); controles_superiores.addStretch()
+        
+        # Botones de navegación global
+        self.btn_ant_global = QPushButton("<")
+        self.btn_ant_global.setFixedSize(30, 30)
+        self.btn_ant_global.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_ant_global.setStyleSheet("QPushButton { background-color: #f0f0f0; border: 1px solid #ccc; border-radius: 4px; font-weight: bold; color: #003366; } QPushButton:hover { background-color: #e0e0e0; } QPushButton:disabled { color: #ccc; }")
+        self.btn_ant_global.clicked.connect(self.anterior_vista_global)
+        self.btn_ant_global.hide()
+        
+        self.btn_sig_global = QPushButton(">")
+        self.btn_sig_global.setFixedSize(30, 30)
+        self.btn_sig_global.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_sig_global.setStyleSheet("QPushButton { background-color: #f0f0f0; border: 1px solid #ccc; border-radius: 4px; font-weight: bold; color: #003366; } QPushButton:hover { background-color: #e0e0e0; } QPushButton:disabled { color: #ccc; }")
+        self.btn_sig_global.clicked.connect(self.siguiente_vista_global)
+        self.btn_sig_global.hide()
+        
+        controles_superiores.addWidget(self.btn_ant_global)
+        controles_superiores.addWidget(self.combo_vista)
+        controles_superiores.addWidget(self.btn_sig_global)
+        controles_superiores.addStretch()
         
         self.lbl_info_conteo = QLabel("Microglías detectadas: 0"); self.lbl_info_conteo.setStyleSheet("font-size: 15px; font-weight: bold; color: #003366;"); self.lbl_info_conteo.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter); controles_superiores.addWidget(self.lbl_info_conteo); controles_superiores.addSpacing(15)
         
@@ -975,8 +1236,30 @@ class VentanaInvestigador(QMainWindow):
 
     def cambiar_vista_global(self, texto_vista):
         pixmap_guardado = self.pixmaps_globales.get(texto_vista)
-        if pixmap_guardado: self.visor_imagen.set_view_mode(texto_vista, pixmap_guardado)
-        else: self.mostrar_notificacion("Aviso", f"Aún no has generado el paso: {texto_vista}.", "warning"); self.combo_vista.blockSignals(True); self.combo_vista.setCurrentText(self.visor_imagen.view_mode); self.combo_vista.blockSignals(False)
+        if pixmap_guardado:
+            self.visor_imagen.set_view_mode(texto_vista, pixmap_guardado)
+            # Actualizar botones de navegación global (ocultar si no hay a donde ir)
+            idx = self.combo_vista.currentIndex()
+            if idx > 0: self.btn_ant_global.show()
+            else: self.btn_ant_global.hide()
+            
+            if idx < self.combo_vista.count() - 1: self.btn_sig_global.show()
+            else: self.btn_sig_global.hide()
+        else:
+            self.mostrar_notificacion("Aviso", f"Aún no has generado el paso: {texto_vista}.", "warning")
+            self.combo_vista.blockSignals(True)
+            self.combo_vista.setCurrentText(self.visor_imagen.view_mode)
+            self.combo_vista.blockSignals(False)
+
+    def anterior_vista_global(self):
+        idx = self.combo_vista.currentIndex()
+        if idx > 0:
+            self.combo_vista.setCurrentIndex(idx - 1)
+
+    def siguiente_vista_global(self):
+        idx = self.combo_vista.currentIndex()
+        if idx < self.combo_vista.count() - 1:
+            self.combo_vista.setCurrentIndex(idx + 1)
 
     def cerrar_sesion(self):
         from vistas.login import VentanaLogin
