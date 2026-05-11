@@ -642,7 +642,8 @@ class InteractiveImageViewer(QLabel):
     def draw_current_state(self):
         """Dibuja la imagen, las cajas normales y la caja resaltada."""
         if not self.original_pixmap or self.original_pixmap.isNull():
-            self.setPixmap(QPixmap())
+            self._current_pixmap = None
+            self.update()
             return
         pix_w, pix_h = self.original_pixmap.width(), self.original_pixmap.height()
         lbl_w, lbl_h = self.width(), self.height()
