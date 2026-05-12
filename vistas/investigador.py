@@ -490,7 +490,92 @@ class DialogoComparativo(QDialog):
         self.ajustar_posicion()
 
 
+class InteractiveLabelDetail(QLabel):
+    def __init__(self, parent_dialog):
+        super().__init__()
+        self.parent_dialog = parent_dialog
+        self.is_drawing = False
+        self.start_pos = None
+        self.current_pos = None
+        self.mode = "pointer" 
+        self.setMouseTracking(True)
+
+    def mousePressEvent(self, event):
+        if self.mode == "eraser" and event.button() == Qt.MouseButton.LeftButton:
+            # Primero verificar si el clic es para eliminar un área existente
+            coords = self.get_rect_in_original_coords(event.pos(), event.pos())
+            if coords:
+                ox, oy = coords["x"], coords["y"]
+                areas = self.parent_dialog.box.get("removal_areas", [])
+                for i, area in enumerate(areas):
+                    if area["x"] <= ox <= area["x"]+area["w"] and area["y"] <= oy <= area["y"]+area["h"]:
+                        areas.pop(i)
+                        self.parent_dialog.actualizar_visibilidad_boton_limpieza()
+                        self.update()
+                        return
+            
+            self.is_drawing = True
+            self.start_pos = event.pos()
+            self.current_pos = event.pos()
+            self.update()
+
+
+    def mouseMoveEvent(self, event):
+        if self.is_drawing:
+            self.current_pos = event.pos()
+            self.update()
+
+    def mouseReleaseEvent(self, event):
+        if self.is_drawing:
+            self.is_drawing = False
+            area = self.get_rect_in_original_coords(self.start_pos, self.current_pos)
+            if area:
+                if "removal_areas" not in self.parent_dialog.box: self.parent_dialog.box["removal_areas"] = []
+                self.parent_dialog.box["removal_areas"].append(area)
+                self.parent_dialog.actualizar_visibilidad_boton_limpieza()
+            self.start_pos = None; self.current_pos = None
+            self.update()
+
+    def get_rect_in_original_coords(self, p1, p2):
+        pix = self.pixmap()
+        if not pix or pix.isNull(): return None
+        lbl_w, lbl_h = self.width(), self.height()
+        pix_w, pix_h = pix.width(), pix.height()
+        dx = (lbl_w - pix_w) // 2; dy = (lbl_h - pix_h) // 2
+        x1 = p1.x() - dx; y1 = p1.y() - dy
+        x2 = p2.x() - dx; y2 = p2.y() - dy
+        orig_w, orig_h = self.parent_dialog.get_original_crop_size()
+        if orig_w == 0 or orig_h == 0: return None
+        scale_x = orig_w / pix_w; scale_y = orig_h / pix_h
+        rx = min(x1, x2); ry = min(y1, y2); rw = abs(x2 - x1); rh = abs(y2 - y1)
+        return {"x": int(rx * scale_x), "y": int(ry * scale_y), "w": int(rw * scale_x), "h": int(rh * scale_y)}
+
+    def paintEvent(self, event):
+        super().paintEvent(event)
+        pix = self.pixmap()
+        if not pix or pix.isNull(): return
+        painter = QPainter(self)
+        lbl_w, lbl_h = self.width(), self.height()
+        pix_w, pix_h = pix.width(), pix.height()
+        dx = (lbl_w - pix_w) // 2; dy = (lbl_h - pix_h) // 2
+        orig_w, orig_h = self.parent_dialog.get_original_crop_size()
+        if orig_w > 0:
+            scale_x = pix_w / orig_w; scale_y = pix_h / orig_h
+            painter.setPen(QPen(QColor(220, 53, 69), 2))
+            for area in self.parent_dialog.box.get("removal_areas", []):
+                rx = int(area["x"] * scale_x) + dx; ry = int(area["y"] * scale_y) + dy
+                rw = int(area["w"] * scale_x); rh = int(area["h"] * scale_y)
+                painter.drawRect(rx, ry, rw, rh)
+                painter.drawLine(rx, ry, rx + rw, ry + rh); painter.drawLine(rx + rw, ry, rx, ry + rh)
+        if self.is_drawing and self.start_pos and self.current_pos:
+            painter.setPen(QPen(QColor(220, 53, 69, 150), 2, Qt.PenStyle.DashLine))
+            rx = min(self.start_pos.x(), self.current_pos.x()); ry = min(self.start_pos.y(), self.current_pos.y())
+            rw = abs(self.current_pos.x() - self.start_pos.x()); rh = abs(self.current_pos.y() - self.start_pos.y())
+            painter.drawRect(rx, ry, rw, rh)
+        painter.end()
+
 class DialogoVistaCelular(QDialog):
+
     """
     Ventana detallada que permite navegar entre las fases de procesamiento
     de una microglía específica (Original < Filtrado > Esqueletizado).
@@ -548,9 +633,10 @@ class DialogoVistaCelular(QDialog):
         self.btn_ant.setStyleSheet("QPushButton { background-color: #f0f0f0; border: 1px solid #ccc; border-radius: 4px; font-size: 18px; font-weight: bold; color: #003366; } QPushButton:hover { background-color: #e0e0e0; } QPushButton:disabled { color: #ccc; }")
         self.btn_ant.clicked.connect(self.mostrar_anterior)
         
-        self.label_imagen = QLabel()
+        self.label_imagen = InteractiveLabelDetail(self)
         self.label_imagen.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.label_imagen.setFixedSize(380, 380)
+
         
         self.btn_sig = QPushButton(">")
         self.btn_sig.setFixedSize(30, 60)
@@ -563,6 +649,39 @@ class DialogoVistaCelular(QDialog):
         layout_imagen_nav.addWidget(self.btn_sig)
         
         layout.addLayout(layout_imagen_nav)
+        
+        # Herramientas de limpieza
+        self.frame_tools_limpieza = QFrame()
+        self.frame_tools_limpieza.setStyleSheet("QFrame { border: none; background: transparent; }")
+        layout_tools_limpieza = QHBoxLayout(self.frame_tools_limpieza)
+        layout_tools_limpieza.setContentsMargins(0,0,0,0)
+        
+        self.btn_tool_limpieza = QPushButton("Off")
+        self.btn_tool_limpieza.setCheckable(True)
+        self.btn_tool_limpieza.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_tool_limpieza.setStyleSheet("QPushButton { padding: 5px 15px; background-color: #f8f9fa; border: 1px solid #ddd; border-radius: 4px; font-weight: bold; font-size: 11px; } QPushButton:checked { background-color: #dc3545; color: white; border-color: #dc3545; }")
+        self.btn_tool_limpieza.clicked.connect(self.toggle_modo_limpieza)
+        
+        self.btn_aplicar_limpieza = QPushButton("Eliminar áreas")
+        self.btn_aplicar_limpieza.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_aplicar_limpieza.setStyleSheet("QPushButton { padding: 5px 15px; background-color: #007bff; color: white; border-radius: 4px; font-weight: bold; font-size: 11px; }")
+        self.btn_aplicar_limpieza.hide()
+        self.btn_aplicar_limpieza.clicked.connect(self.aplicar_limpieza)
+        
+        self.btn_limpiar_todo = QPushButton("Deshacer limpieza")
+        self.btn_limpiar_todo.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_limpiar_todo.setStyleSheet("QPushButton { padding: 5px; background-color: #6c757d; color: white; border-radius: 4px; font-size: 11px; }")
+        self.btn_limpiar_todo.hide()
+        self.btn_limpiar_todo.clicked.connect(self.deshacer_limpieza)
+        
+        layout_tools_limpieza.addWidget(QLabel("Limpieza:"))
+        layout_tools_limpieza.addWidget(self.btn_tool_limpieza)
+        layout_tools_limpieza.addStretch()
+        layout_tools_limpieza.addWidget(self.btn_limpiar_todo)
+        layout_tools_limpieza.addWidget(self.btn_aplicar_limpieza)
+        layout.addWidget(self.frame_tools_limpieza)
+
+
         
         # Filtros Individuales (Offsets) - Solo si estamos en modo investigador y no es modo lectura
         self.frame_offsets = QFrame()
@@ -606,10 +725,13 @@ class DialogoVistaCelular(QDialog):
         # Solo mostrar si el padre está en fase de filtrado (previsualización)
         if hasattr(parent, "combo_vista") and parent.combo_vista.currentText() == "Previsualización":
             self.frame_offsets.show()
-            self.resize(500, 750)
+            self.frame_tools_limpieza.show()
+            self.resize(500, 780)
         else:
             self.frame_offsets.hide()
+            self.frame_tools_limpieza.hide()
             self.resize(450, 520)
+
 
         layout.addSpacing(10)
 
@@ -628,6 +750,9 @@ class DialogoVistaCelular(QDialog):
         self.btn_comparativa.clicked.connect(self.mostrar_comparativa)
         # Solo habilitar si el proceso está terminado (las 3 fases existen)
         self.btn_comparativa.setEnabled(len(self.fases_disponibles) == 3)
+        
+        self.actualizar_visibilidad_boton_limpieza()
+
         
         btn_cerrar = QPushButton("Cerrar")
         btn_cerrar.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -718,6 +843,59 @@ class DialogoVistaCelular(QDialog):
                 # Si estamos viendo la fase filtrado, refrescar
                 if self.fases_disponibles[self.indice_fase]["nombre"] == "FILTRADO":
                     self.actualizar_vista()
+
+    def get_original_crop_size(self):
+        pix = QPixmap(self.crop_path)
+        if not pix.isNull(): return pix.width(), pix.height()
+        return 0, 0
+
+    def toggle_modo_limpieza(self, checked):
+        if checked:
+            self.label_imagen.mode = "eraser"
+            self.label_imagen.setCursor(Qt.CursorShape.CrossCursor)
+            self.btn_tool_limpieza.setText("On")
+        else:
+            self.label_imagen.mode = "pointer"
+            self.label_imagen.setCursor(Qt.CursorShape.ArrowCursor)
+            self.btn_tool_limpieza.setText("Off")
+
+
+    def actualizar_visibilidad_boton_limpieza(self):
+        has_areas = len(self.box.get("removal_areas", [])) > 0
+        self.btn_aplicar_limpieza.setVisible(has_areas)
+        self.btn_limpiar_todo.setVisible(has_areas)
+
+    def aplicar_limpieza(self):
+        from vistas.utilidades import DialogoConfirmacion
+        diag = DialogoConfirmacion("Eliminar Áreas", "¿Confirmas que deseas eliminar permanentemente estas áreas? Esto modificará la imagen base.")
+        if diag.exec():
+            # Aplicar permanentemente a la imagen en memoria (BGR)
+            nombre = os.path.basename(self.crop_path)
+            if hasattr(self.parent(), "crops_en_memoria") and nombre in self.parent().crops_en_memoria:
+                img_bgr = self.parent().crops_en_memoria[nombre]
+                import cv2
+                for area in self.box.get("removal_areas", []):
+                    ax, ay, aw, ah = area["x"], area["y"], area["w"], area["h"]
+                    cv2.rectangle(img_bgr, (ax, ay), (ax + aw, ay + ah), (0, 0, 0), -1)
+                
+                # Limpiar áreas ya aplicadas
+                self.box["removal_areas"] = []
+                self.actualizar_visibilidad_boton_limpieza()
+                self.actualizar_offsets() # Esto reprocesará con la nueva imagen base
+                self.label_imagen.update()
+                self.mostrar_notificacion("Limpieza Aplicada", "Las áreas se han eliminado de la imagen base.", "info")
+
+
+    def deshacer_limpieza(self):
+        self.box["removal_areas"] = []
+        self.actualizar_visibilidad_boton_limpieza()
+        self.actualizar_offsets()
+        self.label_imagen.update()
+
+    def mostrar_notificacion(self, t, m, tipo):
+        from vistas.utilidades import DialogoNotificacion
+        DialogoNotificacion(t, m, tipo, self).exec()
+
 
 
     def mostrar_anterior(self):
@@ -1400,7 +1578,8 @@ class VentanaInvestigador(QMainWindow):
             processor = MicrogliaProcessor(model_path=model_path); resultado = processor.process_and_crop(self.ruta_imagen_actual, base_output_folder=output_dir)
             if len(resultado) == 3:
                 crops_folder, count, boxes_data = resultado
-                for box in boxes_data: box["offsets"] = {"clahe": 0, "gauss": 0, "otsu": 0}
+                for box in boxes_data: box["offsets"] = {"clahe": 0, "gauss": 0, "otsu": 0}; box["removal_areas"] = []
+
                 self.visor_imagen.set_image_and_boxes(self.pixmaps_globales["Original"], boxes_data)
             else:
                 crops_folder, count = resultado; self.visor_imagen.set_image_and_boxes(self.pixmaps_globales["Original"], [])
@@ -1421,7 +1600,8 @@ class VentanaInvestigador(QMainWindow):
         orig_pixmap = self.pixmaps_globales["Original"]
         if not orig_pixmap: return
         rect_recorte = QRect(x, y, w, h); pixmap_recorte = orig_pixmap.copy(rect_recorte); nombre_archivo = f"manual_{uuid.uuid4().hex[:6]}.png"; ruta_guardado = os.path.join(crops_folder, nombre_archivo); pixmap_recorte.save(ruta_guardado, "PNG")
-        nueva_caja = {"x": x, "y": y, "w": w, "h": h, "crop_path": ruta_guardado, "offsets": {"clahe": 0, "gauss": 0, "otsu": 0}}
+        nueva_caja = {"x": x, "y": y, "w": w, "h": h, "crop_path": ruta_guardado, "offsets": {"clahe": 0, "gauss": 0, "otsu": 0}, "removal_areas": []}
+
         self.visor_imagen.boxes.append(nueva_caja); self.visor_imagen.draw_current_state(); self.actualizar_etiqueta_conteo(len(self.visor_imagen.boxes))
 
 
@@ -1492,14 +1672,18 @@ class VentanaInvestigador(QMainWindow):
         g_k_val = self.sld_gauss.value()
         g_otsu_offset = self.sld_otsu.value()
         
-        # Mapa de nombre a offsets para eficiencia
-        mapa_offsets = {}
+        # Mapa de nombre a info (offsets y areas) para eficiencia
+        mapa_info = {}
         for box in self.visor_imagen.boxes:
             nombre = os.path.basename(box["crop_path"])
-            mapa_offsets[nombre] = box.get("offsets", {"clahe":0, "gauss":0, "otsu":0})
+            mapa_info[nombre] = {
+                "offsets": box.get("offsets", {"clahe":0, "gauss":0, "otsu":0}),
+                "removal_areas": box.get("removal_areas", [])
+            }
 
         for nombre, img in self.crops_en_memoria.items():
-            offsets = mapa_offsets.get(nombre, {"clahe":0, "gauss":0, "otsu":0})
+            info = mapa_info.get(nombre, {"offsets": {"clahe":0, "gauss":0, "otsu":0}, "removal_areas": []})
+            offsets = info["offsets"]
             
             # Aplicar Global + Offset
             c_clip = max(0, min(10, g_clahe_clip + offsets["clahe"]))
@@ -1516,7 +1700,7 @@ class VentanaInvestigador(QMainWindow):
                 hsv_clahe = cv2.merge((h_c, s_c, v_clahe))
                 bgr_proc = cv2.cvtColor(hsv_clahe, cv2.COLOR_HSV2BGR)
             else:
-                bgr_proc = img
+                bgr_proc = img.copy()
                 
             gray = cv2.cvtColor(bgr_proc, cv2.COLOR_BGR2GRAY)
             blur = cv2.GaussianBlur(gray, (k, k), 0)
@@ -1524,7 +1708,13 @@ class VentanaInvestigador(QMainWindow):
             threshold_val = max(0, min(255, ret + o_offset))
             _, bin_img = cv2.threshold(blur, threshold_val, 255, cv2.THRESH_BINARY)
             
+            # Aplicar eliminación de áreas manuales
+            for area in info["removal_areas"]:
+                ax, ay, aw, ah = area["x"], area["y"], area["w"], area["h"]
+                cv2.rectangle(bin_img, (ax, ay), (ax + aw, ay + ah), 0, -1)
+            
             self.crops_filtrados_temp[nombre] = bin_img
+
             
         pixmap_filtrada = self.construir_imagen_global_memoria()
         self.pixmaps_globales["Previsualización"] = pixmap_filtrada
@@ -1623,8 +1813,10 @@ class VentanaInvestigador(QMainWindow):
         self.sld_otsu.setValue(0)
         for box in self.visor_imagen.boxes:
             box["offsets"] = {"clahe": 0, "gauss": 0, "otsu": 0}
+            box["removal_areas"] = []
             
         self.actualizar_estado_flujo(2)
+
 
         self.mostrar_notificacion("Corregir Filtrado", "Se han eliminado las fases anteriores. Puedes ajustar los filtros nuevamente.", "info")
 
