@@ -4,7 +4,7 @@ import subprocess
 import uuid
 from pathlib import Path
 
-from ia.modelo_yolo import MIN_MICROGLIA_SIZE
+from ia.constants import MIN_MICROGLIA_SIZE
 
 from PyQt6.QtCore import pyqtSignal, QRect, Qt, QSize, QEvent, QPoint
 from PyQt6.QtGui import QColor, QImage, QPainter, QPen, QPixmap, QIcon, QIntValidator
@@ -32,7 +32,7 @@ from PyQt6.QtCore import QTimer
 # os.environ["QT_QPA_PLATFORM"] = "xcb"
 
 
-from ia.morphology_analyzer import MorphologyAnalyzer
+# MorphologyAnalyzer will be imported inside methods that use it
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"

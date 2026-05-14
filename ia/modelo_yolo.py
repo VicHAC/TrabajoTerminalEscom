@@ -5,18 +5,16 @@ import numpy as np
 import tifffile as tiff
 import torch
 from ultralytics.models.yolo.model import YOLO
-
-# Minimal microglia size (width and height) in pixels to consider a detection or manual box valid
-MIN_MICROGLIA_SIZE = 15
+from ia.constants import MIN_MICROGLIA_SIZE
 
 # Fix for loading YOLO models in some environments
-_original_load = torch.load
-
-def _trusted_torch_load(*args, **kwargs):
-    kwargs["weights_only"] = False
-    return _original_load(*args, **kwargs)
-
-torch.load = _trusted_torch_load
+if not hasattr(torch, "_original_load_patched"):
+    torch._original_load_patched = True
+    _original_load = torch.load
+    def _trusted_torch_load(*args, **kwargs):
+        kwargs["weights_only"] = False
+        return _original_load(*args, **kwargs)
+    torch.load = _trusted_torch_load
 
 def get_optimal_device():
     """Evaluates available hardware and returns the optimal computation device."""

@@ -8,3 +8,4 @@ vistas/__pycache__/
 bd/__pycache__/
 analisis_resultados/
 runs/
+**/*.pyc
