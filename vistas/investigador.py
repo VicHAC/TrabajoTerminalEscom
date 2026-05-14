@@ -1267,9 +1267,46 @@ class DialogoHistorial(QDialog):
         """)
         
         flayout = QVBoxLayout(self.frame)
+        
+        # Layout de encabezado con título e icono de basura
+        header_layout = QHBoxLayout()
+        header_layout.setContentsMargins(15, 10, 15, 0)
+        
         lbl_titulo = QLabel("<b>Historial de Reportes y Análisis</b>")
-        lbl_titulo.setStyleSheet("font-size: 20px; color: #3a61a0; margin-top: 10px;")
-        lbl_titulo.setAlignment(Qt.AlignmentFlag.AlignCenter); flayout.addWidget(lbl_titulo)
+        lbl_titulo.setStyleSheet("font-size: 15px; color: #3a61a0;")
+        lbl_titulo.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        self.btn_borrar_icon = QPushButton()
+        self.btn_borrar_icon.setIcon(QIcon("assets/borrar.png"))
+        self.btn_borrar_icon.setIconSize(QSize(22, 22))
+        self.btn_borrar_icon.setFixedSize(35, 35)
+        self.btn_borrar_icon.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_borrar_icon.setStyleSheet("""
+            QPushButton { background-color: transparent; border: none; }
+            QPushButton:hover { background-color: #f0f0f0; border-radius: 17px; }
+            QPushButton:disabled { opacity: 0.3; }
+        """)
+        self.btn_borrar_icon.setEnabled(False)
+        self.btn_borrar_icon.setToolTip("Borrar seleccionados")
+        self.btn_borrar_icon.clicked.connect(self.borrar_reportes_seleccionados)
+
+        self.btn_cerrar_x = QPushButton("✕")
+        self.btn_cerrar_x.setFixedSize(35, 35)
+        self.btn_cerrar_x.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_cerrar_x.setStyleSheet("""
+            QPushButton { background-color: transparent; border: none; font-size: 18px; color: #666; font-weight: bold; }
+            QPushButton:hover { color: #cf222e; background-color: #f6f8fa; border-radius: 17px; }
+        """)
+        self.btn_cerrar_x.clicked.connect(self.reject)
+        
+        header_layout.addSpacing(70) # Compensar espacio de los dos botones de la derecha para centrar título
+        header_layout.addStretch()
+        header_layout.addWidget(lbl_titulo)
+        header_layout.addStretch()
+        header_layout.addWidget(self.btn_borrar_icon)
+        header_layout.addWidget(self.btn_cerrar_x)
+        
+        flayout.addLayout(header_layout)
         
         self.tree = QTreeWidget()
         self.tree.setHeaderLabels(["Reporte / Imagen", "Fecha", "Estado", "Detecciones"])
@@ -1285,23 +1322,27 @@ class DialogoHistorial(QDialog):
         flayout.addWidget(self.tree)
         
         self.cargar_datos()
+        self.tree.itemChanged.connect(self.actualizar_estado_boton_borrar)
         
         btn_layout = QHBoxLayout()
-        btn_borrar = QPushButton("Borrar Seleccionados")
-        btn_borrar.setStyleSheet("background-color: #cf222e; color: white;")
-        btn_borrar.clicked.connect(self.borrar_reportes_seleccionados)
         
         btn_cargar = QPushButton("Cargar / Retomar")
         btn_cargar.setStyleSheet("background-color: #2da44e; color: white;")
         btn_cargar.clicked.connect(self.aceptar_seleccion)
         
-        btn_cancelar = QPushButton("Cerrar")
-        btn_cancelar.setStyleSheet("background-color: #6e7781; color: white;")
-        btn_cancelar.clicked.connect(self.reject)
+        btn_layout.addStretch()
+        btn_layout.addWidget(btn_cargar)
         
-        btn_layout.addWidget(btn_borrar); btn_layout.addStretch(); btn_layout.addWidget(btn_cancelar); btn_layout.addWidget(btn_cargar)
         flayout.addLayout(btn_layout); main_layout.addWidget(self.frame)
         self.resize(950, 650)
+
+    def actualizar_estado_boton_borrar(self):
+        hay_seleccion = False
+        for i in range(self.tree.topLevelItemCount()):
+            if self.tree.topLevelItem(i).checkState(0) == Qt.CheckState.Checked:
+                hay_seleccion = True
+                break
+        self.btn_borrar_icon.setEnabled(hay_seleccion)
 
     def showEvent(self, event):
         super().showEvent(event)
@@ -1376,7 +1417,9 @@ class DialogoHistorial(QDialog):
                 self.tree.takeTopLevelItem(self.tree.indexOfTopLevelItem(item))
             conn.commit()
         except Exception as e: logging.error(f"Error borrado masivo: {e}")
-        finally: conn.close()
+        finally: 
+            conn.close()
+            self.actualizar_estado_boton_borrar()
 
 
 class VentanaInvestigador(QMainWindow):
@@ -1420,7 +1463,7 @@ class VentanaInvestigador(QMainWindow):
         self.btn_historial.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_historial.setStyleSheet("""
             QPushButton { background-color: white; border: none; font-size: 24px; font-weight: bold; color: #333; }
-            QPushButton:hover { background-color: #f0f0f0; border-radius: 4px; }
+            QPushButton:hover { background-color: #f0f0f0; border-radius: 17px; }
         """)
         
         # Información del usuario al lado derecho
@@ -1493,9 +1536,14 @@ class VentanaInvestigador(QMainWindow):
         self.sld_clahe.setStyleSheet(estilo_slider); self.sld_gauss.setStyleSheet(estilo_slider); self.sld_otsu.setStyleSheet(estilo_slider)
 
 
-        btn_aceptar_filtro = QPushButton("Aceptar"); btn_aceptar_filtro.setStyleSheet("background-color: #28a745; color: white; font-weight: bold; padding: 5px;")
-        btn_cancelar_filtro = QPushButton("Cancelar"); btn_cancelar_filtro.setStyleSheet("background-color: #dc3545; color: white; font-weight: bold; padding: 5px;")
-        layout_filtros.addWidget(btn_aceptar_filtro); layout_filtros.addWidget(btn_cancelar_filtro)
+        btn_f_layout = QHBoxLayout()
+        btn_aceptar_filtro = QPushButton("Aceptar")
+        btn_aceptar_filtro.setStyleSheet("background-color: #2da44e; color: white; font-weight: bold; padding: 6px; font-size: 10px; border-radius: 4px;")
+        btn_cancelar_filtro = QPushButton("Cancelar")
+        btn_cancelar_filtro.setStyleSheet("background-color: #cf222e; color: white; font-weight: bold; padding: 6px; font-size: 10px; border-radius: 4px;")
+        btn_f_layout.addWidget(btn_cancelar_filtro)
+        btn_f_layout.addWidget(btn_aceptar_filtro)
+        layout_filtros.addLayout(btn_f_layout)
         self.menu_lateral.addWidget(self.frame_filtros)
         
         self.sld_clahe.valueChanged.connect(self.previsualizar_filtrado)
@@ -1508,29 +1556,53 @@ class VentanaInvestigador(QMainWindow):
         self.btn_cerrar_sesion = QPushButton("Cerrar Sesión"); self.btn_cerrar_sesion.setStyleSheet("QPushButton { background-color: transparent; border: 2px solid #cc0000; color: #cc0000; font-weight: bold; border-radius: 8px; padding: 10px; margin-top: 20px; } QPushButton:hover { background-color: #cc0000; color: white; }"); self.menu_lateral.addWidget(self.btn_cerrar_sesion)
         frame_menu = QFrame(); frame_menu.setObjectName("menu_lateral"); frame_menu.setFixedWidth(200); frame_menu.setLayout(self.menu_lateral)
         
-        area_imagen = QVBoxLayout(); controles_superiores = QHBoxLayout()
+        area_imagen = QVBoxLayout()
+        controles_superiores = QHBoxLayout()
+        controles_superiores.setContentsMargins(15, 5, 15, 5)
+        controles_superiores.setSpacing(10)
         self.combo_vista = QComboBox(); self.combo_vista.addItem("Original"); self.combo_vista.setMinimumWidth(140); self.combo_vista.setStyleSheet("""
             QComboBox { background-color: white; border: 1px solid #d0d7de; border-radius: 6px; padding: 4px 10px; font-size: 11px; font-weight: bold; color: #24292f; min-width: 140px; }
             QComboBox:hover { background-color: #f6f8fa; }
-            QComboBox::drop-down { border: none; width: 20px; }
-            QComboBox::down-arrow { image: none; border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 5px solid #666; margin-right: 8px; }
+            QComboBox::drop-down { 
+                subcontrol-origin: padding;
+                subcontrol-position: top right;
+                width: 20px; 
+                border: none;
+            }
+            QComboBox::down-arrow { 
+                image: url(assets/abajo.png);
+                width: 12px; 
+                height: 12px;
+            }
             QComboBox QAbstractItemView { background-color: white; border: 1px solid #d0d7de; selection-background-color: #eaf2ff; selection-color: #0969da; outline: none; }
         """); self.combo_vista.setEnabled(False); self.combo_vista.currentTextChanged.connect(self.cambiar_vista_global)
         
         # Botones de navegación global
-        self.btn_ant_global = QPushButton("<")
-        self.btn_ant_global.setFixedSize(30, 30)
+        self.btn_ant_global = QPushButton()
+        self.btn_ant_global.setIcon(QIcon("assets/izq.png"))
+        self.btn_ant_global.setIconSize(QSize(12, 12))
+        self.btn_ant_global.setFixedSize(22, 22)
         self.btn_ant_global.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_ant_global.setStyleSheet("QPushButton { background-color: #f0f0f0; border: 1px solid #ccc; border-radius: 4px; font-weight: bold; color: #003366; } QPushButton:hover { background-color: #e0e0e0; } QPushButton:disabled { color: #ccc; }")
+        self.btn_ant_global.setStyleSheet("""
+            QPushButton { background-color: transparent; border: none; }
+            QPushButton:hover { background-color: #f0f0f0; border-radius: 11px; }
+            QPushButton:disabled { opacity: 0.3; }
+        """)
         self.btn_ant_global.clicked.connect(self.anterior_vista_global)
-        self.btn_ant_global.hide()
+        self.btn_ant_global.setEnabled(False)
         
-        self.btn_sig_global = QPushButton(">")
-        self.btn_sig_global.setFixedSize(30, 30)
+        self.btn_sig_global = QPushButton()
+        self.btn_sig_global.setIcon(QIcon("assets/der.png"))
+        self.btn_sig_global.setIconSize(QSize(12, 12))
+        self.btn_sig_global.setFixedSize(22, 22)
         self.btn_sig_global.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_sig_global.setStyleSheet("QPushButton { background-color: #f0f0f0; border: 1px solid #ccc; border-radius: 4px; font-weight: bold; color: #003366; } QPushButton:hover { background-color: #e0e0e0; } QPushButton:disabled { color: #ccc; }")
+        self.btn_sig_global.setStyleSheet("""
+            QPushButton { background-color: transparent; border: none; }
+            QPushButton:hover { background-color: #f0f0f0; border-radius: 11px; }
+            QPushButton:disabled { opacity: 0.3; }
+        """)
         self.btn_sig_global.clicked.connect(self.siguiente_vista_global)
-        self.btn_sig_global.hide()
+        self.btn_sig_global.setEnabled(False)
         
         controles_superiores.addWidget(self.btn_ant_global)
         controles_superiores.addWidget(self.combo_vista)
@@ -1539,7 +1611,7 @@ class VentanaInvestigador(QMainWindow):
         
         self.lbl_info_conteo = QLabel("Microglías detectadas: 0"); self.lbl_info_conteo.setStyleSheet("font-size: 11px; font-weight: bold; color: #3a61a0; background-color: white; border: 1px solid #d0d7de; border-radius: 6px; padding: 4px 10px;"); self.lbl_info_conteo.setAlignment(Qt.AlignmentFlag.AlignCenter); controles_superiores.addWidget(self.lbl_info_conteo); controles_superiores.addSpacing(15)
         
-        estilo_herramienta = "QPushButton { background-color: transparent; border: none; padding: 2px; } QPushButton:hover { background-color: #e0e0e0; border-radius: 4px; } QPushButton:checked { background-color: #cce5ff; border: 1px solid #007bff; border-radius: 4px; } QPushButton:disabled { opacity: 0.5; }"
+        estilo_herramienta = "QPushButton { background-color: transparent; border: none; padding: 2px; } QPushButton:hover { background-color: #e0e0e0; border-radius: 17px; } QPushButton:checked { background-color: #cce5ff; border: 1px solid #007bff; border-radius: 17px; } QPushButton:disabled { opacity: 0.5; }"
         
         self.btn_herramienta_caja = SafeToolTipButton()
         self.btn_herramienta_caja.setFixedSize(35, 35)
@@ -1581,7 +1653,7 @@ class VentanaInvestigador(QMainWindow):
         self.btn_zoom_reset.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_zoom_reset.setStyleSheet("""
             QPushButton { background-color: transparent; border: none; font-size: 18px; font-weight: bold; color: #3a61a0; padding: 0; text-align: center; }
-            QPushButton:hover { background-color: #f0f0f0; border-radius: 4px; }
+            QPushButton:hover { background-color: #f0f0f0; border-radius: 17px; }
             QPushButton:disabled { color: #aaaaaa; }
         """)
         self.btn_zoom_reset.setEnabled(False)
@@ -1835,20 +1907,14 @@ class VentanaInvestigador(QMainWindow):
                             pixmap = QPixmap.fromImage(qimg)
                     except Exception as e: logging.error(f"Error al cargar imagen: {e}")
                 if not pixmap.isNull():
-                    self.pixmaps_globales["Original"] = pixmap; self.pixmaps_globales["Filtrada"] = None; self.pixmaps_globales["Esqueleto"] = None; self.btn_herramienta_caja.setChecked(False); self.btn_herramienta_eliminar.setChecked(False); self.visor_imagen.current_tool = "pointer"; self.btn_bloquear_zoom.setChecked(False); self.reset_zoom(); self.visor_imagen.set_image_and_boxes(pixmap, []); self.actualizar_estado_flujo(1); self.combo_vista.blockSignals(True); self.combo_vista.clear(); self.combo_vista.addItem("Original"); self.combo_vista.setCurrentText("Original"); self.combo_vista.blockSignals(False); self.visor_imagen.view_mode = "Original"; self.mostrar_notificacion("Imagen cargada", "Imagen lista para el análisis.", "info")
+                    self.pixmaps_globales["Original"] = pixmap; self.pixmaps_globales["Filtrada"] = None; self.pixmaps_globales["Esqueleto"] = None; self.btn_herramienta_caja.setChecked(False); self.btn_herramienta_eliminar.setChecked(False); self.visor_imagen.current_tool = "pointer"; self.btn_bloquear_zoom.setChecked(False); self.reset_zoom(); self.visor_imagen.set_image_and_boxes(pixmap, []); self.actualizar_estado_flujo(1); self.combo_vista.blockSignals(True); self.combo_vista.clear(); self.combo_vista.addItem("Original"); self.combo_vista.setCurrentText("Original"); self.combo_vista.blockSignals(False); self.actualizar_botones_navegacion(); self.visor_imagen.view_mode = "Original"; self.mostrar_notificacion("Imagen cargada", "Imagen lista para el análisis.", "info")
                 else: self.mostrar_notificacion("Error", "El archivo está corrupto o no es válido.", "error")
 
     def cambiar_vista_global(self, texto_vista):
         pixmap_guardado = self.pixmaps_globales.get(texto_vista)
         if pixmap_guardado:
             self.visor_imagen.set_view_mode(texto_vista, pixmap_guardado)
-            # Actualizar botones de navegación global (ocultar si no hay a donde ir)
-            idx = self.combo_vista.currentIndex()
-            if idx > 0: self.btn_ant_global.show()
-            else: self.btn_ant_global.hide()
-            
-            if idx < self.combo_vista.count() - 1: self.btn_sig_global.show()
-            else: self.btn_sig_global.hide()
+            self.actualizar_botones_navegacion()
         else:
             self.mostrar_notificacion("Aviso", f"Aún no has generado el paso: {texto_vista}.", "warning")
             self.combo_vista.blockSignals(True)
@@ -1864,6 +1930,11 @@ class VentanaInvestigador(QMainWindow):
         idx = self.combo_vista.currentIndex()
         if idx < self.combo_vista.count() - 1:
             self.combo_vista.setCurrentIndex(idx + 1)
+
+    def actualizar_botones_navegacion(self):
+        idx = self.combo_vista.currentIndex()
+        self.btn_ant_global.setEnabled(idx > 0)
+        self.btn_sig_global.setEnabled(idx < self.combo_vista.count() - 1)
 
     def cerrar_sesion(self):
         from vistas.login import VentanaLogin
@@ -1962,6 +2033,7 @@ class VentanaInvestigador(QMainWindow):
         self.combo_vista.blockSignals(True)
         self.combo_vista.setCurrentText("Previsualización")
         self.combo_vista.blockSignals(False)
+        self.actualizar_botones_navegacion()
         self.visor_imagen.view_mode = "Previsualización"
         
         self.previsualizar_filtrado()
