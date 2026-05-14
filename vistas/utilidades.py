@@ -25,21 +25,21 @@ class DialogoNotificacion(QDialog):
         layout = QVBoxLayout(self)
         frame = QFrame(self)
         
-        color_titulo = "#3a61a0" # info
-        if tipo == "warning": color_titulo = "#e0a800"
-        elif tipo == "error": color_titulo = "#cc0000"
+        color_titulo = "#0969da" # info (GitHub blue)
+        if tipo == "warning": color_titulo = "#9a6700"
+        elif tipo == "error": color_titulo = "#cf222e" # GitHub red
         
         frame.setStyleSheet(f"""
-            QFrame {{ background-color: #FFFFFF; border-radius: 12px; border: 2px solid {color_titulo}; }}
-            QLabel {{ color: #333333; font-size: 15px; padding: 10px; border: none; }}
-            QPushButton {{ background-color: {color_titulo}; color: white; border-radius: 6px; padding: 8px 20px; font-weight: bold; font-size: 14px; }}
-            QPushButton:hover {{ opacity: 0.8; }}
+            QFrame {{ background-color: #FFFFFF; border-radius: 12px; border: 1px solid {color_titulo}; }}
+            QLabel {{ color: #24292f; font-size: 13px; padding: 5px; border: none; }}
+            QPushButton {{ background-color: #f6f8fa; color: #24292f; border: 1px solid #d0d7de; border-radius: 6px; padding: 6px 16px; font-weight: 600; font-size: 13px; }}
+            QPushButton:hover {{ background-color: #f3f4f6; }}
         """)
         
         flayout = QVBoxLayout(frame)
         
         lbl_titulo = QLabel(f"<b>{titulo}</b>")
-        lbl_titulo.setStyleSheet(f"color: {color_titulo}; font-size: 18px; border: none;")
+        lbl_titulo.setStyleSheet(f"color: {color_titulo}; font-size: 16px; border: none; font-weight: bold;")
         lbl_titulo.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
         linea = QFrame()
@@ -89,17 +89,18 @@ class DialogoConfirmacion(QDialog):
         layout = QVBoxLayout(self)
         frame = QFrame(self)
         frame.setStyleSheet("""
-            QFrame { background-color: #FFFFFF; border-radius: 12px; border: 2px solid #cc0000; }
-            QLabel { color: #333333; font-size: 15px; padding: 10px; border: none;}
-            QPushButton { border-radius: 6px; font-weight: bold; padding: 8px 15px; font-size: 14px; }
-            QPushButton#btn_eliminar { background-color: #cc0000; color: white; }
-            QPushButton#btn_eliminar:hover { background-color: #aa0000; }
-            QPushButton#btn_mantener { background-color: #e0e0e0; color: #333333; }
+            QFrame { background-color: #FFFFFF; border-radius: 12px; border: 1px solid #cf222e; }
+            QLabel { color: #24292f; font-size: 13px; padding: 5px; border: none;}
+            QPushButton { border-radius: 6px; font-weight: 600; padding: 6px 15px; font-size: 13px; border: 1px solid #d0d7de; }
+            QPushButton#btn_eliminar { background-color: #cf222e; color: white; border-color: #a40e26; }
+            QPushButton#btn_eliminar:hover { background-color: #a40e26; }
+            QPushButton#btn_mantener { background-color: #f6f8fa; color: #24292f; }
+            QPushButton#btn_mantener:hover { background-color: #f3f4f6; }
         """)
 
         flayout = QVBoxLayout(frame)
         lbl_titulo = QLabel(f"<b>{titulo}</b>")
-        lbl_titulo.setStyleSheet("color: #cc0000; font-size: 18px; border: none;")
+        lbl_titulo.setStyleSheet("color: #cf222e; font-size: 16px; border: none; font-weight: bold;")
         lbl_titulo.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         linea = QFrame()

@@ -29,7 +29,7 @@ class DialogoCrearUsuario(QDialog):
         self.combo_rol.addItems(["Investigador", "Administrador"])
         
         btn_guardar = QPushButton("Registrar")
-        btn_guardar.setStyleSheet("background-color: #003366; color: white; padding: 8px;")
+        btn_guardar.setStyleSheet("background-color: #2da44e; color: white; border: 1px solid #1a7f37;")
         btn_guardar.clicked.connect(self.guardar_en_bd)
         
         layout.addWidget(QLabel("Datos del nuevo usuario:"))
@@ -94,7 +94,7 @@ class DialogoEditarUsuario(QDialog):
         self.combo_rol.setCurrentText(rol_actual) 
         
         btn_guardar = QPushButton("Actualizar")
-        btn_guardar.setStyleSheet("background-color: #003366; color: white; padding: 8px;")
+        btn_guardar.setStyleSheet("background-color: #0969da; color: white; border: 1px solid #0550ae;")
         btn_guardar.clicked.connect(self.actualizar_en_bd)
         
         layout.addWidget(QLabel("Modificar datos:"))
@@ -163,8 +163,8 @@ class VentanaAdministrador(QMainWindow):
         menu_lateral = QVBoxLayout()
         menu_lateral.setAlignment(Qt.AlignmentFlag.AlignTop)
         
-        label_bienvenida = QLabel("Panel Admin")
-        label_bienvenida.setStyleSheet("font-weight: bold; font-size: 18px; margin-bottom: 20px;")
+        label_bienvenida = QLabel("Administración")
+        label_bienvenida.setStyleSheet("font-weight: bold; font-size: 16px; color: #0969da; margin-bottom: 20px; padding-left: 10px;")
         menu_lateral.addWidget(label_bienvenida)
 
         self.btn_usuarios = QPushButton("Ver Usuarios")
@@ -179,11 +179,13 @@ class VentanaAdministrador(QMainWindow):
                 text-align: left; 
                 padding: 10px; 
                 font-weight: normal;
-                color: #333333;
+                color: #24292f;
+                border: none;
+                font-size: 12px;
             }
             QPushButton:hover {
-                background-color: #F0F0F0;
-                border-radius: 5px;
+                background-color: #f6f8fa;
+                border-radius: 6px;
             }
         """
         for btn in [self.btn_usuarios, self.btn_registrar, self.btn_editar, self.btn_eliminar, self.btn_reportes]:
@@ -248,7 +250,7 @@ class VentanaAdministrador(QMainWindow):
         self.tabla_reportes.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         
         self.btn_eliminar_reporte_fisico = QPushButton("Eliminar Reporte Seleccionado")
-        self.btn_eliminar_reporte_fisico.setStyleSheet("background-color: darkred; color: white; padding: 10px;")
+        self.btn_eliminar_reporte_fisico.setStyleSheet("background-color: #cf222e; color: white; border: 1px solid #a40e26;")
         
         layout_reportes.addWidget(titulo_reportes)
         layout_reportes.addWidget(self.tabla_reportes)

@@ -3,8 +3,12 @@ import os
 import subprocess
 import uuid
 from pathlib import Path
+from datetime import datetime
+import json
 
 from ia.constants import MIN_MICROGLIA_SIZE
+
+from bd.database import conectar
 
 from PyQt6.QtCore import pyqtSignal, QRect, Qt, QSize, QEvent, QPoint
 from PyQt6.QtGui import QColor, QImage, QPainter, QPen, QPixmap, QIcon, QIntValidator
@@ -24,8 +28,14 @@ from PyQt6.QtWidgets import (
     QCheckBox,
     QLineEdit,
     QGridLayout,
-
+    QMessageBox,
+    QTableWidget,
+    QTableWidgetItem,
+    QHeaderView,
+    QAbstractItemView,
     QToolTip,
+    QTreeWidget,
+    QTreeWidgetItem,
 )
 from PyQt6.QtCore import QTimer
 
@@ -112,13 +122,13 @@ class DropZone(QFrame):
         
         self.setStyleSheet("""
             #DropZoneObj {
-                border: 2px dashed #007bff;
+                border: 2px dashed #0969da;
                 border-radius: 8px;
                 background-color: #ffffff;
             }
             #DropZoneObj:hover {
-                background-color: #f4f8fb;
-                border: 2px dashed #0056b3;
+                background-color: #f6f8fa;
+                border: 2px dashed #0550ae;
             }
         """)
         self.actualizar_imagen()
@@ -204,11 +214,11 @@ class DialogoCargarImagen(QDialog):
 
         main_layout = QVBoxLayout(self)
         frame = QFrame(self)
-        frame.setStyleSheet("QFrame { background-color: #FFFFFF; border-radius: 12px; border: 2px solid #003366; } QLabel { border: none; }")
+        frame.setStyleSheet("QFrame { background-color: #FFFFFF; border-radius: 12px; border: 1px solid #d0d7de; } QLabel { border: none; }")
         layout = QVBoxLayout(frame)
         
-        lbl_titulo = QLabel("Detalles del Campo")
-        lbl_titulo.setStyleSheet("font-size: 18px; font-weight: bold; color: #003366;")
+        lbl_titulo = QLabel("Configuración del Campo")
+        lbl_titulo.setStyleSheet("font-size: 18px; font-weight: bold; color: #0969da;")
         lbl_titulo.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(lbl_titulo)
         layout.addSpacing(10)
@@ -219,17 +229,15 @@ class DialogoCargarImagen(QDialog):
         lbl_campo = QLabel("Campo:")
         lbl_campo.setStyleSheet("font-weight: bold; font-size: 13px;")
         self.input_campo = QLineEdit()
-        self.input_campo.setPlaceholderText("Ej. Campo A, Campo B, 1...")
-        self.input_campo.setStyleSheet("padding: 8px; font-size: 14px; border: 1px solid #ccc; border-radius: 4px;")
+        self.input_campo.setPlaceholderText("Ej. Campo A, 1...")
         layout_campo.addWidget(lbl_campo)
         layout_campo.addWidget(self.input_campo)
 
         layout_tiempo = QVBoxLayout()
-        lbl_tiempo = QLabel("Tiempo de la muestra:")
-        lbl_tiempo.setStyleSheet("font-weight: bold; font-size: 13px;")
+        lbl_tiempo = QLabel("Tiempo:")
+        lbl_tiempo.setStyleSheet("font-weight: bold; font-size: 12px; color: #57606a;")
         self.input_tiempo = QLineEdit()
-        self.input_tiempo.setPlaceholderText("Ej. 1hr, 2hrs, 1 semana...")
-        self.input_tiempo.setStyleSheet("padding: 8px; font-size: 14px; border: 1px solid #ccc; border-radius: 4px;")
+        self.input_tiempo.setPlaceholderText("Ej. 1hr, 2hrs...")
         layout_tiempo.addWidget(lbl_tiempo)
         layout_tiempo.addWidget(self.input_tiempo)
 
@@ -249,18 +257,11 @@ class DialogoCargarImagen(QDialog):
         
         btn_cancelar = QPushButton("Cancelar")
         btn_cancelar.setCursor(Qt.CursorShape.PointingHandCursor)
-        btn_cancelar.setStyleSheet("""
-            QPushButton { padding: 8px; background-color: #e0e0e0; border-radius: 4px; font-weight: bold; color: #333;}
-            QPushButton:hover { background-color: #cccccc; }
-        """)
         btn_cancelar.clicked.connect(self.reject)
         
-        btn_continuar = QPushButton("Continuar")
+        btn_continuar = QPushButton("Cargar Imagen")
         btn_continuar.setCursor(Qt.CursorShape.PointingHandCursor)
-        btn_continuar.setStyleSheet("""
-            QPushButton { padding: 8px; background-color: #007bff; border-radius: 4px; font-weight: bold; color: white;}
-            QPushButton:hover { background-color: #0056b3; }
-        """)
+        btn_continuar.setStyleSheet("background-color: #2da44e; color: white; border: 1px solid #1a7f37;")
         btn_continuar.clicked.connect(self.validar_y_continuar)
         
         layout_botones.addWidget(btn_cancelar)
@@ -1054,6 +1055,8 @@ class InteractiveImageViewer(QLabel):
 
     def mousePressEvent(self, event):
         if not self.original_pixmap: return
+        
+
         if event.button() == Qt.MouseButton.LeftButton:
             if self.current_tool == "pointer":
                 if self.hovered_index != -1:
@@ -1150,6 +1153,24 @@ class InteractiveImageViewer(QLabel):
             self.draw_current_state()
         super().leaveEvent(event)
 
+    def borrar_rama_esqueleto(self, pos):
+        if not self.original_pixmap: return
+        
+        orig_coords = self.map_mouse_to_original(pos)
+        if not orig_coords: return
+        
+        ox, oy = orig_coords
+        
+        # Modificar el pixmap original (que es el esqueleto)
+        # Pintamos un círculo negro para 'borrar' la rama
+        painter = QPainter(self.original_pixmap)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor(0, 0, 0)) # Negro
+        painter.drawEllipse(QPoint(int(ox), int(oy)), 8, 8) # Radio de 8 pixeles para facilitar el borrado
+        painter.end()
+        
+        self.draw_current_state()
+
     def set_zoom(self, value):
         if not self.original_pixmap or self.original_pixmap.isNull(): return
         if not self.zoom_locked: self.zoom_level = value; self.draw_current_state(); self.nivel_zoom_cambiado.emit(value)
@@ -1226,78 +1247,136 @@ class InteractiveImageViewer(QLabel):
         super().resizeEvent(event)
         if self.original_pixmap: self.draw_current_state()
 
-class DialogoOpcionesReporte(QDialog):
-    def __init__(self, parent=None):
+
+class DialogoHistorial(QDialog):
+    def __init__(self, id_usuario, parent=None):
         super().__init__(parent)
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog | Qt.WindowType.WindowStaysOnTopHint)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-        self.setModal(True)
-        self.resultado = None
+        self.setModal(True); self.id_usuario = id_usuario; self.seleccion = None
         
         from vistas.utilidades import set_app_icon
         set_app_icon(self)
-
-        layout = QVBoxLayout(self)
-        frame = QFrame(self)
-        frame.setStyleSheet("""
-            QFrame { background-color: #FFFFFF; border-radius: 12px; border: 2px solid #003366; }
-            QLabel { color: #333333; font-size: 15px; padding: 10px; border: none;}
-            QPushButton { border-radius: 6px; font-weight: bold; padding: 8px 15px; font-size: 14px; }
-            QPushButton#btn_agregar { background-color: #28a745; color: white; }
-            QPushButton#btn_agregar:hover { background-color: #218838; }
-            QPushButton#btn_finalizar { background-color: #007bff; color: white; }
-            QPushButton#btn_finalizar:hover { background-color: #0069d9; }
-            QPushButton#btn_cancelar { background-color: #e0e0e0; color: #333333; }
+        
+        main_layout = QVBoxLayout(self)
+        self.frame = QFrame()
+        self.frame.setStyleSheet("""
+            QFrame { background-color: #FFFFFF; border-radius: 15px; border: 2px solid #3a61a0; }
+            QLabel { color: #333333; border: none; }
+            QPushButton { border-radius: 8px; font-weight: bold; padding: 10px; }
         """)
-
-        flayout = QVBoxLayout(frame)
-        lbl_titulo = QLabel("<b>Métricas Extraídas</b>")
-        lbl_titulo.setStyleSheet("color: #003366; font-size: 18px; border: none;")
-        lbl_titulo.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
-        lbl_mensaje = QLabel("Métricas extraídas exitosamente y añadidas al reporte actual.\n¿Qué deseas hacer a continuación?")
-        lbl_mensaje.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        lbl_mensaje.setWordWrap(True)
-
+        
+        flayout = QVBoxLayout(self.frame)
+        lbl_titulo = QLabel("<b>Historial de Reportes y Análisis</b>")
+        lbl_titulo.setStyleSheet("font-size: 20px; color: #3a61a0; margin-top: 10px;")
+        lbl_titulo.setAlignment(Qt.AlignmentFlag.AlignCenter); flayout.addWidget(lbl_titulo)
+        
+        self.tree = QTreeWidget()
+        self.tree.setHeaderLabels(["Reporte / Imagen", "Fecha", "Estado", "Detecciones"])
+        self.tree.setColumnWidth(0, 320)
+        self.tree.setIndentation(20)
+        self.tree.setAnimated(True)
+        self.tree.setStyleSheet("""
+            QTreeWidget { border: 1px solid #d0d7de; border-radius: 8px; background-color: #ffffff; alternate-background-color: #f6f8fa; font-size: 11px; }
+            QTreeWidget::item { height: 30px; border-bottom: 1px solid #f0f0f0; color: #24292f; }
+            QTreeWidget::item:selected { background-color: #eaf2ff; color: #0969da; border-left: 3px solid #0969da; }
+            QHeaderView::section { background-color: #f6f8fa; padding: 6px; font-weight: bold; border: none; border-bottom: 2px solid #d0d7de; color: #57606a; font-size: 11px; }
+        """)
+        flayout.addWidget(self.tree)
+        
+        self.cargar_datos()
+        
         btn_layout = QHBoxLayout()
-        btn_agregar = QPushButton("Agregar otra imagen")
-        btn_agregar.setObjectName("btn_agregar")
-        btn_agregar.setCursor(Qt.CursorShape.PointingHandCursor)
-        btn_agregar.clicked.connect(self.agregar)
-
-        btn_finalizar = QPushButton("Finalizar reporte")
-        btn_finalizar.setObjectName("btn_finalizar")
-        btn_finalizar.setCursor(Qt.CursorShape.PointingHandCursor)
-        btn_finalizar.clicked.connect(self.finalizar)
-
-        btn_cancelar = QPushButton("Cancelar")
-        btn_cancelar.setObjectName("btn_cancelar")
-        btn_cancelar.setCursor(Qt.CursorShape.PointingHandCursor)
-        btn_cancelar.clicked.connect(self.cancelar)
-
-        btn_layout.addWidget(btn_agregar)
-        btn_layout.addWidget(btn_finalizar)
-        btn_layout.addWidget(btn_cancelar)
-
-        flayout.addWidget(lbl_titulo)
-        flayout.addWidget(lbl_mensaje)
-        flayout.addLayout(btn_layout)
-        layout.addWidget(frame)
-        self.setLayout(layout)
+        btn_borrar = QPushButton("Borrar Seleccionados")
+        btn_borrar.setStyleSheet("background-color: #cf222e; color: white;")
+        btn_borrar.clicked.connect(self.borrar_reportes_seleccionados)
+        
+        btn_cargar = QPushButton("Cargar / Retomar")
+        btn_cargar.setStyleSheet("background-color: #2da44e; color: white;")
+        btn_cargar.clicked.connect(self.aceptar_seleccion)
+        
+        btn_cancelar = QPushButton("Cerrar")
+        btn_cancelar.setStyleSheet("background-color: #6e7781; color: white;")
+        btn_cancelar.clicked.connect(self.reject)
+        
+        btn_layout.addWidget(btn_borrar); btn_layout.addStretch(); btn_layout.addWidget(btn_cancelar); btn_layout.addWidget(btn_cargar)
+        flayout.addLayout(btn_layout); main_layout.addWidget(self.frame)
+        self.resize(950, 650)
 
     def showEvent(self, event):
         super().showEvent(event)
         if self.parent():
             p_geom = self.parent().geometry()
             self.move(p_geom.x() + (p_geom.width() - self.width()) // 2, p_geom.y() + (p_geom.height() - self.height()) // 2)
-        else:
-            from PyQt6.QtWidgets import QApplication
-            screen = QApplication.primaryScreen().geometry()
-            self.move((screen.width() - self.width()) // 2, (screen.height() - self.height()) // 2)
 
-    def agregar(self): self.resultado = "agregar"; self.accept()
-    def finalizar(self): self.resultado = "finalizar"; self.accept()
-    def cancelar(self): self.resultado = "cancelar"; self.reject()
+    def cargar_datos(self):
+        from bd.database import conectar
+        conn = conectar(); cur = conn.cursor()
+        try:
+            cur.execute("SELECT id_reporte, nombre_reporte, fecha_creacion, estado FROM Reporte WHERE id_usuario = ? ORDER BY fecha_creacion DESC", (self.id_usuario,))
+            reportes = cur.fetchall()
+            for rep in reportes:
+                id_rep, nombre, fecha, estado = rep
+                rep_item = QTreeWidgetItem(self.tree, [nombre, str(fecha), estado, ""])
+                rep_item.setData(0, Qt.ItemDataRole.UserRole, {"type": "reporte", "id": id_rep})
+                # Habilitar casillas para borrado múltiple
+                rep_item.setCheckState(0, Qt.CheckState.Unchecked)
+                
+                cur.execute("""
+                    SELECT A.id_analisis, I.ruta_archivo, A.fecha_analisis, A.paso_actual, A.cantidad_microglias
+                    FROM Analisis A JOIN Imagen I ON A.id_imagen = I.id_imagen
+                    WHERE A.id_reporte = ? ORDER BY A.fecha_analisis ASC
+                """, (id_rep,))
+                análisis = cur.fetchall()
+                for an in análisis:
+                    id_an, ruta, f_an, paso, cant = an
+                    st = "Completado" if paso == 4 else f"Paso {paso}"
+                    an_item = QTreeWidgetItem(rep_item, [os.path.basename(ruta), str(f_an), st, str(cant)])
+                    an_item.setData(0, Qt.ItemDataRole.UserRole, {"type": "analisis", "id": id_an, "id_reporte": id_rep})
+                    # Deshabilitar interacción totalmente (solo texto informativo)
+                    an_item.setDisabled(True)
+                rep_item.setExpanded(True)
+        except Exception as e: logging.error(f"Error historial: {e}")
+        finally: conn.close()
+
+    def aceptar_seleccion(self):
+        item = self.tree.currentItem()
+        if not item: return
+        if item.parent(): item = item.parent()
+        data = item.data(0, Qt.ItemDataRole.UserRole)
+        self.seleccion = {"type": "reporte", "id_reporte": data["id"], "estado": item.text(2)}
+        self.accept()
+
+    def borrar_reportes_seleccionados(self):
+        # Recopilar todos los reportes marcados
+        items_a_borrar = []
+        for i in range(self.tree.topLevelItemCount()):
+            item = self.tree.topLevelItem(i)
+            if item.checkState(0) == Qt.CheckState.Checked:
+                items_a_borrar.append(item)
+        
+        if not items_a_borrar:
+            from vistas.utilidades import DialogoNotificacion
+            DialogoNotificacion("Atención", "Selecciona al menos un reporte con la casilla para borrar.", "warning", self).exec()
+            return
+            
+        from vistas.utilidades import DialogoConfirmacion
+        msg = f"¿Estás seguro de borrar {len(items_a_borrar)} reporte(s) seleccionado(s) y todos sus datos asociados?"
+        if not DialogoConfirmacion("Borrar Selección", msg).exec(): return
+        
+        from bd.database import conectar
+        conn = conectar(); cur = conn.cursor()
+        try:
+            for item in items_a_borrar:
+                data = item.data(0, Qt.ItemDataRole.UserRole)
+                id_rep = data["id"]
+                cur.execute("DELETE FROM Microglia WHERE id_analisis IN (SELECT id_analisis FROM Analisis WHERE id_reporte = ?)", (id_rep,))
+                cur.execute("DELETE FROM Analisis WHERE id_reporte = ?", (id_rep,))
+                cur.execute("DELETE FROM Reporte WHERE id_reporte = ?", (id_rep,))
+                self.tree.takeTopLevelItem(self.tree.indexOfTopLevelItem(item))
+            conn.commit()
+        except Exception as e: logging.error(f"Error borrado masivo: {e}")
+        finally: conn.close()
 
 
 class VentanaInvestigador(QMainWindow):
@@ -1305,15 +1384,19 @@ class VentanaInvestigador(QMainWindow):
         from vistas.utilidades import DialogoNotificacion
         DialogoNotificacion(titulo, mensaje, tipo, self).exec()
 
-    def __init__(self, id_usuario, rol):
+    def __init__(self, id_usuario, rol, nombre_usuario=""):
         super().__init__()
-        self.id_usuario = id_usuario; self.rol = rol
+        self.id_usuario = id_usuario; self.rol = rol; self.nombre_usuario = nombre_usuario
         self.ruta_imagen_actual = None
         self.pixmaps_globales = {"Original": None, "Filtrada": None, "Esqueleto": None}
         self.crops_en_memoria = {}
         self.crops_filtrados_temp = {}
         self.metadatos_imagen = {"campo": "", "tiempo": ""}
         self.metricas_reporte = []
+        self.id_reporte_actual = None
+        self.id_analisis_actual = None
+        self.paso_actual = 0
+        self.metricas_extraidas_ciclo_actual = False
         self.setWindowTitle(f"Prototipo Microglías - Panel ({self.rol})")
         
         from vistas.utilidades import set_app_icon
@@ -1326,17 +1409,68 @@ class VentanaInvestigador(QMainWindow):
 
     def inicializar_ui(self):
         widget_central = QWidget(); layout_principal = QHBoxLayout()
-        menu_lateral = QVBoxLayout(); menu_lateral.setAlignment(Qt.AlignmentFlag.AlignTop)
-        label_bienvenida = QLabel(f"Sesión: {self.rol}"); label_bienvenida.setStyleSheet("font-weight: bold; font-size: 16px; margin-bottom: 20px;"); menu_lateral.addWidget(label_bienvenida)
-        self.btn_cargar = QPushButton("Cargar Imagen"); self.btn_historial = QPushButton("Historial"); label_caract = QLabel("Caracterización:"); label_caract.setStyleSheet("font-weight: bold; margin-top: 15px;")
-        self.btn_conteo = QPushButton("1. Aplicar Conteo"); self.btn_filtrar = QPushButton("2. Aplicar Filtrado"); self.btn_ramas = QPushButton("3. Mostrar Ramas"); label_reporte = QLabel("Reportes:"); label_reporte.setStyleSheet("font-weight: bold; margin-top: 15px;")
-        self.btn_reporte = QPushButton("Generar Reporte"); self.btn_guardar_img = QPushButton("Guardar Imagen")
+        self.menu_lateral = QVBoxLayout(); self.menu_lateral.setAlignment(Qt.AlignmentFlag.AlignTop)
+        
+        # Layout superior del menú lateral para el botón de historial (≡) - Absolute Top
+        layout_historial_top = QHBoxLayout()
+        layout_historial_top.setContentsMargins(0, 0, 0, 0)
+        self.btn_historial = QPushButton("≡")
+        self.btn_historial.setFixedSize(35, 35)
+        self.btn_historial.setToolTip("Historial")
+        self.btn_historial.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_historial.setStyleSheet("""
+            QPushButton { background-color: white; border: none; font-size: 24px; font-weight: bold; color: #333; }
+            QPushButton:hover { background-color: #f0f0f0; border-radius: 4px; }
+        """)
+        
+        # Información del usuario al lado derecho
+        layout_user_info = QVBoxLayout()
+        lbl_rango = QLabel(self.rol)
+        lbl_rango.setStyleSheet("color: #007bff; font-weight: bold; font-size: 13px; margin-left: 2px; padding: 0;")
+        lbl_nombre = QLabel(self.nombre_usuario)
+        lbl_nombre.setStyleSheet("color: #666; font-size: 11px; margin-left: 2px; padding: 0;")
+        layout_user_info.addWidget(lbl_rango)
+        layout_user_info.addWidget(lbl_nombre)
+        layout_user_info.setSpacing(0)
+        
+        layout_historial_top.addWidget(self.btn_historial)
+        layout_historial_top.addLayout(layout_user_info)
+        layout_historial_top.addStretch()
+        self.menu_lateral.addLayout(layout_historial_top)
+        self.menu_lateral.addSpacing(10)
+
+        self.btn_cargar = QPushButton("Cargar Imagen"); label_caract = QLabel("Caracterización:"); label_caract.setStyleSheet("font-weight: bold; margin-top: 15px;")
+        self.btn_conteo = QPushButton("Detectar Microglías"); self.btn_filtrar = QPushButton("Filtrar Imagen"); self.btn_ramas = QPushButton("Mostrar Ramas"); label_reporte = QLabel("Reportes:"); label_reporte.setStyleSheet("font-weight: bold; margin-top: 15px;")
+        
+        self.btn_obtener_metricas = QPushButton("Obtener métricas")
+        self.btn_agregar_imagen_reporte = QPushButton("Agregar imagen")
+        self.btn_descargar_reporte = QPushButton("Descargar reporte")
+        self.btn_finalizar_reporte = QPushButton("Finalizar reporte")
+        
         self.btn_corregir_filtrado = QPushButton("Corregir Filtrado")
 
-        estilo_btn_menu = "QPushButton { background-color: transparent; text-align: left; padding: 10px; font-weight: normal; color: #333333; border: none;} QPushButton:hover { background-color: #F0F0F0; border-radius: 5px; } QPushButton:disabled { color: #aaaaaa; }"
-        for btn in [self.btn_cargar, self.btn_historial, self.btn_conteo, self.btn_filtrar, self.btn_ramas, self.btn_reporte, self.btn_guardar_img, self.btn_corregir_filtrado]: btn.setStyleSheet(estilo_btn_menu); menu_lateral.addWidget(btn)
+
+        estilo_btn_menu = "QPushButton { background-color: transparent; text-align: left; padding: 8px 10px; font-weight: normal; color: #333333; border: none; font-size: 11px;} QPushButton:hover { background-color: #F0F0F0; border-radius: 5px; } QPushButton:disabled { color: #aaaaaa; }"
+        lista_botones = [
+            self.btn_cargar, self.btn_conteo, self.btn_filtrar, self.btn_ramas, 
+            self.btn_obtener_metricas, self.btn_agregar_imagen_reporte, 
+            self.btn_descargar_reporte, self.btn_finalizar_reporte, self.btn_corregir_filtrado
+        ]
+        for btn in lista_botones: 
+            btn.setStyleSheet(estilo_btn_menu)
+            self.menu_lateral.addWidget(btn)
+            
         self.btn_corregir_filtrado.hide()
         self.btn_corregir_filtrado.setStyleSheet(estilo_btn_menu + "QPushButton { color: #dc3545; font-weight: bold; }")
+
+        # Botón para guardar progreso en el menú lateral
+        self.btn_guardar_progreso = QPushButton("Guardar Progreso")
+        self.btn_guardar_progreso.setStyleSheet("QPushButton { color: #007bff; font-weight: bold; text-align: left; padding: 8px 10px; background-color: transparent; border: none; font-size: 11px; } QPushButton:hover { background-color: #F0F0F0; border-radius: 5px; }")
+        self.btn_guardar_progreso.clicked.connect(self.save_current_progress)
+        self.menu_lateral.addWidget(self.btn_guardar_progreso)
+
+        # Conectar el botón de historial
+        self.btn_historial.clicked.connect(self.abrir_historial)
 
         
         self.frame_filtros = QFrame()
@@ -1355,14 +1489,14 @@ class VentanaInvestigador(QMainWindow):
         lbl_otsu = QLabel("Umbral Binarización:")
         self.sld_otsu = QSlider(Qt.Orientation.Horizontal); self.sld_otsu.setRange(-50, 50); self.sld_otsu.setValue(0)
         layout_filtros.addWidget(lbl_otsu); layout_filtros.addWidget(self.sld_otsu)
-        estilo_slider = "QSlider::groove:horizontal { border: 1px solid #bbb; height: 6px; background: #eee; margin: 2px 0; border-radius: 3px; } QSlider::handle:horizontal { background: #3a61a0; border: 1px solid #3a61a0; width: 16px; height: 16px; margin: -5px 0; border-radius: 8px; } QSlider::handle:horizontal:hover { background: #2a4d80; border: 1px solid #2a4d80; }"
+        estilo_slider = "QSlider::groove:horizontal { border: 1px solid #d0d7de; height: 4px; background: #f6f8fa; margin: 2px 0; border-radius: 2px; } QSlider::handle:horizontal { background: #ffffff; border: 1px solid #3a61a0; width: 12px; height: 12px; margin: -5px 0; border-radius: 6px; } QSlider::handle:horizontal:hover { background: #eaf2ff; }"
         self.sld_clahe.setStyleSheet(estilo_slider); self.sld_gauss.setStyleSheet(estilo_slider); self.sld_otsu.setStyleSheet(estilo_slider)
 
 
         btn_aceptar_filtro = QPushButton("Aceptar"); btn_aceptar_filtro.setStyleSheet("background-color: #28a745; color: white; font-weight: bold; padding: 5px;")
         btn_cancelar_filtro = QPushButton("Cancelar"); btn_cancelar_filtro.setStyleSheet("background-color: #dc3545; color: white; font-weight: bold; padding: 5px;")
         layout_filtros.addWidget(btn_aceptar_filtro); layout_filtros.addWidget(btn_cancelar_filtro)
-        menu_lateral.addWidget(self.frame_filtros)
+        self.menu_lateral.addWidget(self.frame_filtros)
         
         self.sld_clahe.valueChanged.connect(self.previsualizar_filtrado)
         self.sld_gauss.valueChanged.connect(self.previsualizar_filtrado)
@@ -1370,12 +1504,18 @@ class VentanaInvestigador(QMainWindow):
         btn_aceptar_filtro.clicked.connect(self.confirmar_filtrado)
         btn_cancelar_filtro.clicked.connect(self.cancelar_filtrado)
 
-        menu_lateral.addStretch()
-        self.btn_cerrar_sesion = QPushButton("Cerrar Sesión"); self.btn_cerrar_sesion.setStyleSheet("QPushButton { background-color: transparent; border: 2px solid #cc0000; color: #cc0000; font-weight: bold; border-radius: 8px; padding: 10px; margin-top: 20px; } QPushButton:hover { background-color: #cc0000; color: white; }"); menu_lateral.addWidget(self.btn_cerrar_sesion)
-        frame_menu = QFrame(); frame_menu.setObjectName("menu_lateral"); frame_menu.setFixedWidth(200); frame_menu.setLayout(menu_lateral)
+        self.menu_lateral.addStretch()
+        self.btn_cerrar_sesion = QPushButton("Cerrar Sesión"); self.btn_cerrar_sesion.setStyleSheet("QPushButton { background-color: transparent; border: 2px solid #cc0000; color: #cc0000; font-weight: bold; border-radius: 8px; padding: 10px; margin-top: 20px; } QPushButton:hover { background-color: #cc0000; color: white; }"); self.menu_lateral.addWidget(self.btn_cerrar_sesion)
+        frame_menu = QFrame(); frame_menu.setObjectName("menu_lateral"); frame_menu.setFixedWidth(200); frame_menu.setLayout(self.menu_lateral)
         
         area_imagen = QVBoxLayout(); controles_superiores = QHBoxLayout()
-        self.combo_vista = QComboBox(); self.combo_vista.addItem("Original"); self.combo_vista.setMinimumWidth(160); self.combo_vista.setStyleSheet("padding: 5px; font-size: 13px; font-weight: bold; min-width: 160px;"); self.combo_vista.setEnabled(False); self.combo_vista.currentTextChanged.connect(self.cambiar_vista_global)
+        self.combo_vista = QComboBox(); self.combo_vista.addItem("Original"); self.combo_vista.setMinimumWidth(140); self.combo_vista.setStyleSheet("""
+            QComboBox { background-color: white; border: 1px solid #d0d7de; border-radius: 6px; padding: 4px 10px; font-size: 11px; font-weight: bold; color: #24292f; min-width: 140px; }
+            QComboBox:hover { background-color: #f6f8fa; }
+            QComboBox::drop-down { border: none; width: 20px; }
+            QComboBox::down-arrow { image: none; border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 5px solid #666; margin-right: 8px; }
+            QComboBox QAbstractItemView { background-color: white; border: 1px solid #d0d7de; selection-background-color: #eaf2ff; selection-color: #0969da; outline: none; }
+        """); self.combo_vista.setEnabled(False); self.combo_vista.currentTextChanged.connect(self.cambiar_vista_global)
         
         # Botones de navegación global
         self.btn_ant_global = QPushButton("<")
@@ -1397,13 +1537,14 @@ class VentanaInvestigador(QMainWindow):
         controles_superiores.addWidget(self.btn_sig_global)
         controles_superiores.addStretch()
         
-        self.lbl_info_conteo = QLabel("Microglías detectadas: 0"); self.lbl_info_conteo.setStyleSheet("font-size: 15px; font-weight: bold; color: #003366;"); self.lbl_info_conteo.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter); controles_superiores.addWidget(self.lbl_info_conteo); controles_superiores.addSpacing(15)
+        self.lbl_info_conteo = QLabel("Microglías detectadas: 0"); self.lbl_info_conteo.setStyleSheet("font-size: 11px; font-weight: bold; color: #3a61a0; background-color: white; border: 1px solid #d0d7de; border-radius: 6px; padding: 4px 10px;"); self.lbl_info_conteo.setAlignment(Qt.AlignmentFlag.AlignCenter); controles_superiores.addWidget(self.lbl_info_conteo); controles_superiores.addSpacing(15)
         
         estilo_herramienta = "QPushButton { background-color: transparent; border: none; padding: 2px; } QPushButton:hover { background-color: #e0e0e0; border-radius: 4px; } QPushButton:checked { background-color: #cce5ff; border: 1px solid #007bff; border-radius: 4px; } QPushButton:disabled { opacity: 0.5; }"
         
         self.btn_herramienta_caja = SafeToolTipButton()
+        self.btn_herramienta_caja.setFixedSize(35, 35)
         self.btn_herramienta_caja.setIcon(QIcon("assets/seleccionar.png"))
-        self.btn_herramienta_caja.setIconSize(QSize(28, 28))
+        self.btn_herramienta_caja.setIconSize(QSize(20, 20))
         self.btn_herramienta_caja.setCustomToolTip("Crear seleccion")
         self.btn_herramienta_caja.setStyleSheet(estilo_herramienta)
         self.btn_herramienta_caja.setCheckable(True)
@@ -1411,8 +1552,9 @@ class VentanaInvestigador(QMainWindow):
         self.btn_herramienta_caja.hide() 
         
         self.btn_herramienta_eliminar = SafeToolTipButton()
+        self.btn_herramienta_eliminar.setFixedSize(35, 35)
         self.btn_herramienta_eliminar.setIcon(QIcon("assets/borrar.png"))
-        self.btn_herramienta_eliminar.setIconSize(QSize(28, 28))
+        self.btn_herramienta_eliminar.setIconSize(QSize(20, 20))
         self.btn_herramienta_eliminar.setCustomToolTip("Eliminar seleccion")
         self.btn_herramienta_eliminar.setStyleSheet(estilo_herramienta)
         self.btn_herramienta_eliminar.setCheckable(True)
@@ -1426,16 +1568,28 @@ class VentanaInvestigador(QMainWindow):
         
         lbl_minus = QLabel("-"); lbl_minus.setStyleSheet("font-size: 24px; font-weight: bold; color: #555;"); lbl_plus = QLabel("+"); lbl_plus.setStyleSheet("font-size: 20px; font-weight: bold; color: #555;")
         self.sld_nivel_zoom = QSlider(Qt.Orientation.Horizontal); self.sld_nivel_zoom.setRange(50, 400); self.sld_nivel_zoom.setValue(100); self.sld_nivel_zoom.setFixedWidth(120); self.sld_nivel_zoom.setEnabled(False)
-        self.sld_nivel_zoom.setStyleSheet("QSlider::groove:horizontal { border: 1px solid #bbb; height: 4px; background: #eee; margin: 2px 0; border-radius: 2px; } QSlider::handle:horizontal { background: #3a61a0; border: 1px solid #3a61a0; width: 14px; height: 14px; margin: -5px 0; border-radius: 7px; }")
+        self.sld_nivel_zoom.setStyleSheet("""
+            QSlider::groove:horizontal { border: 1px solid #d0d7de; height: 4px; background: #f6f8fa; margin: 2px 0; border-radius: 2px; } 
+            QSlider::handle:horizontal { background: #ffffff; border: 1px solid #3a61a0; width: 10px; height: 10px; margin: -4px 0; border-radius: 5px; }
+            QSlider::handle:horizontal:hover { background: #eaf2ff; }
+        """)
 
         
-        self.btn_zoom_reset = QPushButton("Reset")
-        self.btn_zoom_reset.setStyleSheet("QPushButton { background-color: #f0f0f0; border: 1px solid #ccc; border-radius: 4px; padding: 4px 10px; font-weight: bold; color:#007bff;} QPushButton:hover { background-color: #e0e0e0; } QPushButton:disabled { color:#aaa; }")
+        self.btn_zoom_reset = QPushButton("↺")
+        self.btn_zoom_reset.setFixedSize(35, 35)
+        self.btn_zoom_reset.setToolTip("Restablecer Zoom")
+        self.btn_zoom_reset.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_zoom_reset.setStyleSheet("""
+            QPushButton { background-color: transparent; border: none; font-size: 18px; font-weight: bold; color: #3a61a0; padding: 0; text-align: center; }
+            QPushButton:hover { background-color: #f0f0f0; border-radius: 4px; }
+            QPushButton:disabled { color: #aaaaaa; }
+        """)
         self.btn_zoom_reset.setEnabled(False)
         
         self.btn_bloquear_zoom = SafeToolTipButton()
+        self.btn_bloquear_zoom.setFixedSize(35, 35)
         self.btn_bloquear_zoom.setIcon(QIcon("assets/desbloqueado.png"))
-        self.btn_bloquear_zoom.setIconSize(QSize(24, 24))
+        self.btn_bloquear_zoom.setIconSize(QSize(20, 20))
         self.btn_bloquear_zoom.setCustomToolTip("Bloquear zoom")
         self.btn_bloquear_zoom.setStyleSheet(estilo_herramienta)
         self.btn_bloquear_zoom.setCheckable(True)
@@ -1451,11 +1605,16 @@ class VentanaInvestigador(QMainWindow):
         area_imagen.addLayout(controles_superiores); area_imagen.addWidget(self.visor_imagen, stretch=1)
         layout_principal.addWidget(frame_menu); layout_principal.addLayout(area_imagen, stretch=1); widget_central.setLayout(layout_principal); self.setCentralWidget(widget_central)
         
-        self.btn_cargar.clicked.connect(self.cargar_imagen); self.btn_cerrar_sesion.clicked.connect(self.cerrar_sesion); self.btn_conteo.clicked.connect(self.execute_microglia_counting); self.btn_filtrar.clicked.connect(self.ejecutar_filtrado); self.btn_ramas.clicked.connect(self.mostrar_ramas_morfologia); self.btn_reporte.clicked.connect(self.generar_reporte); self.btn_corregir_filtrado.clicked.connect(self.corregir_filtrado)
+        self.btn_cargar.clicked.connect(self.cargar_imagen); self.btn_cerrar_sesion.clicked.connect(self.cerrar_sesion); self.btn_conteo.clicked.connect(self.execute_microglia_counting); self.btn_filtrar.clicked.connect(self.ejecutar_filtrado); self.btn_ramas.clicked.connect(self.mostrar_ramas_morfologia); self.btn_corregir_filtrado.clicked.connect(self.corregir_filtrado)
+        
+        self.btn_obtener_metricas.clicked.connect(self.obtener_metricas)
+        self.btn_agregar_imagen_reporte.clicked.connect(self.agregar_imagen_reporte)
+        self.btn_descargar_reporte.clicked.connect(self.descargar_reporte)
+        self.btn_finalizar_reporte.clicked.connect(self.finalizar_reporte)
 
         self.actualizar_estado_flujo(0)
         
-        if self.rol == "Invitado" or self.rol == "Guest": self.btn_historial.hide(); self.btn_guardar_img.hide()
+        if self.rol == "Invitado" or self.rol == "Guest": self.btn_historial.hide()
 
     def toggle_herramienta_caja(self, checked):
         if checked: self.btn_herramienta_eliminar.setChecked(False); self.visor_imagen.current_tool = "draw"; self.visor_imagen.hovered_index = -1; self.visor_imagen.draw_current_state()
@@ -1478,11 +1637,18 @@ class VentanaInvestigador(QMainWindow):
         self.sld_nivel_zoom.setEnabled(not checked); self.btn_zoom_reset.setEnabled(not checked); self.visor_imagen.lock_zoom(checked)
 
     def actualizar_estado_flujo(self, paso):
+        self.paso_actual = paso
+        # Reset report buttons by default
+        self.btn_obtener_metricas.setEnabled(False)
+        self.btn_agregar_imagen_reporte.setEnabled(False)
+        self.btn_descargar_reporte.setEnabled(False)
+        self.btn_finalizar_reporte.setEnabled(False)
+
         if paso == 0:
-            self.btn_cargar.setEnabled(True); self.btn_conteo.setEnabled(False); self.btn_filtrar.setEnabled(False); self.btn_ramas.setEnabled(False); self.btn_reporte.setEnabled(False); self.btn_guardar_img.setEnabled(False); self.combo_vista.setEnabled(False)
+            self.btn_cargar.setEnabled(True); self.btn_conteo.setEnabled(False); self.btn_filtrar.setEnabled(False); self.btn_ramas.setEnabled(False); self.combo_vista.setEnabled(False)
             self.btn_herramienta_caja.hide(); self.btn_herramienta_eliminar.hide()
         elif paso == 1:
-            self.btn_cargar.setEnabled(True); self.btn_conteo.setEnabled(True); self.btn_filtrar.setEnabled(False); self.btn_ramas.setEnabled(False); self.btn_reporte.setEnabled(False); self.btn_guardar_img.setEnabled(True); self.combo_vista.setEnabled(False)
+            self.btn_cargar.setEnabled(True); self.btn_conteo.setEnabled(True); self.btn_filtrar.setEnabled(False); self.btn_ramas.setEnabled(False); self.combo_vista.setEnabled(False)
             self.btn_herramienta_caja.hide(); self.btn_herramienta_eliminar.hide()
         elif paso == 2:
             self.btn_cargar.setEnabled(False); self.btn_conteo.setEnabled(False); self.btn_filtrar.setEnabled(True); self.btn_ramas.setEnabled(False); self.combo_vista.setEnabled(True)
@@ -1495,11 +1661,146 @@ class VentanaInvestigador(QMainWindow):
             self.btn_herramienta_eliminar.hide(); self.btn_herramienta_eliminar.setChecked(False)
             self.visor_imagen.current_tool = "pointer"
         elif paso == 4:
-            self.btn_cargar.setEnabled(False); self.btn_conteo.setEnabled(False); self.btn_filtrar.setEnabled(False); self.btn_ramas.setEnabled(False); self.btn_reporte.setEnabled(True)
+            self.btn_cargar.setEnabled(False); self.btn_conteo.setEnabled(False); self.btn_filtrar.setEnabled(False); self.btn_ramas.setEnabled(False)
             self.btn_corregir_filtrado.show()
             self.btn_herramienta_caja.hide(); self.btn_herramienta_eliminar.hide()
+            
+            # Report buttons logic
+            if not self.metricas_extraidas_ciclo_actual:
+                self.btn_obtener_metricas.setEnabled(True)
+            else:
+                self.btn_agregar_imagen_reporte.setEnabled(True)
+                self.btn_descargar_reporte.setEnabled(True)
+                self.btn_finalizar_reporte.setEnabled(True)
         
         if paso != 4: self.btn_corregir_filtrado.hide()
+
+    def save_current_progress(self, mostrar_notif=True):
+        if not self.ruta_imagen_actual: return
+        
+        from bd.database import conectar
+        import json
+        conn = conectar(); cur = conn.cursor()
+        
+        try:
+            # 1. Asegurar Reporte (Grupo)
+            if not self.id_reporte_actual:
+                cur.execute("INSERT INTO Reporte (id_usuario, nombre_reporte) VALUES (?, ?)", 
+                           (self.id_usuario, f"Reporte {datetime.now().strftime('%Y-%m-%d %H:%M')}"))
+                self.id_reporte_actual = cur.lastrowid
+
+            # 2. Asegurar Imagen
+            cur.execute("SELECT id_imagen FROM Imagen WHERE ruta_archivo = ?", (self.ruta_imagen_actual,))
+            res = cur.fetchone()
+            if not res:
+                cur.execute("INSERT INTO Imagen (id_usuario, ruta_archivo, formato, campo, tiempo_muestra) VALUES (?,?,?,?,?)",
+                           (self.id_usuario, self.ruta_imagen_actual, 'TIFF', self.metadatos_imagen.get("campo"), self.metadatos_imagen.get("tiempo")))
+                id_img = cur.lastrowid
+            else: id_img = res[0]
+
+            # 3. Guardar Análisis con Estado Persistente
+            datos = {
+                "boxes": self.visor_imagen.boxes,
+                "metricas_acumuladas": self.metricas_reporte
+            }
+            datos_json = json.dumps(datos)
+
+            if not self.id_analisis_actual:
+                cur.execute("INSERT INTO Analisis (id_reporte, id_imagen, cantidad_microglias, paso_actual, datos_persistentes) VALUES (?,?,?,?,?)",
+                           (self.id_reporte_actual, id_img, len(self.visor_imagen.boxes), self.paso_actual, datos_json))
+                self.id_analisis_actual = cur.lastrowid
+            else:
+                cur.execute("UPDATE Analisis SET cantidad_microglias = ?, paso_actual = ?, datos_persistentes = ? WHERE id_analisis = ?",
+                           (len(self.visor_imagen.boxes), self.paso_actual, datos_json, self.id_analisis_actual))
+
+            # 4. Sincronizar Microglias (Detecciones individuales)
+            cur.execute("DELETE FROM Microglia WHERE id_analisis = ?", (self.id_analisis_actual,))
+            for box in self.visor_imagen.boxes:
+                cur.execute("INSERT INTO Microglia (id_analisis, centroide_x, centroide_y, area_total_pixeles, perimetro, bbox_x, bbox_y, bbox_w, bbox_h, crop_path) VALUES (?,0,0,0,0,?,?,?,?,?)",
+                           (self.id_analisis_actual, box['x'], box['y'], box['w'], box['h'], box.get('crop_path', '')))
+            
+            conn.commit()
+            if mostrar_notif:
+                self.mostrar_notificacion("Éxito", "Progreso guardado correctamente.", "info")
+        except Exception as e:
+            self.mostrar_notificacion("Error", f"No se pudo guardar: {e}", "error")
+        finally: conn.close()
+
+    def abrir_historial(self):
+        diag = DialogoHistorial(self.id_usuario, self)
+        if diag.exec() and diag.seleccion:
+            self.cargar_reporte_especifico(diag.seleccion)
+
+    def cargar_reporte_especifico(self, seleccion):
+        id_reporte = seleccion["id_reporte"]
+        from bd.database import conectar
+        import json
+        conn = conectar(); cur = conn.cursor()
+        try:
+            # 1. Obtener el último análisis de este reporte
+            cur.execute("""
+                SELECT A.id_analisis, I.ruta_archivo, I.campo, I.tiempo_muestra, A.paso_actual, A.datos_persistentes
+                FROM Analisis A JOIN Imagen I ON A.id_imagen = I.id_imagen
+                WHERE A.id_reporte = ? ORDER BY A.id_analisis DESC LIMIT 1
+            """, (id_reporte,))
+            res = cur.fetchone()
+            
+            self.id_reporte_actual = id_reporte
+            
+            if not res:
+                # Reporte vacío? (No debería pasar)
+                self.id_analisis_actual = None; self.metricas_reporte = []
+                self.actualizar_estado_flujo(0)
+                return
+
+            id_an, ruta, campo, tiempo, paso, datos_json = res
+            
+            # 2. Decidir si retomar o empezar nueva imagen
+            if paso < 4:
+                # RETOMAR ANÁLISIS INCOMPLETO
+                self.ruta_imagen_actual = ruta
+                self.metadatos_imagen = {"campo": campo, "tiempo": tiempo}
+                self.id_analisis_actual = id_an
+                self.paso_actual = paso
+
+                if datos_json:
+                    datos = json.loads(datos_json)
+                    boxes = datos.get("boxes", [])
+                    self.metricas_reporte = datos.get("metricas_acumuladas", [])
+                else: boxes = []; self.metricas_reporte = []
+
+                # Cargar imagen
+                from PyQt6.QtGui import QImage, QPixmap
+                import cv2; import numpy as np
+                cv_img = cv2.imread(ruta, cv2.IMREAD_UNCHANGED)
+                if cv_img is not None:
+                    if cv_img.dtype == np.uint16: cv_img = ((cv_img-cv_img.min())/(cv_img.max()-cv_img.min())*255).astype(np.uint8)
+                    if len(cv_img.shape) == 2: h, w = cv_img.shape; qimg = QImage(cv_img.data, w, h, w, QImage.Format.Format_Grayscale8)
+                    else: cv_img = cv2.cvtColor(cv_img, cv2.COLOR_BGR2RGB); h, w, ch = cv_img.shape; qimg = QImage(cv_img.data, w, h, ch * w, QImage.Format.Format_RGB888)
+                    pixmap = QPixmap.fromImage(qimg)
+                else: pixmap = QPixmap(ruta)
+                
+                self.pixmaps_globales = {"Original": pixmap, "Filtrada": None, "Esqueleto": None}
+                self.visor_imagen.set_image_and_boxes(pixmap, boxes)
+                self.combo_vista.setEnabled(True); self.combo_vista.setCurrentText("Original")
+                self.actualizar_estado_flujo(paso)
+                self.mostrar_notificacion("Éxito", f"Continuando análisis: {os.path.basename(ruta)}", "info")
+            else:
+                # ÚLTIMA IMAGEN COMPLETADA -> CARGAR MÉTRICAS Y PEDIR NUEVA IMAGEN
+                if datos_json:
+                    datos = json.loads(datos_json)
+                    self.metricas_reporte = datos.get("metricas_acumuladas", [])
+                    # Importante: si la última imagen se terminó, sus métricas deben estar en el acumulado.
+                    # Si no están, las buscamos en el propio análisis (esto es una salvaguarda)
+                else: self.metricas_reporte = []
+                
+                self.id_analisis_actual = None; self.ruta_imagen_actual = None; self.paso_actual = 0
+                self.visor_imagen.set_image_and_boxes(None, [])
+                self.actualizar_estado_flujo(0)
+                self.mostrar_notificacion("Reporte Cargado", "Última imagen completada. Por favor, añade una nueva imagen para continuar el reporte.", "info")
+
+        except Exception as e: self.mostrar_notificacion("Error", f"Fallo al cargar reporte: {e}", "error")
+        finally: conn.close()
 
 
     def actualizar_etiqueta_conteo(self, conteo): self.lbl_info_conteo.setText(f"Microglías detectadas: {conteo}")
@@ -1652,7 +1953,7 @@ class VentanaInvestigador(QMainWindow):
         dialogo.close(); QApplication.restoreOverrideCursor()
         
         self.frame_filtros.show()
-        for btn in [self.btn_cargar, self.btn_historial, self.btn_conteo, self.btn_filtrar, self.btn_ramas, self.btn_reporte, self.btn_guardar_img]: btn.setEnabled(False)
+        for btn in [self.btn_cargar, self.btn_conteo, self.btn_filtrar, self.btn_ramas, self.btn_obtener_metricas, self.btn_agregar_imagen_reporte, self.btn_descargar_reporte, self.btn_finalizar_reporte]: btn.setEnabled(False)
         self.combo_vista.setEnabled(True)
         items_combo = [self.combo_vista.itemText(i) for i in range(self.combo_vista.count())]
         if "Previsualización" not in items_combo:
@@ -1821,7 +2122,7 @@ class VentanaInvestigador(QMainWindow):
         self.mostrar_notificacion("Corregir Filtrado", "Se han eliminado las fases anteriores. Puedes ajustar los filtros nuevamente.", "info")
 
 
-    def generar_reporte(self):
+    def obtener_metricas(self):
         if not self.ruta_imagen_actual or not self.visor_imagen.boxes:
             self.mostrar_notificacion("Advertencia", "No hay datos para extraer métricas.", "warning")
             return
@@ -1834,8 +2135,7 @@ class VentanaInvestigador(QMainWindow):
             return
             
         from ia.extract_microglia_metrics import extract_microglia_metrics
-        from PyQt6.QtWidgets import QApplication, QFileDialog
-        import logging
+        from PyQt6.QtWidgets import QApplication
         
         dialogo = DialogoCarga("Extrayendo métricas morfológicas...\nPor favor, espera.", self)
         dialogo.show()
@@ -1866,180 +2166,143 @@ class VentanaInvestigador(QMainWindow):
             "metricas": metricas_imagen
         })
         
-        opciones = DialogoOpcionesReporte(self)
-        opciones.exec()
+        self.metricas_extraidas_ciclo_actual = True
+        self.actualizar_estado_flujo(4)
+        self.save_current_progress(mostrar_notif=False)
+        self.mostrar_notificacion("Éxito", "Métricas extraídas y progreso guardado correctamente.", "info")
+
+    def agregar_imagen_reporte(self):
+        self.visor_imagen.set_image_and_boxes(None, [])
+        self.ruta_imagen_actual = None
+        self.id_analisis_actual = None
+        self.pixmaps_globales = {"Original": None, "Filtrada": None, "Esqueleto": None}
+        self.combo_vista.blockSignals(True)
+        self.combo_vista.clear()
+        self.combo_vista.blockSignals(False)
         
-        if opciones.resultado == "agregar":
-            # Clean UI to load another image
-            self.visor_imagen.set_image_and_boxes(None, [])
-            self.ruta_imagen_actual = None
-            self.pixmaps_globales = {"Original": None, "Filtrada": None, "Esqueleto": None}
-            self.combo_vista.blockSignals(True)
-            self.combo_vista.clear()
-            self.combo_vista.blockSignals(False)
-            self.actualizar_estado_flujo(0)
-            self.mostrar_notificacion("Info", "Listo para cargar otra imagen y agregar al reporte.", "info")
+        self.metricas_extraidas_ciclo_actual = False
+        self.actualizar_estado_flujo(0)
+        self.mostrar_notificacion("Info", "Sesión lista para cargar otra imagen y agregar al reporte.", "info")
+
+    def descargar_reporte(self):
+        if not self.metricas_reporte:
+            self.mostrar_notificacion("Advertencia", "No hay métricas acumuladas para descargar.", "warning")
+            return
             
-        elif opciones.resultado == "finalizar":
-            from datetime import datetime
-            fecha_str = datetime.now().strftime("%Y%m%d_%H%M")
-            default_name = f"Reporte_{fecha_str}.xlsx"
+        from datetime import datetime; from PyQt6.QtWidgets import QFileDialog; from pathlib import Path
+        fecha_str = datetime.now().strftime("%Y%m%d_%H%M"); default_name = f"Reporte_{fecha_str}.xlsx"
+        
+        filepath, filter_selected = QFileDialog.getSaveFileName(self, "Guardar Reporte", default_name, "Excel Files (*.xlsx);;PDF Files (*.pdf);;Both Formats (*.xlsx *.pdf)")
+        if not filepath: return
             
-            filepath, filter_selected = QFileDialog.getSaveFileName(self, "Guardar Reporte", default_name, "Excel Files (*.xlsx);;PDF Files (*.pdf);;Both Formats (*.xlsx *.pdf)")
-            if not filepath:
-                # If cancel, metrics are still saved.
-                return
+        try:
+            reporte_por_tiempo = {}
+            for img_data in self.metricas_reporte:
+                t = str(img_data.get("tiempo", "X HORA")).upper()
+                if t not in reporte_por_tiempo: reporte_por_tiempo[t] = []
+                reporte_por_tiempo[t].append(img_data)
+
+            columnas_labels = ["No.", "Lines", "Junction Points", "End Points", "Junction Voxels", "Slab Voxels", "Avg. Branch Length", "Triple points", "Quadruple points", "Max Branch Length", "Longest Shortest path"]
+            metric_keys = ["lines", "junction points", "end points", "junction voxels", "slab voxels", "average branch length", "triple points", "quadruple points", "maximum branch length", "longest shortest path"]
+
+            save_xlsx = "Excel" in filter_selected or "Both" in filter_selected or filepath.endswith(".xlsx")
+            save_pdf = "PDF" in filter_selected or "Both" in filter_selected or filepath.endswith(".pdf")
+
+            if save_xlsx:
+                xlsx_path = filepath if filepath.endswith(".xlsx") else str(Path(filepath).with_suffix(".xlsx"))
+                import openpyxl; from openpyxl.styles import PatternFill, Font, Alignment; from openpyxl.utils import get_column_letter
+                wb = openpyxl.Workbook(); wb.remove(wb.active)
                 
-            try:
-                # Group by time (common for both formats)
-                reporte_por_tiempo = {}
-                for img_data in self.metricas_reporte:
-                    t = str(img_data.get("tiempo", "X HORA")).upper()
-                    if t not in reporte_por_tiempo:
-                        reporte_por_tiempo[t] = []
-                    reporte_por_tiempo[t].append(img_data)
-
-                columnas_labels = [
-                    "No.", "Lines", "Junction Points", "End Points", "Junction Voxels",
-                    "Slab Voxels", "Avg. Branch Length", "Triple points", "Quadruple points",
-                    "Max Branch Length", "Longest Shortest path"
-                ]
-
-                metric_keys = [
-                    "lines", "junction points", "end points", "junction voxels",
-                    "slab voxels", "average branch length", "triple points", "quadruple points",
-                    "maximum branch length", "longest shortest path"
-                ]
-
-                save_xlsx = "Excel" in filter_selected or "Both" in filter_selected or filepath.endswith(".xlsx")
-                save_pdf = "PDF" in filter_selected or "Both" in filter_selected or filepath.endswith(".pdf")
-
-                # Handle XLSX generation
-                if save_xlsx:
-                    xlsx_path = filepath if filepath.endswith(".xlsx") else str(Path(filepath).with_suffix(".xlsx"))
-                    import openpyxl
-                    from openpyxl.styles import PatternFill, Font, Alignment
-                    from openpyxl.utils import get_column_letter
-                    wb = openpyxl.Workbook()
-                    wb.remove(wb.active) 
+                yellow_fill = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid")
+                header_bg_fill = PatternFill(start_color="3A61A0", end_color="3A61A0", fill_type="solid")
+                light_gray_fill = PatternFill(start_color="F2F2F2", end_color="F2F2F2", fill_type="solid")
+                bold_font = Font(bold=True); header_black_font = Font(color="000000", bold=True); center_alignment = Alignment(horizontal="center", vertical="center")
+                anchos_fijos = [9.3, 18.0, 22.6, 18.6, 22.6, 16.6, 26.6, 20.0, 26.6, 26.6, 32.0]
+                
+                for tiempo, lista_campos in reporte_por_tiempo.items():
+                    ws = wb.create_sheet(title=tiempo[:31])
+                    for col_idx, width in enumerate(anchos_fijos, start=1):
+                        ws.column_dimensions[get_column_letter(col_idx)].width = width
                     
-                    yellow_fill = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid")
-                    header_bg_fill = PatternFill(start_color="3A61A0", end_color="3A61A0", fill_type="solid")
-                    light_gray_fill = PatternFill(start_color="F2F2F2", end_color="F2F2F2", fill_type="solid")
-                    bold_font = Font(bold=True)
-                    header_black_font = Font(color="000000", bold=True)
-                    center_alignment = Alignment(horizontal="center", vertical="center")
-                    anchos_fijos = [9.3, 18.0, 22.6, 18.6, 22.6, 16.6, 26.6, 20.0, 26.6, 26.6, 32.0]
-                    
-                    for tiempo, lista_campos in reporte_por_tiempo.items():
-                        ws = wb.create_sheet(title=tiempo[:31])
-                        for col_idx, width in enumerate(anchos_fijos, start=1):
-                            ws.column_dimensions[get_column_letter(col_idx)].width = width
+                    row_idx = 1
+                    for img_data in lista_campos:
+                        ws.merge_cells(start_row=row_idx, start_column=1, end_row=row_idx, end_column=len(columnas_labels))
+                        for c in range(1, len(columnas_labels) + 1):
+                            ws.cell(row=row_idx, column=c).fill = yellow_fill
                         
-                        row_idx = 1
+                        cell_title = ws.cell(row=row_idx, column=1, value=img_data["campo"])
+                        cell_title.font = bold_font; cell_title.alignment = center_alignment; row_idx += 1
+                        
+                        for col_idx, label in enumerate(columnas_labels, start=1):
+                            cell_h = ws.cell(row=row_idx, column=col_idx, value=label)
+                            cell_h.font = header_black_font; cell_h.fill = header_bg_fill; cell_h.alignment = center_alignment
+                        row_idx += 1
+                        
+                        for i, met in enumerate(img_data["metricas"], start=1):
+                            cell_num = ws.cell(row=row_idx, column=1, value=i); cell_num.alignment = center_alignment
+                            for col_idx, key in enumerate(metric_keys, start=2):
+                                cell_m = ws.cell(row=row_idx, column=col_idx, value=met.get(key, "")); cell_m.alignment = center_alignment
+                            if i % 2 != 0:
+                                for c in range(1, len(columnas_labels) + 1):
+                                    ws.cell(row=row_idx, column=c).fill = light_gray_fill
+                            row_idx += 1
+                        row_idx += 1
+                wb.save(xlsx_path)
+
+            if save_pdf:
+                pdf_path = filepath if filepath.endswith(".pdf") else str(Path(filepath).with_suffix(".pdf"))
+                try:
+                    from fpdf import FPDF
+                    class PDFReport(FPDF):
+                        def header(self):
+                            self.set_font("Arial", "B", 14)
+                            self.cell(0, 10, "Reporte de Métricas Morfológicas - Microglías", 0, 1, "C")
+                            self.ln(5)
+
+                    pdf = PDFReport(orientation="L", unit="mm", format="A4")
+                    pdf.set_auto_page_break(auto=True, margin=15)
+                    pdf_widths = [12, 22, 26, 22, 26, 20, 31, 23, 31, 31, 36] 
+
+                    for tiempo, lista_campos in reporte_por_tiempo.items():
+                        pdf.add_page()
+                        pdf.set_font("Arial", "B", 12)
+                        pdf.cell(0, 10, f"TIEMPO: {tiempo}", 0, 1, "L")
+                        
                         for img_data in lista_campos:
-                            ws.merge_cells(start_row=row_idx, start_column=1, end_row=row_idx, end_column=len(columnas_labels))
-                            for c in range(1, len(columnas_labels) + 1):
-                                ws.cell(row=row_idx, column=c).fill = yellow_fill
+                            pdf.set_fill_color(255, 255, 0); pdf.set_font("Arial", "B", 10)
+                            pdf.cell(sum(pdf_widths), 8, f"Campo: {img_data['campo']}", 1, 1, "C", True)
                             
-                            cell_title = ws.cell(row=row_idx, column=1, value=img_data['campo'])
-                            cell_title.font = bold_font
-                            cell_title.alignment = center_alignment
-                            row_idx += 1
+                            pdf.set_fill_color(58, 97, 160); pdf.set_text_color(0, 0, 0); pdf.set_font("Arial", "B", 7)
+                            for i, label in enumerate(columnas_labels):
+                                pdf.cell(pdf_widths[i], 8, label, 1, 0, "C", True)
+                            pdf.ln()
                             
-                            for col_idx, label in enumerate(columnas_labels, start=1):
-                                cell_h = ws.cell(row=row_idx, column=col_idx, value=label)
-                                cell_h.font = header_black_font
-                                cell_h.fill = header_bg_fill
-                                cell_h.alignment = center_alignment
-                            row_idx += 1
-                            
-                            for i, met in enumerate(img_data['metricas'], start=1):
-                                cell_num = ws.cell(row=row_idx, column=1, value=i)
-                                cell_num.alignment = center_alignment
-                                for col_idx, key in enumerate(metric_keys, start=2):
-                                    cell_m = ws.cell(row=row_idx, column=col_idx, value=met.get(key, ""))
-                                    cell_m.alignment = center_alignment
-                                if i % 2 != 0:
-                                    for c in range(1, len(columnas_labels) + 1):
-                                        ws.cell(row=row_idx, column=c).fill = light_gray_fill
-                                row_idx += 1
-                            row_idx += 1
-                    wb.save(xlsx_path)
-
-                # Handle PDF generation
-                if save_pdf:
-                    pdf_path = filepath if filepath.endswith(".pdf") else str(Path(filepath).with_suffix(".pdf"))
-                    try:
-                        from fpdf import FPDF
-                    except ImportError:
-                        if not save_xlsx: # Only error if PDF was the only target
-                            self.mostrar_notificacion("Librería faltante", "Por favor instala fpdf2:\n'pip install fpdf2'", "error")
-                            return
-                        else:
-                            logging.error("PDF generation skipped: fpdf2 not installed")
-                    else:
-                        class PDFReport(FPDF):
-                            def header(self):
-                                self.set_font('Arial', 'B', 14)
-                                self.cell(0, 10, 'Reporte de Métricas Morfológicas - Microglías', 0, 1, 'C')
-                                self.ln(5)
-
-                        pdf = PDFReport(orientation='L', unit='mm', format='A4')
-                        pdf.set_auto_page_break(auto=True, margin=15)
-                        pdf_widths = [12, 22, 26, 22, 26, 20, 31, 23, 31, 31, 36] 
-
-                        for tiempo, lista_campos in reporte_por_tiempo.items():
-                            pdf.add_page()
-                            pdf.set_font('Arial', 'B', 12)
-                            pdf.cell(0, 10, f"TIEMPO: {tiempo}", 0, 1, 'L')
-                            
-                            for img_data in lista_campos:
-                                pdf.set_fill_color(255, 255, 0)
-                                pdf.set_font('Arial', 'B', 10)
-                                pdf.cell(sum(pdf_widths), 8, f"Campo: {img_data['campo']}", 1, 1, 'C', True)
+                            pdf.set_font("Arial", "", 9); pdf.set_text_color(0, 0, 0)
+                            for idx, met in enumerate(img_data["metricas"], start=1):
+                                if idx % 2 != 0: pdf.set_fill_color(242, 242, 242)
+                                else: pdf.set_fill_color(255, 255, 255)
                                 
-                                pdf.set_fill_color(58, 97, 160)
-                                pdf.set_text_color(0, 0, 0)
-                                pdf.set_font('Arial', 'B', 7)
-                                for i, label in enumerate(columnas_labels):
-                                    pdf.cell(pdf_widths[i], 8, label, 1, 0, 'C', True)
+                                pdf.cell(pdf_widths[0], 7, str(idx), 1, 0, "C", True)
+                                values = [str(met.get(k, "")) for k in metric_keys]
+                                for i_v, val in enumerate(values):
+                                    pdf.cell(pdf_widths[i_v+1], 7, val, 1, 0, "C", True)
                                 pdf.ln()
-                                
-                                pdf.set_font('Arial', '', 9)
-                                pdf.set_text_color(0, 0, 0)
-                                for idx, met in enumerate(img_data['metricas'], start=1):
-                                    if idx % 2 != 0: pdf.set_fill_color(242, 242, 242)
-                                    else: pdf.set_fill_color(255, 255, 255)
-                                    
-                                    pdf.cell(pdf_widths[0], 7, str(idx), 1, 0, 'C', True)
-                                    values = [
-                                        str(met.get("lines", "")), str(met.get("junction points", "")),
-                                        str(met.get("end points", "")), str(met.get("junction voxels", "")),
-                                        str(met.get("slab voxels", "")), str(met.get("average branch length", "")),
-                                        str(met.get("triple points", "")), str(met.get("quadruple points", "")),
-                                        str(met.get("maximum branch length", "")), str(met.get("longest shortest path", ""))
-                                    ]
-                                    for i, val in enumerate(values):
-                                        pdf.cell(pdf_widths[i+1], 7, val, 1, 0, 'C', True)
-                                    pdf.ln()
-                                pdf.ln(5)
-                        pdf.output(pdf_path)
+                            pdf.ln(5)
+                    pdf.output(pdf_path)
+                except Exception as e:
+                    import logging
+                    logging.error(f"Error generando PDF: {e}")
 
-                self.metricas_reporte.clear()
-                msg = f"Reporte guardado correctamente en:\n{filepath}"
-                if "Both" in filter_selected: msg = "Ambos reportes (XLSX y PDF) han sido guardados."
-                self.mostrar_notificacion("Éxito", msg, "success")
-                
-                # Reset UI completely
-                self.visor_imagen.set_image_and_boxes(None, [])
-                self.ruta_imagen_actual = None
-                self.pixmaps_globales = {"Original": None, "Filtrada": None, "Esqueleto": None}
-                self.combo_vista.blockSignals(True)
-                self.combo_vista.clear()
-                self.combo_vista.blockSignals(False)
-                self.lbl_info_conteo.setText("Microglías detectadas: 0")
-                self.actualizar_estado_flujo(0)
-                
-            except Exception as e:
-                self.mostrar_notificacion("Error", f"Error al guardar el reporte: {str(e)}", "error")
+            self.mostrar_notificacion("Éxito", f"Reporte guardado en: {os.path.basename(filepath)}", "info")
+        except Exception as error:
+            self.mostrar_notificacion("Error", f"Falló la exportación: {str(error)}", "error")
+
+    def finalizar_reporte(self):
+        from vistas.utilidades import DialogoConfirmacion
+        msg = "¿Estás seguro de finalizar el reporte actual? Se limpiarán todas las métricas acumuladas."
+        if not DialogoConfirmacion("Finalizar Reporte", msg).exec(): return
+        self.metricas_reporte.clear(); self.metricas_extraidas_ciclo_actual = False
+        self.visor_imagen.set_image_and_boxes(None, []); self.ruta_imagen_actual = None; self.id_analisis_actual = None
+        self.pixmaps_globales = {"Original": None, "Filtrada": None, "Esqueleto": None}
+        self.combo_vista.blockSignals(True); self.combo_vista.clear(); self.combo_vista.blockSignals(False); self.actualizar_estado_flujo(0)
+        self.mostrar_notificacion("Reporte Finalizado", "Sistema reiniciado.", "info")

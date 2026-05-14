@@ -36,10 +36,10 @@ class VentanaLogin(QWidget):
         else:
             self.logo.setStyleSheet("border: 1px dashed #ccc; color: #999; padding: 20px;")
             
-        titulo = QLabel("Iniciar Sesión")
-        titulo.setStyleSheet("font-size: 22px; font-weight: bold; color: #000000; margin-top: 10px;")
-        subtitulo = QLabel("Ingresa nombre de usuario y contraseña")
-        subtitulo.setStyleSheet("color: #666666; margin-bottom: 20px;")
+        titulo = QLabel("Bienvenido")
+        titulo.setStyleSheet("font-size: 24px; font-weight: bold; color: #24292f; margin-top: 15px;")
+        subtitulo = QLabel("Ingresa tus credenciales para continuar")
+        subtitulo.setStyleSheet("color: #57606a; font-size: 13px; margin-bottom: 25px;")
         
         self.input_usuario = QLineEdit()
         self.input_usuario.setPlaceholderText("Usuario")
@@ -48,13 +48,13 @@ class VentanaLogin(QWidget):
         self.input_password.setPlaceholderText("Contraseña")
         self.input_password.setEchoMode(QLineEdit.EchoMode.Password)
 
-        btn_ingresar = QPushButton("Ingresar")
-        btn_ingresar.setStyleSheet("background-color: #000000; color: #FFFFFF; padding: 12px; margin-top: 10px;")
+        btn_ingresar = QPushButton("Iniciar Sesión")
+        btn_ingresar.setStyleSheet("background-color: #24292f; color: #FFFFFF; padding: 10px; border-radius: 6px; font-size: 14px;")
         btn_ingresar.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_ingresar.clicked.connect(self.verificar_login)
 
-        btn_invitado = QPushButton("Ingresar como invitado")
-        btn_invitado.setStyleSheet("background-color: transparent; color: #555555; text-decoration: underline;")
+        btn_invitado = QPushButton("Continuar como invitado")
+        btn_invitado.setStyleSheet("background-color: transparent; color: #0969da; border: none; font-weight: normal; font-size: 13px;")
         btn_invitado.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_invitado.clicked.connect(self.login_invitado)
         
@@ -99,7 +99,7 @@ class VentanaLogin(QWidget):
                     self.dashboard = VentanaAdministrador(id_usuario=id_user)
                 else:
                     from vistas.investigador import VentanaInvestigador
-                    self.dashboard = VentanaInvestigador(id_usuario=id_user, rol=rol)
+                    self.dashboard = VentanaInvestigador(id_usuario=id_user, rol=rol, nombre_usuario=usuario)
                 
                 self.dashboard.show()
                 self.close()
@@ -112,6 +112,6 @@ class VentanaLogin(QWidget):
 
     def login_invitado(self):
         from vistas.investigador import VentanaInvestigador
-        self.dashboard = VentanaInvestigador(id_usuario=0, rol="Invitado")
+        self.dashboard = VentanaInvestigador(id_usuario=0, rol="Invitado", nombre_usuario="Invitado")
         self.dashboard.show()
         self.close()

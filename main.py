@@ -6,7 +6,6 @@ from PyQt6.QtWidgets import QApplication
 from PyQt6.QtGui import QIcon
 from vistas.login import VentanaLogin
 
-
 def resource_path(relative_path):
     """Obtiene la ruta absoluta a un recurso, funciona tanto en desarrollo como en PyInstaller"""
     try:
@@ -41,53 +40,60 @@ def main():
     QMainWindow, QDialog, QWidget#ventana_login {
         background-color: #FFFFFF;
     }
-    /* Forzar a que todo el texto base sea negro */
     QWidget {
-        color: #000000;
+        color: #24292f;
+        font-family: 'Segoe UI', 'Roboto', 'Arial', sans-serif;
     }
     QLabel {
-        font-family: 'Segoe UI', Arial, sans-serif;
-        color: #333333;
+        color: #24292f;
     }
     QLineEdit {
-        border: 1px solid #CCCCCC;
-        border-radius: 8px;
-        padding: 10px;
-        background-color: #FDFDFD;
-        color: #000000; /* Letras negras en los inputs */
-        font-size: 14px;
+        border: 1px solid #d0d7de;
+        border-radius: 6px;
+        padding: 8px 12px;
+        background-color: #ffffff;
+        color: #24292f;
+        font-size: 13px;
     }
     QLineEdit:focus {
-        border: 2px solid #003366;
+        border: 2px solid #0969da;
+        background-color: #ffffff;
     }
     QPushButton {
-        border-radius: 8px;
-        font-family: 'Segoe UI', Arial, sans-serif;
-        font-size: 14px;
-        font-weight: bold;
-        color: #333333; /* Texto de los botones visible */
+        border-radius: 6px;
+        padding: 8px 16px;
+        font-size: 13px;
+        font-weight: 600;
+        background-color: #f6f8fa;
+        border: 1px solid #d0d7de;
+        color: #24292f;
+    }
+    QPushButton:hover {
+        background-color: #f3f4f6;
+        border-color: #1b1f2426;
+    }
+    QPushButton:pressed {
+        background-color: #ebecf0;
     }
     QTableWidget {
         background-color: #FFFFFF;
-        color: #000000; /* Letras negras en las tablas */
-        border: 1px solid #E0E0E0;
-        gridline-color: #CCCCCC;
-    }
-    QTableWidget::item {
-        color: #000000;
+        border: 1px solid #d0d7de;
+        border-radius: 6px;
+        gridline-color: #f0f0f0;
+        font-size: 12px;
     }
     QHeaderView::section {
-        background-color: #FFFFFF;
-        color: #000000; /* Letras negras en los títulos de las columnas */
+        background-color: #f6f8fa;
+        color: #57606a;
         padding: 8px;
         border: none;
-        border-bottom: 2px solid #003366;
+        border-bottom: 1px solid #d0d7de;
         font-weight: bold;
-        font-size: 14px;
+        font-size: 12px;
     }
     QFrame#menu_lateral {
-        background-color: #FFFFFF;
-        border-right: 1px solid #E0E0E0;
+        background-color: #ffffff;
+        border-right: 1px solid #d0d7de;
     }
     """
     app.setStyleSheet(estilo_global)
