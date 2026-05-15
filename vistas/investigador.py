@@ -1470,10 +1470,13 @@ class VentanaInvestigador(QMainWindow):
         layout_user_info = QVBoxLayout()
         lbl_rango = QLabel(self.rol)
         lbl_rango.setStyleSheet("color: #007bff; font-weight: bold; font-size: 13px; margin-left: 2px; padding: 0;")
-        lbl_nombre = QLabel(self.nombre_usuario)
-        lbl_nombre.setStyleSheet("color: #666; font-size: 11px; margin-left: 2px; padding: 0;")
         layout_user_info.addWidget(lbl_rango)
-        layout_user_info.addWidget(lbl_nombre)
+
+        if self.rol != "Invitado":
+            lbl_nombre = QLabel(self.nombre_usuario)
+            lbl_nombre.setStyleSheet("color: #666; font-size: 11px; margin-left: 2px; padding: 0;")
+            layout_user_info.addWidget(lbl_nombre)
+        
         layout_user_info.setSpacing(0)
         
         layout_historial_top.addWidget(self.btn_historial)
@@ -1511,6 +1514,9 @@ class VentanaInvestigador(QMainWindow):
         self.btn_guardar_progreso.setStyleSheet("QPushButton { color: #007bff; font-weight: bold; text-align: left; padding: 8px 10px; background-color: transparent; border: none; font-size: 11px; } QPushButton:hover { background-color: #F0F0F0; border-radius: 5px; }")
         self.btn_guardar_progreso.clicked.connect(self.save_current_progress)
         self.menu_lateral.addWidget(self.btn_guardar_progreso)
+
+        if self.rol == "Invitado":
+            self.btn_guardar_progreso.hide()
 
         # Conectar el botón de historial
         self.btn_historial.clicked.connect(self.abrir_historial)

@@ -18,8 +18,9 @@ class VentanaLogin(QWidget):
             base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
             
         self.logo_path = os.path.join(base_path, "assets", "logo.png")
+        self.icon_path = os.path.join(base_path, "assets", "logoW.png")
         
-        self.setWindowIcon(QIcon(self.logo_path))
+        self.setWindowIcon(QIcon(self.icon_path))
         self.resize(400, 550)
         
         layout = QVBoxLayout()
@@ -32,7 +33,9 @@ class VentanaLogin(QWidget):
         
         pixmap = QPixmap(self.logo_path)
         if not pixmap.isNull():
-            self.logo.setPixmap(pixmap.scaled(150, 150, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+            self.logo.setFixedSize(250, 250)
+            self.logo.setScaledContents(True)
+            self.logo.setPixmap(pixmap)
         else:
             self.logo.setStyleSheet("border: 1px dashed #ccc; color: #999; padding: 20px;")
             
@@ -62,7 +65,7 @@ class VentanaLogin(QWidget):
         label_ayuda.setStyleSheet("color: #888888; font-size: 11px; margin-top: 30px;")
         label_ayuda.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        layout.addWidget(self.logo)
+        layout.addWidget(self.logo, alignment=Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(titulo, alignment=Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(subtitulo, alignment=Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(self.input_usuario)

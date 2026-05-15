@@ -9,7 +9,7 @@ def get_logo_path():
         base_path = sys._MEIPASS
     except Exception:
         base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    return os.path.join(base_path, "assets", "logo.png")
+    return os.path.join(base_path, "assets", "logoW.png")
 
 def set_app_icon(window):
     window.setWindowIcon(QIcon(get_logo_path()))
