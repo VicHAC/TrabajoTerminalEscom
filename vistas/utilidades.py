@@ -1,7 +1,7 @@
 import sys
 import os
 from PyQt6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QFrame, QLabel, QPushButton
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QSize
 from PyQt6.QtGui import QIcon
 
 def get_logo_path():
@@ -38,9 +38,14 @@ class DialogoNotificacion(QDialog):
         
         flayout = QVBoxLayout(frame)
         
+        header_layout = QHBoxLayout()
+        header_layout.setContentsMargins(10, 10, 10, 0)
         lbl_titulo = QLabel(f"<b>{titulo}</b>")
         lbl_titulo.setStyleSheet(f"color: {color_titulo}; font-size: 16px; border: none; font-weight: bold;")
         lbl_titulo.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        header_layout.addWidget(lbl_titulo)
+        flayout.addLayout(header_layout)
         
         linea = QFrame()
         linea.setFrameShape(QFrame.Shape.HLine)

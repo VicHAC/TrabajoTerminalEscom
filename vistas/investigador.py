@@ -217,10 +217,30 @@ class DialogoCargarImagen(QDialog):
         frame.setStyleSheet("QFrame { background-color: #FFFFFF; border-radius: 12px; border: 1px solid #d0d7de; } QLabel { border: none; }")
         layout = QVBoxLayout(frame)
         
-        lbl_titulo = QLabel("Configuración del Campo")
-        lbl_titulo.setStyleSheet("font-size: 18px; font-weight: bold; color: #0969da;")
+        header_layout = QHBoxLayout()
+        lbl_titulo = QLabel("Registro del Campo")
+        lbl_titulo.setStyleSheet("font-size: 18px; font-weight: bold; color: #0969da; border: none;")
         lbl_titulo.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(lbl_titulo)
+        
+        header_layout.setContentsMargins(10, 10, 10, 0)
+        self.btn_cerrar_x = QPushButton()
+        self.btn_cerrar_x.setIcon(QIcon("assets/buttons/xneg.png"))
+        self.btn_cerrar_x.setIconSize(QSize(20, 20))
+        self.btn_cerrar_x.setFixedSize(35, 35)
+        self.btn_cerrar_x.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_cerrar_x.setStyleSheet("""
+            QPushButton { background-color: transparent; border: none; }
+            QPushButton:hover { background-color: #f6f8fa; border-radius: 17px; }
+        """)
+        self.btn_cerrar_x.enterEvent = lambda e: self.btn_cerrar_x.setIcon(QIcon("assets/buttons/xroja.png"))
+        self.btn_cerrar_x.leaveEvent = lambda e: self.btn_cerrar_x.setIcon(QIcon("assets/buttons/xneg.png"))
+        self.btn_cerrar_x.clicked.connect(self.reject)
+        
+        header_layout.addStretch()
+        header_layout.addWidget(lbl_titulo)
+        header_layout.addStretch()
+        header_layout.addWidget(self.btn_cerrar_x)
+        layout.addLayout(header_layout)
         layout.addSpacing(10)
 
         layout_campos = QHBoxLayout()
@@ -264,8 +284,9 @@ class DialogoCargarImagen(QDialog):
         btn_continuar.setStyleSheet("background-color: #2da44e; color: white; border: 1px solid #1a7f37;")
         btn_continuar.clicked.connect(self.validar_y_continuar)
         
-        layout_botones.addWidget(btn_cancelar)
+        layout_botones.addStretch()
         layout_botones.addWidget(btn_continuar)
+        layout_botones.addStretch()
         
         layout.addLayout(layout_botones)
         main_layout.addWidget(frame)
@@ -377,10 +398,32 @@ class DialogoComparativo(QDialog):
         self.frame.setStyleSheet("QFrame { background-color: #FFFFFF; border-radius: 12px; border: 2px solid #003366; } QLabel { border: none; }")
         self.layout_principal = QVBoxLayout(self.frame)
         
-        self.lbl_titulo = QLabel("<b>Comparativa del Proceso de la Microglía</b>")
+        header_layout = QHBoxLayout()
+        self.lbl_titulo = QLabel("<b>Comparativa del Proceso</b>")
         self.lbl_titulo.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.lbl_titulo.setStyleSheet("font-size: 18px; color: #003366; margin-bottom: 10px;")
-        self.layout_principal.addWidget(self.lbl_titulo)
+        self.lbl_titulo.setStyleSheet("font-size: 18px; color: #003366; border: none;")
+        
+        header_layout.setContentsMargins(10, 10, 10, 0)
+        self.btn_cerrar_x = QPushButton()
+        self.btn_cerrar_x.setIcon(QIcon("assets/buttons/xneg.png"))
+        self.btn_cerrar_x.setIconSize(QSize(20, 20))
+        self.btn_cerrar_x.setFixedSize(35, 35)
+        self.btn_cerrar_x.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_cerrar_x.setStyleSheet("""
+            QPushButton { background-color: transparent; border: none; }
+            QPushButton:hover { background-color: #f6f8fa; border-radius: 17px; }
+        """)
+        self.btn_cerrar_x.enterEvent = lambda e: self.btn_cerrar_x.setIcon(QIcon("assets/buttons/xroja.png"))
+        self.btn_cerrar_x.leaveEvent = lambda e: self.btn_cerrar_x.setIcon(QIcon("assets/buttons/xneg.png"))
+
+        self.btn_cerrar_x.clicked.connect(self.accept)
+        
+        header_layout.addStretch()
+        header_layout.addWidget(self.lbl_titulo)
+        header_layout.addStretch()
+        header_layout.addWidget(self.btn_cerrar_x)
+        self.layout_principal.addLayout(header_layout)
+        self.layout_principal.addSpacing(10)
 
         # Widget para vista lado a lado
         self.widget_lado_lado = QWidget()
@@ -435,8 +478,6 @@ class DialogoComparativo(QDialog):
         
         layout_botones.addStretch()
         layout_botones.addWidget(self.btn_toggle)
-        layout_botones.addSpacing(15)
-        layout_botones.addWidget(btn_cerrar)
         layout_botones.addStretch()
         
         self.layout_principal.addLayout(layout_botones)
@@ -613,11 +654,32 @@ class DialogoVistaCelular(QDialog):
         layout = QVBoxLayout(frame)
         
         nombre_archivo = os.path.basename(self.crop_path)
-
+        header_layout = QHBoxLayout()
         lbl_nombre = QLabel(f"Identificador: <b>{nombre_archivo}</b>")
         lbl_nombre.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        lbl_nombre.setStyleSheet("font-size: 15px; color: #003366; margin-bottom: 5px;")
-        layout.addWidget(lbl_nombre)
+        lbl_nombre.setStyleSheet("font-size: 15px; color: #003366; border: none;")
+        
+        header_layout.setContentsMargins(10, 10, 10, 0)
+        self.btn_cerrar_x = QPushButton()
+        self.btn_cerrar_x.setIcon(QIcon("assets/buttons/xneg.png"))
+        self.btn_cerrar_x.setIconSize(QSize(20, 20))
+        self.btn_cerrar_x.setFixedSize(35, 35)
+        self.btn_cerrar_x.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_cerrar_x.setStyleSheet("""
+            QPushButton { background-color: transparent; border: none; }
+            QPushButton:hover { background-color: #f6f8fa; border-radius: 17px; }
+        """)
+        self.btn_cerrar_x.enterEvent = lambda e: self.btn_cerrar_x.setIcon(QIcon("assets/buttons/xroja.png"))
+        self.btn_cerrar_x.leaveEvent = lambda e: self.btn_cerrar_x.setIcon(QIcon("assets/buttons/xneg.png"))
+
+        self.btn_cerrar_x.clicked.connect(self.accept)
+        
+        header_layout.addStretch()
+        header_layout.addWidget(lbl_nombre)
+        header_layout.addStretch()
+        header_layout.addWidget(self.btn_cerrar_x)
+        layout.addLayout(header_layout)
+        layout.addSpacing(10)
 
         # Nombre de la fase actual
         self.lbl_fase = QLabel("FASE: ORIGINAL")
@@ -628,10 +690,16 @@ class DialogoVistaCelular(QDialog):
         # Contenedor de imagen con botones de navegación lateral
         layout_imagen_nav = QHBoxLayout()
         
-        self.btn_ant = QPushButton("<")
-        self.btn_ant.setFixedSize(30, 60)
+        self.btn_ant = QPushButton()
+        self.btn_ant.setIcon(QIcon("assets/buttons/izq.png"))
+        self.btn_ant.setIconSize(QSize(12, 12))
+        self.btn_ant.setFixedSize(22, 22)
         self.btn_ant.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_ant.setStyleSheet("QPushButton { background-color: #f0f0f0; border: 1px solid #ccc; border-radius: 4px; font-size: 18px; font-weight: bold; color: #003366; } QPushButton:hover { background-color: #e0e0e0; } QPushButton:disabled { color: #ccc; }")
+        self.btn_ant.setStyleSheet("""
+            QPushButton { background-color: transparent; border: none; }
+            QPushButton:hover { background-color: #f0f0f0; border-radius: 11px; }
+            QPushButton:disabled { opacity: 0.3; }
+        """)
         self.btn_ant.clicked.connect(self.mostrar_anterior)
         
         self.label_imagen = InteractiveLabelDetail(self)
@@ -639,10 +707,16 @@ class DialogoVistaCelular(QDialog):
         self.label_imagen.setFixedSize(380, 380)
 
         
-        self.btn_sig = QPushButton(">")
-        self.btn_sig.setFixedSize(30, 60)
+        self.btn_sig = QPushButton()
+        self.btn_sig.setIcon(QIcon("assets/buttons/der.png"))
+        self.btn_sig.setIconSize(QSize(12, 12))
+        self.btn_sig.setFixedSize(22, 22)
         self.btn_sig.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_sig.setStyleSheet("QPushButton { background-color: #f0f0f0; border: 1px solid #ccc; border-radius: 4px; font-size: 18px; font-weight: bold; color: #003366; } QPushButton:hover { background-color: #e0e0e0; } QPushButton:disabled { color: #ccc; }")
+        self.btn_sig.setStyleSheet("""
+            QPushButton { background-color: transparent; border: none; }
+            QPushButton:hover { background-color: #f0f0f0; border-radius: 11px; }
+            QPushButton:disabled { opacity: 0.3; }
+        """)
         self.btn_sig.clicked.connect(self.mostrar_siguiente)
         
         layout_imagen_nav.addWidget(self.btn_ant)
@@ -765,8 +839,6 @@ class DialogoVistaCelular(QDialog):
         
         layout_inferior.addStretch()
         layout_inferior.addWidget(self.btn_comparativa)
-        layout_inferior.addSpacing(10)
-        layout_inferior.addWidget(btn_cerrar)
         layout_inferior.addStretch()
         
         layout.addLayout(layout_inferior)
@@ -1254,6 +1326,7 @@ class DialogoHistorial(QDialog):
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog | Qt.WindowType.WindowStaysOnTopHint)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setModal(True); self.id_usuario = id_usuario; self.seleccion = None
+        from PyQt6.QtGui import QColor, QIcon
         
         from vistas.utilidades import set_app_icon
         set_app_icon(self)
@@ -1277,7 +1350,7 @@ class DialogoHistorial(QDialog):
         lbl_titulo.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
         self.btn_borrar_icon = QPushButton()
-        self.btn_borrar_icon.setIcon(QIcon("assets/borrar.png"))
+        self.btn_borrar_icon.setIcon(QIcon("assets/buttons/borrar.png"))
         self.btn_borrar_icon.setIconSize(QSize(22, 22))
         self.btn_borrar_icon.setFixedSize(35, 35)
         self.btn_borrar_icon.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -1290,16 +1363,22 @@ class DialogoHistorial(QDialog):
         self.btn_borrar_icon.setToolTip("Borrar seleccionados")
         self.btn_borrar_icon.clicked.connect(self.borrar_reportes_seleccionados)
 
-        self.btn_cerrar_x = QPushButton("✕")
+
+        header_layout.setContentsMargins(10, 10, 10, 0)
+        self.btn_cerrar_x = QPushButton()
+        self.btn_cerrar_x.setIcon(QIcon("assets/buttons/xneg.png"))
+        self.btn_cerrar_x.setIconSize(QSize(20, 20))
         self.btn_cerrar_x.setFixedSize(35, 35)
         self.btn_cerrar_x.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_cerrar_x.setStyleSheet("""
-            QPushButton { background-color: transparent; border: none; font-size: 18px; color: #666; font-weight: bold; }
-            QPushButton:hover { color: #cf222e; background-color: #f6f8fa; border-radius: 17px; }
+            QPushButton { background-color: transparent; border: none; }
+            QPushButton:hover { background-color: #f6f8fa; border-radius: 17px; }
         """)
+        self.btn_cerrar_x.enterEvent = lambda e: self.btn_cerrar_x.setIcon(QIcon("assets/buttons/xroja.png"))
+        self.btn_cerrar_x.leaveEvent = lambda e: self.btn_cerrar_x.setIcon(QIcon("assets/buttons/xneg.png"))
         self.btn_cerrar_x.clicked.connect(self.reject)
         
-        header_layout.addSpacing(70) # Compensar espacio de los dos botones de la derecha para centrar título
+        header_layout.addSpacing(70) # Ajuste para centrar título
         header_layout.addStretch()
         header_layout.addWidget(lbl_titulo)
         header_layout.addStretch()
@@ -1309,14 +1388,24 @@ class DialogoHistorial(QDialog):
         flayout.addLayout(header_layout)
         
         self.tree = QTreeWidget()
-        self.tree.setHeaderLabels(["Reporte / Imagen", "Fecha", "Estado", "Detecciones"])
-        self.tree.setColumnWidth(0, 320)
+        self.tree.setHeaderLabels(["Reporte / Imagen", "Fecha", "Estado", "Detecciones", "Descargar"])
+        self.tree.setColumnWidth(0, 250)
+        self.tree.setColumnWidth(1, 130)
+        self.tree.setColumnWidth(2, 100)
+        self.tree.setColumnWidth(3, 100)
+        self.tree.setColumnWidth(4, 80)
+        from PyQt6.QtWidgets import QHeaderView
+        self.tree.header().setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
+        self.tree.header().setStretchLastSection(False)
         self.tree.setIndentation(20)
         self.tree.setAnimated(True)
+        from PyQt6.QtWidgets import QAbstractItemView
+        self.tree.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
         self.tree.setStyleSheet("""
-            QTreeWidget { border: 1px solid #d0d7de; border-radius: 8px; background-color: #ffffff; alternate-background-color: #f6f8fa; font-size: 11px; }
-            QTreeWidget::item { height: 30px; border-bottom: 1px solid #f0f0f0; color: #24292f; }
-            QTreeWidget::item:selected { background-color: #eaf2ff; color: #0969da; border-left: 3px solid #0969da; }
+            QTreeWidget { border: 1px solid #d0d7de; border-radius: 8px; background-color: #ffffff; alternate-background-color: #f6f8fa; font-size: 11px; outline: none; }
+            QTreeWidget::item { height: 32px; border-bottom: 1px solid #f0f0f0; color: #24292f; }
+            QTreeWidget::item:selected { background-color: transparent; color: #24292f; }
+            QTreeWidget::indicator { width: 18px; height: 18px; }
             QHeaderView::section { background-color: #f6f8fa; padding: 6px; font-weight: bold; border: none; border-bottom: 2px solid #d0d7de; color: #57606a; font-size: 11px; }
         """)
         flayout.addWidget(self.tree)
@@ -1326,23 +1415,84 @@ class DialogoHistorial(QDialog):
         
         btn_layout = QHBoxLayout()
         
-        btn_cargar = QPushButton("Cargar / Retomar")
-        btn_cargar.setStyleSheet("background-color: #2da44e; color: white;")
-        btn_cargar.clicked.connect(self.aceptar_seleccion)
+        self.btn_cargar = QPushButton("Cargar / Retomar")
+        self.btn_cargar.setEnabled(False)
+        self.btn_cargar.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_cargar.setStyleSheet("""
+            QPushButton { background-color: #e1e4e8; color: #959da5; border-radius: 6px; font-weight: bold; padding: 10px 20px; border: none; }
+            QPushButton:enabled { background-color: #2da44e; color: white; }
+            QPushButton:enabled:hover { background-color: #2c974b; }
+        """)
+        self.btn_cargar.clicked.connect(self.aceptar_seleccion)
         
         btn_layout.addStretch()
-        btn_layout.addWidget(btn_cargar)
+        btn_layout.addWidget(self.btn_cargar)
         
-        flayout.addLayout(btn_layout); main_layout.addWidget(self.frame)
+        flayout.addLayout(btn_layout);        main_layout.addWidget(self.frame)
+        self.actualizar_estado_boton_borrar() # Asegurar estado inicial
         self.resize(950, 650)
 
+    def descargar_reporte_id(self, id_reporte):
+        from bd.database import conectar
+        import json
+        conn = conectar(); cur = conn.cursor()
+        try:
+            cur.execute("SELECT datos_persistentes FROM Analisis WHERE id_reporte = ?", (id_reporte,))
+            rows = cur.fetchall()
+            all_metrics = []
+            for r in rows:
+                if r[0]:
+                    d = json.loads(r[0])
+                    m = d.get("metricas_acumuladas", [])
+                    if isinstance(m, list): all_metrics.extend(m)
+                    else: all_metrics.append(m)
+            
+            if not all_metrics:
+                from vistas.utilidades import DialogoNotificacion
+                DialogoNotificacion("Aviso", "Este reporte no tiene métricas completadas para descargar.", "info", self).exec()
+                return
+                
+            # Usar la lógica global de descarga
+            original_metrics = self.parent().metricas_reporte
+            self.parent().metricas_reporte = all_metrics
+            self.parent().descargar_reporte()
+            self.parent().metricas_reporte = original_metrics
+            
+        except Exception as e:
+            from vistas.utilidades import DialogoNotificacion
+            DialogoNotificacion("Error", f"Error al descargar: {e}", "error", self).exec()
+        finally:
+            conn.close()
+
     def actualizar_estado_boton_borrar(self):
-        hay_seleccion = False
+        num_seleccionados = 0
         for i in range(self.tree.topLevelItemCount()):
-            if self.tree.topLevelItem(i).checkState(0) == Qt.CheckState.Checked:
-                hay_seleccion = True
-                break
-        self.btn_borrar_icon.setEnabled(hay_seleccion)
+            item = self.tree.topLevelItem(i)
+            if item.checkState(0) == Qt.CheckState.Checked:
+                num_seleccionados += 1
+                # Resaltar la fila en azul
+                for col in range(self.tree.columnCount()):
+                    item.setBackground(col, QColor("#0969da"))
+                    item.setForeground(col, QColor("#ffffff"))
+                
+                # Nombre del reporte subrayado y negritas
+                f = item.font(0)
+                f.setUnderline(True); f.setBold(True)
+                item.setFont(0, f)
+            else:
+                # Restaurar colores originales
+                for col in range(self.tree.columnCount()):
+                    item.setBackground(col, Qt.GlobalColor.transparent)
+                    item.setForeground(col, QColor("#24292f"))
+                
+                # Restaurar fuente original
+                f = item.font(0)
+                f.setUnderline(False); f.setBold(False)
+                item.setFont(0, f)
+        
+        self.btn_borrar_icon.setEnabled(num_seleccionados > 0)
+        # Habilitar cargar SOLO si hay exactamente uno seleccionado
+        self.btn_cargar.setEnabled(num_seleccionados == 1)
 
     def showEvent(self, event):
         super().showEvent(event)
@@ -1371,22 +1521,56 @@ class DialogoHistorial(QDialog):
                 análisis = cur.fetchall()
                 for an in análisis:
                     id_an, ruta, f_an, paso, cant = an
-                    st = "Completado" if paso == 4 else f"Paso {paso}"
+                    st = "Completado" if paso >= 5 else f"Paso {paso}"
                     an_item = QTreeWidgetItem(rep_item, [os.path.basename(ruta), str(f_an), st, str(cant)])
                     an_item.setData(0, Qt.ItemDataRole.UserRole, {"type": "analisis", "id": id_an, "id_reporte": id_rep})
                     # Deshabilitar interacción totalmente (solo texto informativo)
                     an_item.setDisabled(True)
                 rep_item.setExpanded(True)
+                
+                # Agregar botón de descarga individual si el reporte está completado
+                cur.execute("SELECT COUNT(*) FROM Analisis WHERE id_reporte = ? AND paso_actual >= 5", (id_rep,))
+                completados = cur.fetchone()[0]
+                
+                btn_dl = QPushButton()
+                btn_dl.setIcon(QIcon("assets/buttons/download.png"))
+                btn_dl.setIconSize(QSize(18, 18))
+                btn_dl.setFixedSize(30, 30)
+                btn_dl.setCursor(Qt.CursorShape.PointingHandCursor)
+                btn_dl.setStyleSheet("""
+                    QPushButton { background-color: transparent; border: none; }
+                    QPushButton:hover { background-color: #f0f0f0; border-radius: 15px; }
+                    QPushButton:disabled { opacity: 0.1; }
+                """)
+                btn_dl.setEnabled(completados > 0)
+                btn_dl.setToolTip("Descargar")
+                btn_dl.clicked.connect(lambda checked, r_id=id_rep: self.descargar_reporte_id(r_id))
+                
+                # Contenedor para centrar el botón en la columna
+                container = QWidget()
+                layout_c = QHBoxLayout(container)
+                layout_c.addWidget(btn_dl)
+                layout_c.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                layout_c.setContentsMargins(0, 0, 0, 0)
+                self.tree.setItemWidget(rep_item, 4, container)
         except Exception as e: logging.error(f"Error historial: {e}")
         finally: conn.close()
 
     def aceptar_seleccion(self):
-        item = self.tree.currentItem()
-        if not item: return
-        if item.parent(): item = item.parent()
-        data = item.data(0, Qt.ItemDataRole.UserRole)
-        self.seleccion = {"type": "reporte", "id_reporte": data["id"], "estado": item.text(2)}
+        # Buscar el primer reporte marcado con casilla
+        item_seleccionado = None
+        for i in range(self.tree.topLevelItemCount()):
+            item = self.tree.topLevelItem(i)
+            if item.checkState(0) == Qt.CheckState.Checked:
+                item_seleccionado = item
+                break
+        
+        if not item_seleccionado: return
+        
+        data = item_seleccionado.data(0, Qt.ItemDataRole.UserRole)
+        self.seleccion = {"type": "reporte", "id_reporte": data["id"], "estado": item_seleccionado.text(2)}
         self.accept()
+
 
     def borrar_reportes_seleccionados(self):
         # Recopilar todos los reportes marcados
@@ -1457,12 +1641,14 @@ class VentanaInvestigador(QMainWindow):
         # Layout superior del menú lateral para el botón de historial (≡) - Absolute Top
         layout_historial_top = QHBoxLayout()
         layout_historial_top.setContentsMargins(0, 0, 0, 0)
-        self.btn_historial = QPushButton("≡")
+        self.btn_historial = QPushButton()
+        self.btn_historial.setIcon(QIcon("assets/buttons/historial.png"))
+        self.btn_historial.setIconSize(QSize(22, 22))
         self.btn_historial.setFixedSize(35, 35)
         self.btn_historial.setToolTip("Historial")
         self.btn_historial.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_historial.setStyleSheet("""
-            QPushButton { background-color: white; border: none; font-size: 24px; font-weight: bold; color: #333; }
+            QPushButton { background-color: transparent; border: none; }
             QPushButton:hover { background-color: #f0f0f0; border-radius: 17px; }
         """)
         
@@ -1507,16 +1693,11 @@ class VentanaInvestigador(QMainWindow):
             self.menu_lateral.addWidget(btn)
             
         self.btn_corregir_filtrado.hide()
-        self.btn_corregir_filtrado.setStyleSheet(estilo_btn_menu + "QPushButton { color: #dc3545; font-weight: bold; }")
-
-        # Botón para guardar progreso en el menú lateral
-        self.btn_guardar_progreso = QPushButton("Guardar Progreso")
-        self.btn_guardar_progreso.setStyleSheet("QPushButton { color: #007bff; font-weight: bold; text-align: left; padding: 8px 10px; background-color: transparent; border: none; font-size: 11px; } QPushButton:hover { background-color: #F0F0F0; border-radius: 5px; }")
-        self.btn_guardar_progreso.clicked.connect(self.save_current_progress)
-        self.menu_lateral.addWidget(self.btn_guardar_progreso)
-
-        if self.rol == "Invitado":
-            self.btn_guardar_progreso.hide()
+        self.btn_corregir_filtrado.setStyleSheet(estilo_btn_menu + "QPushButton { color: #0969da; font-weight: bold; }")
+        
+        self.btn_cerrar_sesion = QPushButton("Cerrar Sesión")
+        self.btn_cerrar_sesion.setStyleSheet(estilo_btn_menu + "QPushButton { color: #dc3545; font-weight: bold; }")
+        self.menu_lateral.addWidget(self.btn_cerrar_sesion)
 
         # Conectar el botón de historial
         self.btn_historial.clicked.connect(self.abrir_historial)
@@ -1576,7 +1757,7 @@ class VentanaInvestigador(QMainWindow):
                 border: none;
             }
             QComboBox::down-arrow { 
-                image: url(assets/abajo.png);
+                image: url(assets/buttons/abajo.png);
                 width: 12px; 
                 height: 12px;
             }
@@ -1585,7 +1766,7 @@ class VentanaInvestigador(QMainWindow):
         
         # Botones de navegación global
         self.btn_ant_global = QPushButton()
-        self.btn_ant_global.setIcon(QIcon("assets/izq.png"))
+        self.btn_ant_global.setIcon(QIcon("assets/buttons/izq.png"))
         self.btn_ant_global.setIconSize(QSize(12, 12))
         self.btn_ant_global.setFixedSize(22, 22)
         self.btn_ant_global.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -1598,7 +1779,7 @@ class VentanaInvestigador(QMainWindow):
         self.btn_ant_global.setEnabled(False)
         
         self.btn_sig_global = QPushButton()
-        self.btn_sig_global.setIcon(QIcon("assets/der.png"))
+        self.btn_sig_global.setIcon(QIcon("assets/buttons/der.png"))
         self.btn_sig_global.setIconSize(QSize(12, 12))
         self.btn_sig_global.setFixedSize(22, 22)
         self.btn_sig_global.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -1621,7 +1802,7 @@ class VentanaInvestigador(QMainWindow):
         
         self.btn_herramienta_caja = SafeToolTipButton()
         self.btn_herramienta_caja.setFixedSize(35, 35)
-        self.btn_herramienta_caja.setIcon(QIcon("assets/seleccionar.png"))
+        self.btn_herramienta_caja.setIcon(QIcon("assets/buttons/seleccionar.png"))
         self.btn_herramienta_caja.setIconSize(QSize(20, 20))
         self.btn_herramienta_caja.setCustomToolTip("Crear seleccion")
         self.btn_herramienta_caja.setStyleSheet(estilo_herramienta)
@@ -1631,7 +1812,7 @@ class VentanaInvestigador(QMainWindow):
         
         self.btn_herramienta_eliminar = SafeToolTipButton()
         self.btn_herramienta_eliminar.setFixedSize(35, 35)
-        self.btn_herramienta_eliminar.setIcon(QIcon("assets/borrar.png"))
+        self.btn_herramienta_eliminar.setIcon(QIcon("assets/buttons/borrar.png"))
         self.btn_herramienta_eliminar.setIconSize(QSize(20, 20))
         self.btn_herramienta_eliminar.setCustomToolTip("Eliminar seleccion")
         self.btn_herramienta_eliminar.setStyleSheet(estilo_herramienta)
@@ -1666,7 +1847,7 @@ class VentanaInvestigador(QMainWindow):
         
         self.btn_bloquear_zoom = SafeToolTipButton()
         self.btn_bloquear_zoom.setFixedSize(35, 35)
-        self.btn_bloquear_zoom.setIcon(QIcon("assets/desbloqueado.png"))
+        self.btn_bloquear_zoom.setIcon(QIcon("assets/buttons/desbloqueado.png"))
         self.btn_bloquear_zoom.setIconSize(QSize(20, 20))
         self.btn_bloquear_zoom.setCustomToolTip("Bloquear zoom")
         self.btn_bloquear_zoom.setStyleSheet(estilo_herramienta)
@@ -1677,7 +1858,7 @@ class VentanaInvestigador(QMainWindow):
         controles_superiores.addWidget(lbl_minus); controles_superiores.addWidget(self.sld_nivel_zoom); controles_superiores.addWidget(lbl_plus); controles_superiores.addSpacing(5); controles_superiores.addWidget(self.btn_zoom_reset); controles_superiores.addWidget(self.btn_bloquear_zoom)
         
         self.visor_imagen = InteractiveImageViewer(); self.visor_imagen.setText("Sube una imagen .tiff para empezar el análisis..."); self.visor_imagen.setStyleSheet("border: 2px dashed #aaa; background-color: #f0f0f0; font-size: 18px; color: #666;")
-        self.visor_imagen.conteo_actualizado.connect(self.actualizar_etiqueta_conteo); self.visor_imagen.nueva_caja_dibujada.connect(self.agregar_microglia_manual); self.visor_imagen.nivel_zoom_cambiado.connect(self.sld_nivel_zoom.setValue)
+        self.visor_imagen.conteo_actualizado.connect(self.conteo_modificado_auto_save); self.visor_imagen.nueva_caja_dibujada.connect(self.agregar_microglia_manual); self.visor_imagen.nivel_zoom_cambiado.connect(self.sld_nivel_zoom.setValue)
         self.sld_nivel_zoom.valueChanged.connect(self.visor_imagen.set_zoom); self.btn_zoom_reset.clicked.connect(self.reset_zoom)
         
         area_imagen.addLayout(controles_superiores); area_imagen.addWidget(self.visor_imagen, stretch=1)
@@ -1706,13 +1887,17 @@ class VentanaInvestigador(QMainWindow):
 
     def toggle_bloqueo_zoom(self, checked):
         if checked:
-            self.btn_bloquear_zoom.setIcon(QIcon("assets/bloqueado.png"))
+            self.btn_bloquear_zoom.setIcon(QIcon("assets/buttons/bloqueado.png"))
             self.btn_bloquear_zoom.setCustomToolTip("Desbloquear zoom")
         else:
-            self.btn_bloquear_zoom.setIcon(QIcon("assets/desbloqueado.png"))
+            self.btn_bloquear_zoom.setIcon(QIcon("assets/buttons/desbloqueado.png"))
             self.btn_bloquear_zoom.setCustomToolTip("Bloquear zoom")
             
         self.sld_nivel_zoom.setEnabled(not checked); self.btn_zoom_reset.setEnabled(not checked); self.visor_imagen.lock_zoom(checked)
+
+    def conteo_modificado_auto_save(self, conteo):
+        self.actualizar_etiqueta_conteo(conteo)
+        self.save_current_progress(mostrar_notif=False)
 
     def actualizar_estado_flujo(self, paso):
         self.paso_actual = paso
@@ -1742,16 +1927,21 @@ class VentanaInvestigador(QMainWindow):
             self.btn_cargar.setEnabled(False); self.btn_conteo.setEnabled(False); self.btn_filtrar.setEnabled(False); self.btn_ramas.setEnabled(False)
             self.btn_corregir_filtrado.show()
             self.btn_herramienta_caja.hide(); self.btn_herramienta_eliminar.hide()
-            
-            # Report buttons logic
-            if not self.metricas_extraidas_ciclo_actual:
-                self.btn_obtener_metricas.setEnabled(True)
-            else:
-                self.btn_agregar_imagen_reporte.setEnabled(True)
-                self.btn_descargar_reporte.setEnabled(True)
-                self.btn_finalizar_reporte.setEnabled(True)
+            self.btn_obtener_metricas.setEnabled(True)
+        elif paso == 5:
+            self.btn_cargar.setEnabled(False); self.btn_conteo.setEnabled(False); self.btn_filtrar.setEnabled(False); self.btn_ramas.setEnabled(False)
+            self.btn_corregir_filtrado.show()
+            self.btn_herramienta_caja.hide(); self.btn_herramienta_eliminar.hide()
+            self.btn_obtener_metricas.setEnabled(False)
+            self.btn_agregar_imagen_reporte.setEnabled(True)
+            self.btn_descargar_reporte.setEnabled(True)
+            self.btn_finalizar_reporte.setEnabled(True)
         
-        if paso != 4: self.btn_corregir_filtrado.hide()
+        if paso not in [4, 5]: self.btn_corregir_filtrado.hide()
+        
+        # Guardado automático de progreso al cambiar de fase
+        if paso > 0:
+            self.save_current_progress(mostrar_notif=False)
 
     def save_current_progress(self, mostrar_notif=True):
         if not self.ruta_imagen_actual: return
@@ -1834,7 +2024,7 @@ class VentanaInvestigador(QMainWindow):
             id_an, ruta, campo, tiempo, paso, datos_json = res
             
             # 2. Decidir si retomar o empezar nueva imagen
-            if paso < 4:
+            if paso < 5:
                 # RETOMAR ANÁLISIS INCOMPLETO
                 self.ruta_imagen_actual = ruta
                 self.metadatos_imagen = {"campo": campo, "tiempo": tiempo}
@@ -1860,7 +2050,29 @@ class VentanaInvestigador(QMainWindow):
                 
                 self.pixmaps_globales = {"Original": pixmap, "Filtrada": None, "Esqueleto": None}
                 self.visor_imagen.set_image_and_boxes(pixmap, boxes)
-                self.combo_vista.setEnabled(True); self.combo_vista.setCurrentText("Original")
+                
+                # Reconstruir la lista del combo_vista y las imágenes globales según el paso alcanzado
+                self.combo_vista.blockSignals(True)
+                # Limpiar opciones extra del combo (mantener solo Original)
+                while self.combo_vista.count() > 1:
+                    self.combo_vista.removeItem(1)
+                
+                if paso >= 3:
+                    pix_f = self.construir_imagen_global("filtradas")
+                    if pix_f:
+                        self.pixmaps_globales["Filtrada"] = pix_f
+                        self.combo_vista.addItem("Filtrada")
+                
+                if paso >= 4:
+                    pix_e = self.construir_imagen_global("esqueletos")
+                    if pix_e:
+                        self.pixmaps_globales["Esqueleto"] = pix_e
+                        self.combo_vista.addItem("Esqueleto")
+                
+                self.combo_vista.setCurrentText("Original")
+                self.combo_vista.blockSignals(False)
+                self.combo_vista.setEnabled(paso >= 2)
+                
                 self.actualizar_estado_flujo(paso)
                 self.mostrar_notificacion("Éxito", f"Continuando análisis: {os.path.basename(ruta)}", "info")
             else:
@@ -1963,7 +2175,7 @@ class VentanaInvestigador(QMainWindow):
                 crops_folder, count = resultado; self.visor_imagen.set_image_and_boxes(self.pixmaps_globales["Original"], [])
 
 
-            dialogo.close(); QApplication.restoreOverrideCursor(); self.actualizar_estado_flujo(2); self.mostrar_notificacion("1. Conteo completado", f"Se detectaron {count} posibles microglías.\n\nUsa las herramientas superiores si necesitas agregar o eliminar selecciones.", "info")
+            dialogo.close(); QApplication.restoreOverrideCursor(); self.actualizar_estado_flujo(2); self.mostrar_notificacion("2. Detección", f"Se detectaron {count} posibles microglías.\n\nUsa las herramientas superiores si necesitas agregar o eliminar selecciones.", "info")
         except Exception as e: dialogo.close(); QApplication.restoreOverrideCursor(); self.mostrar_notificacion("Error", str(e), "error")
 
     def agregar_microglia_manual(self, x, y, w, h):
@@ -1981,6 +2193,7 @@ class VentanaInvestigador(QMainWindow):
         nueva_caja = {"x": x, "y": y, "w": w, "h": h, "crop_path": ruta_guardado, "offsets": {"clahe": 0, "gauss": 0, "otsu": 0}, "removal_areas": []}
 
         self.visor_imagen.boxes.append(nueva_caja); self.visor_imagen.draw_current_state(); self.actualizar_etiqueta_conteo(len(self.visor_imagen.boxes))
+        self.save_current_progress(mostrar_notif=False)
 
 
     def construir_imagen_global(self, carpeta_origen):
@@ -2031,6 +2244,14 @@ class VentanaInvestigador(QMainWindow):
         
         self.frame_filtros.show()
         for btn in [self.btn_cargar, self.btn_conteo, self.btn_filtrar, self.btn_ramas, self.btn_obtener_metricas, self.btn_agregar_imagen_reporte, self.btn_descargar_reporte, self.btn_finalizar_reporte]: btn.setEnabled(False)
+        
+        # Ocultar herramientas manuales al iniciar el filtrado
+        self.btn_herramienta_caja.setChecked(False)
+        self.btn_herramienta_eliminar.setChecked(False)
+        self.btn_herramienta_caja.hide()
+        self.btn_herramienta_eliminar.hide()
+        self.visor_imagen.current_tool = "pointer"
+        
         self.combo_vista.setEnabled(True)
         items_combo = [self.combo_vista.itemText(i) for i in range(self.combo_vista.count())]
         if "Previsualización" not in items_combo:
@@ -2124,7 +2345,7 @@ class VentanaInvestigador(QMainWindow):
                 
                 self.frame_filtros.hide()
                 self.actualizar_estado_flujo(3)
-                self.mostrar_notificacion("2. Filtrado", f"Se aplicaron los filtros a {count} microglías.", "info")
+                self.mostrar_notificacion("3. Filtrado", f"Se aplicaron los filtros a {count} microglías.", "info")
             else: self.mostrar_notificacion("Error", "No se guardó ninguna imagen.", "error")
         except Exception as error: dialogo.close(); QApplication.restoreOverrideCursor(); self.mostrar_notificacion("Error", f"Falló el guardado: {str(error)}", "error")
 
@@ -2156,7 +2377,7 @@ class VentanaInvestigador(QMainWindow):
                     if img_raw is not None: _, bin_img = cv2.threshold(img_raw, 127, 255, cv2.THRESH_BINARY); img_bool = bin_img > 0; skeleton = skeletonize(img_bool); skeleton_img = (skeleton * 255).astype(np.uint8); out_path = os.path.join(esqueletos_dir, nombre); is_success, im_buf_arr = cv2.imencode(".png", skeleton_img)
                     if is_success: im_buf_arr.tofile(out_path); count += 1
             dialogo.close(); QApplication.restoreOverrideCursor()
-            if count > 0: pixmap_esqueleto = self.construir_imagen_global("esqueletos"); self.pixmaps_globales["Esqueleto"] = pixmap_esqueleto; self.actualizar_estado_flujo(4); self.combo_vista.addItem("Esqueleto"); self.combo_vista.setCurrentText("Esqueleto"); self.mostrar_notificacion("3. Ramas Generadas", f"Se generaron {count} esqueletos topológicos.\n\nYa puedes avanzar a los Reportes para cargar una imagen nueva o exportar el reporte.", "info")
+            if count > 0: pixmap_esqueleto = self.construir_imagen_global("esqueletos"); self.pixmaps_globales["Esqueleto"] = pixmap_esqueleto; self.actualizar_estado_flujo(4); self.combo_vista.addItem("Esqueleto"); self.combo_vista.setCurrentText("Esqueleto"); self.mostrar_notificacion("4. Esqueleto (Ramas)", f"Se generaron {count} esqueletos topológicos.\n\nYa puedes avanzar a obtener las métricas finales.", "info")
             else: self.mostrar_notificacion("Advertencia", "No se generaron esqueletos. Verifica la carpeta de filtrado.", "warning")
         except Exception as error: dialogo.close(); QApplication.restoreOverrideCursor(); self.mostrar_notificacion("Error de Procesamiento", f"Falló el cálculo:\n{str(error)}", "error")
 
@@ -2245,9 +2466,8 @@ class VentanaInvestigador(QMainWindow):
         })
         
         self.metricas_extraidas_ciclo_actual = True
-        self.actualizar_estado_flujo(4)
-        self.save_current_progress(mostrar_notif=False)
-        self.mostrar_notificacion("Éxito", "Métricas extraídas y progreso guardado correctamente.", "info")
+        self.actualizar_estado_flujo(5)
+        self.mostrar_notificacion("5. Métricas", "Métricas extraídas y análisis completado exitosamente.", "info")
 
     def agregar_imagen_reporte(self):
         self.visor_imagen.set_image_and_boxes(None, [])
@@ -2266,6 +2486,11 @@ class VentanaInvestigador(QMainWindow):
         if not self.metricas_reporte:
             self.mostrar_notificacion("Advertencia", "No hay métricas acumuladas para descargar.", "warning")
             return
+            
+        # Depuración: imprimir estructura de datos
+        print(f"DEBUG: metricas_reporte type: {type(self.metricas_reporte)}")
+        if isinstance(self.metricas_reporte, list) and len(self.metricas_reporte) > 0:
+            print(f"DEBUG: First item type: {type(self.metricas_reporte[0])}")
             
         from datetime import datetime; from PyQt6.QtWidgets import QFileDialog; from pathlib import Path
         fecha_str = datetime.now().strftime("%Y%m%d_%H%M"); default_name = f"Reporte_{fecha_str}.xlsx"
@@ -2308,7 +2533,9 @@ class VentanaInvestigador(QMainWindow):
                         for c in range(1, len(columnas_labels) + 1):
                             ws.cell(row=row_idx, column=c).fill = yellow_fill
                         
-                        cell_title = ws.cell(row=row_idx, column=1, value=img_data["campo"])
+                        campo_val = img_data.get("campo", "")
+                        if isinstance(campo_val, dict): campo_val = str(campo_val)
+                        cell_title = ws.cell(row=row_idx, column=1, value=str(campo_val))
                         cell_title.font = bold_font; cell_title.alignment = center_alignment; row_idx += 1
                         
                         for col_idx, label in enumerate(columnas_labels, start=1):
@@ -2319,7 +2546,9 @@ class VentanaInvestigador(QMainWindow):
                         for i, met in enumerate(img_data["metricas"], start=1):
                             cell_num = ws.cell(row=row_idx, column=1, value=i); cell_num.alignment = center_alignment
                             for col_idx, key in enumerate(metric_keys, start=2):
-                                cell_m = ws.cell(row=row_idx, column=col_idx, value=met.get(key, "")); cell_m.alignment = center_alignment
+                                val = met.get(key, "")
+                                if isinstance(val, (dict, list)): val = str(val)
+                                cell_m = ws.cell(row=row_idx, column=col_idx, value=val); cell_m.alignment = center_alignment
                             if i % 2 != 0:
                                 for c in range(1, len(columnas_labels) + 1):
                                     ws.cell(row=row_idx, column=c).fill = light_gray_fill
@@ -2361,9 +2590,13 @@ class VentanaInvestigador(QMainWindow):
                                 else: pdf.set_fill_color(255, 255, 255)
                                 
                                 pdf.cell(pdf_widths[0], 7, str(idx), 1, 0, "C", True)
-                                values = [str(met.get(k, "")) for k in metric_keys]
+                                values = []
+                                for k in metric_keys:
+                                    v = met.get(k, "")
+                                    values.append(str(v) if not isinstance(v, (int, float)) else v)
+                                    
                                 for i_v, val in enumerate(values):
-                                    pdf.cell(pdf_widths[i_v+1], 7, val, 1, 0, "C", True)
+                                    pdf.cell(pdf_widths[i_v+1], 7, str(val), 1, 0, "C", True)
                                 pdf.ln()
                             pdf.ln(5)
                     pdf.output(pdf_path)
