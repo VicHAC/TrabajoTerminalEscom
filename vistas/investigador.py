@@ -1477,6 +1477,8 @@ class DialogoConfirmacion(QDialog):
         
         from vistas.utilidades import set_app_icon
         set_app_icon(self)
+        if parent:
+            parent.installEventFilter(self)
 
         layout = QVBoxLayout(self)
         frame = QFrame(self)
@@ -1518,11 +1520,22 @@ class DialogoConfirmacion(QDialog):
         layout.addWidget(frame)
         self.setLayout(layout)
 
-    def showEvent(self, event):
-        super().showEvent(event)
+    def eventFilter(self, obj, event):
+        from PyQt6.QtCore import QEvent
+        if obj == self.parent() and (event.type() == QEvent.Type.Resize or event.type() == QEvent.Type.Move):
+            self.centrar_en_padre()
+        return super().eventFilter(obj, event)
+
+    def centrar_en_padre(self):
         if self.parent():
             p_geom = self.parent().geometry()
             self.move(p_geom.x() + (p_geom.width() - self.width()) // 2, p_geom.y() + (p_geom.height() - self.height()) // 2)
+
+    def showEvent(self, event):
+        from PyQt6.QtWidgets import QApplication
+        super().showEvent(event)
+        if self.parent():
+            self.centrar_en_padre()
         else:
             screen = QApplication.primaryScreen().geometry()
             self.move((screen.width() - self.width()) // 2, (screen.height() - self.height()) // 2)
@@ -1846,7 +1859,7 @@ class DialogoHistorial(QDialog):
         self.btn_borrar_icon.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_borrar_icon.setStyleSheet("""
             QPushButton { background-color: transparent; border: none; }
-            QPushButton:hover { background-color: #f0f0f0; border-radius: 17px; }
+            QPushButton:hover { background-color: #ddf4ff; border-radius: 17px; }
             QPushButton:disabled { opacity: 0.3; }
         """)
         self.btn_borrar_icon.setEnabled(False)
@@ -1890,18 +1903,17 @@ class DialogoHistorial(QDialog):
         self.tree.setIndentation(20)
         self.tree.setAnimated(True)
         from PyQt6.QtWidgets import QAbstractItemView
-        self.tree.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
+        self.tree.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self.tree.setStyleSheet("""
             QTreeWidget { border: 1px solid #d0d7de; border-radius: 8px; background-color: #ffffff; alternate-background-color: #f6f8fa; font-size: 11px; outline: none; }
             QTreeWidget::item { height: 32px; border-bottom: 1px solid #f0f0f0; color: #24292f; }
-            QTreeWidget::item:selected { background-color: transparent; color: #24292f; }
-            QTreeWidget::indicator { width: 18px; height: 18px; }
+            QTreeWidget::item:selected { background-color: #0969da; color: #ffffff; }
             QHeaderView::section { background-color: #f6f8fa; padding: 6px; font-weight: bold; border: none; border-bottom: 2px solid #d0d7de; color: #57606a; font-size: 11px; }
         """)
         flayout.addWidget(self.tree)
         
         self.cargar_datos()
-        self.tree.itemChanged.connect(self.actualizar_estado_boton_borrar)
+        self.tree.itemSelectionChanged.connect(self.actualizar_estado_boton_borrar)
         
         btn_layout = QHBoxLayout()
         
@@ -1909,9 +1921,23 @@ class DialogoHistorial(QDialog):
         self.btn_cargar.setEnabled(False)
         self.btn_cargar.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_cargar.setStyleSheet("""
-            QPushButton { background-color: #e1e4e8; color: #959da5; border-radius: 6px; font-weight: bold; padding: 10px 20px; border: none; }
-            QPushButton:enabled { background-color: #2da44e; color: white; }
-            QPushButton:enabled:hover { background-color: #2c974b; }
+            QPushButton { 
+                background-color: transparent; 
+                border: 2px solid #2da44e; 
+                color: #2da44e; 
+                border-radius: 8px; 
+                font-weight: bold; 
+                padding: 10px 20px; 
+            }
+            QPushButton:hover { 
+                background-color: #2da44e; 
+                color: white; 
+            }
+            QPushButton:disabled { 
+                background-color: transparent; 
+                border: 2px solid #d0d7de; 
+                color: #8c959f; 
+            }
         """)
         self.btn_cargar.clicked.connect(self.aceptar_seleccion)
         
@@ -1955,31 +1981,10 @@ class DialogoHistorial(QDialog):
             conn.close()
 
     def actualizar_estado_boton_borrar(self):
-        num_seleccionados = 0
-        for i in range(self.tree.topLevelItemCount()):
-            item = self.tree.topLevelItem(i)
-            if item.checkState(0) == Qt.CheckState.Checked:
-                num_seleccionados += 1
-                # Resaltar la fila en azul
-                for col in range(self.tree.columnCount()):
-                    item.setBackground(col, QColor("#0969da"))
-                    item.setForeground(col, QColor("#ffffff"))
-                
-                # Nombre del reporte subrayado y negritas
-                f = item.font(0)
-                f.setUnderline(True); f.setBold(True)
-                item.setFont(0, f)
-            else:
-                # Restaurar colores originales
-                for col in range(self.tree.columnCount()):
-                    item.setBackground(col, Qt.GlobalColor.transparent)
-                    item.setForeground(col, QColor("#24292f"))
-                
-                # Restaurar fuente original
-                f = item.font(0)
-                f.setUnderline(False); f.setBold(False)
-                item.setFont(0, f)
+        selected_items = self.tree.selectedItems()
+        selected_reports = [item for item in selected_items if item.data(0, Qt.ItemDataRole.UserRole) and item.data(0, Qt.ItemDataRole.UserRole).get("type") == "reporte"]
         
+        num_seleccionados = len(selected_reports)
         self.btn_borrar_icon.setEnabled(num_seleccionados > 0)
         # Habilitar cargar SOLO si hay exactamente uno seleccionado
         self.btn_cargar.setEnabled(num_seleccionados == 1)
@@ -2000,8 +2005,6 @@ class DialogoHistorial(QDialog):
                 id_rep, nombre, fecha, estado = rep
                 rep_item = QTreeWidgetItem(self.tree, [nombre, str(fecha), estado, ""])
                 rep_item.setData(0, Qt.ItemDataRole.UserRole, {"type": "reporte", "id": id_rep})
-                # Habilitar casillas para borrado múltiple
-                rep_item.setCheckState(0, Qt.CheckState.Unchecked)
                 
                 cur.execute("""
                     SELECT A.id_analisis, I.ruta_archivo, A.fecha_analisis, A.paso_actual, A.cantidad_microglias
@@ -2047,32 +2050,25 @@ class DialogoHistorial(QDialog):
         finally: conn.close()
 
     def aceptar_seleccion(self):
-        # Buscar el primer reporte marcado con casilla
-        item_seleccionado = None
-        for i in range(self.tree.topLevelItemCount()):
-            item = self.tree.topLevelItem(i)
-            if item.checkState(0) == Qt.CheckState.Checked:
-                item_seleccionado = item
-                break
+        selected_items = self.tree.selectedItems()
+        selected_reports = [item for item in selected_items if item.data(0, Qt.ItemDataRole.UserRole) and item.data(0, Qt.ItemDataRole.UserRole).get("type") == "reporte"]
         
-        if not item_seleccionado: return
+        if not selected_reports: return
         
+        item_seleccionado = selected_reports[0]
         data = item_seleccionado.data(0, Qt.ItemDataRole.UserRole)
         self.seleccion = {"type": "reporte", "id_reporte": data["id"], "estado": item_seleccionado.text(2)}
         self.accept()
 
 
     def borrar_reportes_seleccionados(self):
-        # Recopilar todos los reportes marcados
-        items_a_borrar = []
-        for i in range(self.tree.topLevelItemCount()):
-            item = self.tree.topLevelItem(i)
-            if item.checkState(0) == Qt.CheckState.Checked:
-                items_a_borrar.append(item)
+        # Recopilar todos los reportes seleccionados
+        selected_items = self.tree.selectedItems()
+        items_a_borrar = [item for item in selected_items if item.data(0, Qt.ItemDataRole.UserRole) and item.data(0, Qt.ItemDataRole.UserRole).get("type") == "reporte"]
         
         if not items_a_borrar:
             from vistas.utilidades import DialogoNotificacion
-            DialogoNotificacion("Atención", "Selecciona al menos un reporte con la casilla para borrar.", "warning", self).exec()
+            DialogoNotificacion("Atención", "Selecciona al menos un reporte de la lista para borrar.", "warning", self).exec()
             return
             
         from vistas.utilidades import DialogoConfirmacion
@@ -2139,7 +2135,7 @@ class VentanaInvestigador(QMainWindow):
         self.btn_historial.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_historial.setStyleSheet("""
             QPushButton { background-color: transparent; border: none; }
-            QPushButton:hover { background-color: #f0f0f0; border-radius: 17px; }
+            QPushButton:hover { background-color: #ddf4ff; border-radius: 17px; }
         """)
         
         # Información del usuario al lado derecho
@@ -2259,7 +2255,7 @@ class VentanaInvestigador(QMainWindow):
         self.btn_ant_global.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_ant_global.setStyleSheet("""
             QPushButton { background-color: transparent; border: none; }
-            QPushButton:hover { background-color: #f0f0f0; border-radius: 11px; }
+            QPushButton:hover { background-color: #ddf4ff; border-radius: 11px; }
             QPushButton:disabled { opacity: 0.3; }
         """)
         self.btn_ant_global.clicked.connect(self.anterior_vista_global)
@@ -2272,7 +2268,7 @@ class VentanaInvestigador(QMainWindow):
         self.btn_sig_global.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_sig_global.setStyleSheet("""
             QPushButton { background-color: transparent; border: none; }
-            QPushButton:hover { background-color: #f0f0f0; border-radius: 11px; }
+            QPushButton:hover { background-color: #ddf4ff; border-radius: 11px; }
             QPushButton:disabled { opacity: 0.3; }
         """)
         self.btn_sig_global.clicked.connect(self.siguiente_vista_global)
@@ -2285,7 +2281,7 @@ class VentanaInvestigador(QMainWindow):
         
         self.lbl_info_conteo = QLabel("Microglías detectadas: 0"); self.lbl_info_conteo.setStyleSheet("font-size: 11px; font-weight: bold; color: #3a61a0; background-color: white; border: 1px solid #d0d7de; border-radius: 6px; padding: 4px 10px;"); self.lbl_info_conteo.setAlignment(Qt.AlignmentFlag.AlignCenter); controles_superiores.addWidget(self.lbl_info_conteo); controles_superiores.addSpacing(15)
         
-        estilo_herramienta = "QPushButton { background-color: transparent; border: none; padding: 2px; } QPushButton:hover { background-color: #e0e0e0; border-radius: 17px; } QPushButton:checked { background-color: #cce5ff; border: 1px solid #007bff; border-radius: 17px; } QPushButton:disabled { opacity: 0.5; }"
+        estilo_herramienta = "QPushButton { background-color: transparent; border: none; padding: 2px; } QPushButton:hover { background-color: #ddf4ff; border-radius: 17px; } QPushButton:checked { background-color: #cce5ff; border: 1px solid #007bff; border-radius: 17px; } QPushButton:disabled { opacity: 0.5; }"
         
         self.btn_herramienta_caja = SafeToolTipButton()
         self.btn_herramienta_caja.setFixedSize(35, 35)
@@ -2327,7 +2323,7 @@ class VentanaInvestigador(QMainWindow):
         self.btn_zoom_reset.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_zoom_reset.setStyleSheet("""
             QPushButton { background-color: transparent; border: none; font-size: 18px; font-weight: bold; color: #3a61a0; padding: 0; text-align: center; }
-            QPushButton:hover { background-color: #f0f0f0; border-radius: 17px; }
+            QPushButton:hover { background-color: #ddf4ff; border-radius: 17px; }
             QPushButton:disabled { color: #aaaaaa; }
         """)
         self.btn_zoom_reset.setEnabled(False)

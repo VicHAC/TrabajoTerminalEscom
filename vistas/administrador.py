@@ -5,7 +5,8 @@ from PyQt6.QtWidgets import (QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
                              QPushButton, QLabel, QTableWidget, QTableWidgetItem, 
                              QHeaderView, QFrame, QDialog, QLineEdit, QComboBox,
                              QStackedWidget)
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QSize
+from PyQt6.QtGui import QIcon
 
 # ==========================================
 # POP-UP: CREAR USUARIO
@@ -27,9 +28,32 @@ class DialogoCrearUsuario(QDialog):
         self.input_password.setEchoMode(QLineEdit.EchoMode.Password)
         self.combo_rol = QComboBox()
         self.combo_rol.addItems(["Investigador", "Administrador"])
+        self.combo_rol.setStyleSheet("""
+            QComboBox {
+                border: 1px solid #d0d7de;
+                border-radius: 6px;
+                padding: 6px 10px;
+                background-color: #ffffff;
+                color: #24292f;
+            }
+        """)
         
         btn_guardar = QPushButton("Registrar")
-        btn_guardar.setStyleSheet("background-color: #2da44e; color: white; border: 1px solid #1a7f37;")
+        btn_guardar.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_guardar.setStyleSheet("""
+            QPushButton {
+                background-color: transparent; 
+                border: 2px solid #2da44e; 
+                color: #2da44e; 
+                font-weight: bold; 
+                border-radius: 8px; 
+                padding: 10px; 
+            }
+            QPushButton:hover {
+                background-color: #2da44e;
+                color: white;
+            }
+        """)
         btn_guardar.clicked.connect(self.guardar_en_bd)
         
         layout.addWidget(QLabel("Datos del nuevo usuario:"))
@@ -92,9 +116,32 @@ class DialogoEditarUsuario(QDialog):
         self.combo_rol = QComboBox()
         self.combo_rol.addItems(["Investigador", "Administrador"])
         self.combo_rol.setCurrentText(rol_actual) 
+        self.combo_rol.setStyleSheet("""
+            QComboBox {
+                border: 1px solid #d0d7de;
+                border-radius: 6px;
+                padding: 6px 10px;
+                background-color: #ffffff;
+                color: #24292f;
+            }
+        """)
         
         btn_guardar = QPushButton("Actualizar")
-        btn_guardar.setStyleSheet("background-color: #0969da; color: white; border: 1px solid #0550ae;")
+        btn_guardar.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_guardar.setStyleSheet("""
+            QPushButton {
+                background-color: transparent; 
+                border: 2px solid #0969da; 
+                color: #0969da; 
+                font-weight: bold; 
+                border-radius: 8px; 
+                padding: 10px; 
+            }
+            QPushButton:hover {
+                background-color: #0969da;
+                color: white;
+            }
+        """)
         btn_guardar.clicked.connect(self.actualizar_en_bd)
         
         layout.addWidget(QLabel("Modificar datos:"))
@@ -163,14 +210,30 @@ class VentanaAdministrador(QMainWindow):
         menu_lateral = QVBoxLayout()
         menu_lateral.setAlignment(Qt.AlignmentFlag.AlignTop)
         
-        label_bienvenida = QLabel("Administración")
-        label_bienvenida.setStyleSheet("font-weight: bold; font-size: 16px; color: #0969da; margin-bottom: 20px; padding-left: 10px;")
+        label_bienvenida = QLabel("Administrador(a)")
+        label_bienvenida.setStyleSheet("font-weight: bold; font-size: 16px; color: #0969da; margin-bottom: 2px; padding-left: 10px;")
+        
+        # Obtener nombre del administrador logueado
+        nombre_admin = "Administrador"
+        try:
+            import sqlite3
+            conexion = sqlite3.connect("bd/database.db")
+            cursor = conexion.cursor()
+            cursor.execute("SELECT nombre_usuario FROM Usuario WHERE id_usuario = ?", (self.id_usuario,))
+            res = cursor.fetchone()
+            if res:
+                nombre_admin = res[0]
+            conexion.close()
+        except Exception as e:
+            print(f"Error al obtener nombre de admin: {e}")
+            
+        label_usuario_logueado = QLabel(nombre_admin)
+        label_usuario_logueado.setStyleSheet("font-size: 11px; color: #57606a; margin-bottom: 20px; padding-left: 10px;")
+        
         menu_lateral.addWidget(label_bienvenida)
+        menu_lateral.addWidget(label_usuario_logueado)
 
         self.btn_usuarios = QPushButton("Ver Usuarios")
-        self.btn_registrar = QPushButton("Registrar Usuario")
-        self.btn_editar = QPushButton("Editar Usuario")
-        self.btn_eliminar = QPushButton("Eliminar Usuario")
         self.btn_reportes = QPushButton("Gestionar Reportes")
 
         estilo_btn_menu = """
@@ -188,7 +251,7 @@ class VentanaAdministrador(QMainWindow):
                 border-radius: 6px;
             }
         """
-        for btn in [self.btn_usuarios, self.btn_registrar, self.btn_editar, self.btn_eliminar, self.btn_reportes]:
+        for btn in [self.btn_usuarios, self.btn_reportes]:
             btn.setStyleSheet(estilo_btn_menu)
             menu_lateral.addWidget(btn)
 
@@ -223,8 +286,58 @@ class VentanaAdministrador(QMainWindow):
         # Vista de Usuarios 
         pagina_usuarios = QWidget()
         layout_usuarios = QVBoxLayout(pagina_usuarios)
+        
+        # Cabecera de usuarios (Título y Botones de añadir, editar y borrar)
+        header_usuarios = QHBoxLayout()
+        header_usuarios.setContentsMargins(0, 0, 0, 10)
+        
         titulo_usuarios = QLabel("Usuarios Registrados")
-        titulo_usuarios.setStyleSheet("font-size: 20px; font-weight: bold; margin-bottom: 10px;")
+        titulo_usuarios.setStyleSheet("font-size: 15px; font-weight: bold; color: #3a61a0;")
+        
+        self.btn_registrar_usuario = QPushButton()
+        self.btn_registrar_usuario.setIcon(QIcon("assets/buttons/añadir.png"))
+        self.btn_registrar_usuario.setIconSize(QSize(22, 22))
+        self.btn_registrar_usuario.setFixedSize(35, 35)
+        self.btn_registrar_usuario.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_registrar_usuario.setStyleSheet("""
+            QPushButton { background-color: transparent; border: none; }
+            QPushButton:hover { background-color: #ddf4ff; border-radius: 17px; }
+            QPushButton:disabled { opacity: 0.3; }
+        """)
+        self.btn_registrar_usuario.setEnabled(True)
+        self.btn_registrar_usuario.setToolTip("Registrar nuevo usuario")
+        
+        self.btn_editar_usuario = QPushButton()
+        self.btn_editar_usuario.setIcon(QIcon("assets/buttons/editar.png"))
+        self.btn_editar_usuario.setIconSize(QSize(22, 22))
+        self.btn_editar_usuario.setFixedSize(35, 35)
+        self.btn_editar_usuario.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_editar_usuario.setStyleSheet("""
+            QPushButton { background-color: transparent; border: none; }
+            QPushButton:hover { background-color: #ddf4ff; border-radius: 17px; }
+            QPushButton:disabled { opacity: 0.3; }
+        """)
+        self.btn_editar_usuario.setEnabled(False)
+        self.btn_editar_usuario.setToolTip("Editar usuario")
+        
+        self.btn_eliminar_usuario = QPushButton()
+        self.btn_eliminar_usuario.setIcon(QIcon("assets/buttons/borrar.png"))
+        self.btn_eliminar_usuario.setIconSize(QSize(22, 22))
+        self.btn_eliminar_usuario.setFixedSize(35, 35)
+        self.btn_eliminar_usuario.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_eliminar_usuario.setStyleSheet("""
+            QPushButton { background-color: transparent; border: none; }
+            QPushButton:hover { background-color: #ddf4ff; border-radius: 17px; }
+            QPushButton:disabled { opacity: 0.3; }
+        """)
+        self.btn_eliminar_usuario.setEnabled(False)
+        self.btn_eliminar_usuario.setToolTip("Eliminar usuario(s)")
+        
+        header_usuarios.addWidget(titulo_usuarios)
+        header_usuarios.addStretch()
+        header_usuarios.addWidget(self.btn_registrar_usuario)
+        header_usuarios.addWidget(self.btn_editar_usuario)
+        header_usuarios.addWidget(self.btn_eliminar_usuario)
         
         self.tabla_usuarios = QTableWidget()
         self.tabla_usuarios.setColumnCount(4)
@@ -232,29 +345,49 @@ class VentanaAdministrador(QMainWindow):
         self.tabla_usuarios.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.tabla_usuarios.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.tabla_usuarios.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.tabla_usuarios.setSelectionMode(QTableWidget.SelectionMode.ExtendedSelection)
         
-        layout_usuarios.addWidget(titulo_usuarios)
+        layout_usuarios.addLayout(header_usuarios)
         layout_usuarios.addWidget(self.tabla_usuarios)
 
         # Vista de Reportes 
         pagina_reportes = QWidget()
         layout_reportes = QVBoxLayout(pagina_reportes)
+        
+        # Cabecera de reportes (Título y Botón de borrar)
+        header_reportes = QHBoxLayout()
+        header_reportes.setContentsMargins(0, 0, 0, 10)
+        
         titulo_reportes = QLabel("Reportes del Sistema")
-        titulo_reportes.setStyleSheet("font-size: 20px; font-weight: bold; margin-bottom: 10px;")
+        titulo_reportes.setStyleSheet("font-size: 15px; font-weight: bold; color: #3a61a0;")
+        
+        self.btn_eliminar_reporte_fisico = QPushButton()
+        self.btn_eliminar_reporte_fisico.setIcon(QIcon("assets/buttons/borrar.png"))
+        self.btn_eliminar_reporte_fisico.setIconSize(QSize(22, 22))
+        self.btn_eliminar_reporte_fisico.setFixedSize(35, 35)
+        self.btn_eliminar_reporte_fisico.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_eliminar_reporte_fisico.setStyleSheet("""
+            QPushButton { background-color: transparent; border: none; }
+            QPushButton:hover { background-color: #ddf4ff; border-radius: 17px; }
+            QPushButton:disabled { opacity: 0.3; }
+        """)
+        self.btn_eliminar_reporte_fisico.setEnabled(False)
+        self.btn_eliminar_reporte_fisico.setToolTip("Eliminar reporte(s)")
+        
+        header_reportes.addWidget(titulo_reportes)
+        header_reportes.addStretch()
+        header_reportes.addWidget(self.btn_eliminar_reporte_fisico)
         
         self.tabla_reportes = QTableWidget()
-        self.tabla_reportes.setColumnCount(4)
-        self.tabla_reportes.setHorizontalHeaderLabels(["ID Reporte", "ID Análisis", "Ruta Archivo", "Fecha Generación"])
+        self.tabla_reportes.setColumnCount(5)
+        self.tabla_reportes.setHorizontalHeaderLabels(["ID Reporte", "ID Análisis", "Ruta Archivo", "Fecha Generación", "Creado por"])
         self.tabla_reportes.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.tabla_reportes.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.tabla_reportes.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.tabla_reportes.setSelectionMode(QTableWidget.SelectionMode.ExtendedSelection)
         
-        self.btn_eliminar_reporte_fisico = QPushButton("Eliminar Reporte Seleccionado")
-        self.btn_eliminar_reporte_fisico.setStyleSheet("background-color: #cf222e; color: white; border: 1px solid #a40e26;")
-        
-        layout_reportes.addWidget(titulo_reportes)
+        layout_reportes.addLayout(header_reportes)
         layout_reportes.addWidget(self.tabla_reportes)
-        layout_reportes.addWidget(self.btn_eliminar_reporte_fisico)
 
         self.stack.addWidget(pagina_usuarios)
         self.stack.addWidget(pagina_reportes)
@@ -269,10 +402,12 @@ class VentanaAdministrador(QMainWindow):
         self.btn_cerrar_sesion.clicked.connect(self.cerrar_sesion)
         self.btn_usuarios.clicked.connect(self.mostrar_vista_usuarios)
         self.btn_reportes.clicked.connect(self.mostrar_vista_reportes)
-        self.btn_registrar.clicked.connect(self.abrir_registro_usuario)
-        self.btn_editar.clicked.connect(self.abrir_editar_usuario)
-        self.btn_eliminar.clicked.connect(self.eliminar_usuario)
+        self.btn_registrar_usuario.clicked.connect(self.abrir_registro_usuario)
+        self.btn_editar_usuario.clicked.connect(self.abrir_editar_usuario)
+        self.btn_eliminar_usuario.clicked.connect(self.eliminar_usuario)
         self.btn_eliminar_reporte_fisico.clicked.connect(self.eliminar_reporte)
+        self.tabla_usuarios.itemSelectionChanged.connect(self.actualizar_estado_botones_usuario)
+        self.tabla_reportes.itemSelectionChanged.connect(self.actualizar_estado_boton_borrar)
 
         self.cargar_usuarios_bd()
 
@@ -285,6 +420,7 @@ class VentanaAdministrador(QMainWindow):
         self.cargar_reportes_bd()
 
     def cargar_usuarios_bd(self):
+        self.tabla_usuarios.blockSignals(True)
         self.tabla_usuarios.setRowCount(0)
         try:
             conexion = sqlite3.connect("bd/database.db")
@@ -299,6 +435,29 @@ class VentanaAdministrador(QMainWindow):
                     self.tabla_usuarios.setItem(fila_idx, col_idx, QTableWidgetItem(str(dato)))
         except Exception as e:
             print(f"Error al cargar usuarios: {e}")
+        finally:
+            self.tabla_usuarios.blockSignals(False)
+            self.actualizar_estado_botones_usuario()
+
+    def actualizar_estado_botones_usuario(self):
+        filas_seleccionadas = self.tabla_usuarios.selectionModel().selectedRows()
+        num_seleccionados = len(filas_seleccionadas)
+        
+        # El de editar solo se activa si hay exactamente 1 seleccionado
+        self.btn_editar_usuario.setEnabled(num_seleccionados == 1)
+        
+        # El de borrar se activa con uno o más, siempre y cuando NO esté el usuario activo
+        if num_seleccionados == 0:
+            self.btn_eliminar_usuario.setEnabled(False)
+        else:
+            contiene_activo = False
+            for index in filas_seleccionadas:
+                row = index.row()
+                item_id = self.tabla_usuarios.item(row, 0)
+                if item_id and item_id.text() == str(self.id_usuario):
+                    contiene_activo = True
+                    break
+            self.btn_eliminar_usuario.setEnabled(not contiene_activo)
 
     def abrir_registro_usuario(self):
         self.stack.setCurrentIndex(0) 
@@ -308,16 +467,16 @@ class VentanaAdministrador(QMainWindow):
 
     def abrir_editar_usuario(self):
         self.stack.setCurrentIndex(0)
-        fila_seleccionada = self.tabla_usuarios.currentRow()
-        
-        if fila_seleccionada < 0:
+        filas_seleccionadas = self.tabla_usuarios.selectionModel().selectedRows()
+        if len(filas_seleccionadas) != 1:
             from vistas.utilidades import DialogoNotificacion
-            DialogoNotificacion("Atención", "Selecciona a una persona de la tabla primero.", "warning", self).exec()
+            DialogoNotificacion("Atención", "Selecciona exactamente a una persona de la tabla primero.", "warning", self).exec()
             return
             
-        id_usuario = self.tabla_usuarios.item(fila_seleccionada, 0).text()
-        nombre = self.tabla_usuarios.item(fila_seleccionada, 1).text()
-        rol = self.tabla_usuarios.item(fila_seleccionada, 2).text()
+        row = filas_seleccionadas[0].row()
+        id_usuario = self.tabla_usuarios.item(row, 0).text()
+        nombre = self.tabla_usuarios.item(row, 1).text()
+        rol = self.tabla_usuarios.item(row, 2).text()
         
         dialogo = DialogoEditarUsuario(id_usuario, nombre, rol, self)
         if dialogo.exec():
@@ -325,33 +484,48 @@ class VentanaAdministrador(QMainWindow):
 
     def eliminar_usuario(self):
         self.stack.setCurrentIndex(0)
-        fila_seleccionada = self.tabla_usuarios.currentRow()
+        filas_seleccionadas = self.tabla_usuarios.selectionModel().selectedRows()
         
-        if fila_seleccionada < 0:
+        if not filas_seleccionadas:
             from vistas.utilidades import DialogoNotificacion
-            DialogoNotificacion("Atención", "Selecciona a una persona de la tabla primero para darle cuello.", "warning", self).exec()
+            DialogoNotificacion("Atención", "Selecciona a una persona de la tabla primero.", "warning", self).exec()
             return
             
-        id_usuario_eliminar = self.tabla_usuarios.item(fila_seleccionada, 0).text()
-        nombre_usuario = self.tabla_usuarios.item(fila_seleccionada, 1).text()
-        
-        if str(self.id_usuario) == id_usuario_eliminar:
-            from vistas.utilidades import DialogoNotificacion
-            DialogoNotificacion("Error", "No te puedes borrar a ti mismo.", "error", self).exec()
-            return
+        # Recopilar IDs y nombres
+        ids_a_eliminar = []
+        nombres_a_eliminar = []
+        for index in filas_seleccionadas:
+            row = index.row()
+            item_id = self.tabla_usuarios.item(row, 0)
+            item_nombre = self.tabla_usuarios.item(row, 1)
+            if not item_id or not item_nombre:
+                continue
+            id_val = item_id.text()
+            if id_val == str(self.id_usuario):
+                from vistas.utilidades import DialogoNotificacion
+                DialogoNotificacion("Error", "No te puedes borrar a ti mismo.", "error", self).exec()
+                return
+            ids_a_eliminar.append(id_val)
+            nombres_a_eliminar.append(item_nombre.text())
 
         from vistas.utilidades import DialogoConfirmacion
-        dialogo = DialogoConfirmacion("Confirmar", f"¿Seguro que quieres borrar a {nombre_usuario}?", self)
+        if len(ids_a_eliminar) == 1:
+            msg = f"¿Seguro que quieres borrar a {nombres_a_eliminar[0]}?"
+        else:
+            msg = f"¿Seguro que quieres borrar a los {len(ids_a_eliminar)} usuarios seleccionados?"
+            
+        dialogo = DialogoConfirmacion("Confirmar", msg, self)
         
         if dialogo.exec() and dialogo.resultado:
             try:
                 conexion = sqlite3.connect("bd/database.db")
                 cursor = conexion.cursor()
-                cursor.execute("DELETE FROM Usuario WHERE id_usuario = ?", (id_usuario_eliminar,))
+                for id_val in ids_a_eliminar:
+                    cursor.execute("DELETE FROM Usuario WHERE id_usuario = ?", (id_val,))
                 conexion.commit()
                 conexion.close()
                 from vistas.utilidades import DialogoNotificacion
-                DialogoNotificacion("Sobres", "Usuario eliminado.", "info", self).exec()
+                DialogoNotificacion("Sobres", "Usuario(s) eliminado(s).", "info", self).exec()
                 self.cargar_usuarios_bd()
             except Exception as e:
                 from vistas.utilidades import DialogoNotificacion
@@ -362,7 +536,18 @@ class VentanaAdministrador(QMainWindow):
         try:
             conexion = sqlite3.connect("bd/database.db")
             cursor = conexion.cursor()
-            cursor.execute("SELECT id_reporte, id_analisis, ruta_archivo, fecha_generacion FROM Reporte")
+            cursor.execute("""
+                SELECT 
+                    R.id_reporte, 
+                    A.id_analisis, 
+                    COALESCE(I.ruta_archivo, 'Sin archivo'), 
+                    COALESCE(A.fecha_analisis, R.fecha_creacion),
+                    COALESCE(U.nombre_usuario, 'Desconocido')
+                FROM Reporte R
+                LEFT JOIN Analisis A ON R.id_reporte = A.id_reporte
+                LEFT JOIN Imagen I ON A.id_imagen = I.id_imagen
+                LEFT JOIN Usuario U ON R.id_usuario = U.id_usuario
+            """)
             reportes = cursor.fetchall()
             conexion.close()
 
@@ -372,38 +557,59 @@ class VentanaAdministrador(QMainWindow):
                     self.tabla_reportes.setItem(fila_idx, col_idx, QTableWidgetItem(str(dato)))
         except Exception as e:
             print(f"Error al cargar reportes: {e}")
+        finally:
+            self.actualizar_estado_boton_borrar()
+
+    def actualizar_estado_boton_borrar(self):
+        num_seleccionados = len(self.tabla_reportes.selectionModel().selectedRows())
+        self.btn_eliminar_reporte_fisico.setEnabled(num_seleccionados > 0)
 
     def eliminar_reporte(self):
-        fila_seleccionada = self.tabla_reportes.currentRow()
+        filas_seleccionadas = self.tabla_reportes.selectionModel().selectedRows()
         
-        if fila_seleccionada < 0:
+        if not filas_seleccionadas:
             from vistas.utilidades import DialogoNotificacion
-            DialogoNotificacion("Atención", "Selecciona un reporte de la tabla primero.", "warning", self).exec()
+            DialogoNotificacion("Atención", "Selecciona al menos un reporte de la tabla primero.", "warning", self).exec()
             return
             
-        id_reporte = self.tabla_reportes.item(fila_seleccionada, 0).text()
-        ruta_archivo = self.tabla_reportes.item(fila_seleccionada, 2).text()
-
         from vistas.utilidades import DialogoConfirmacion
-        dialogo = DialogoConfirmacion("Confirmar", "¿Seguro que quieres borrar este reporte? Se eliminará físicamente.", self)
+        msg = f"¿Seguro que quieres borrar {len(filas_seleccionadas)} reporte(s) seleccionado(s)? Se eliminarán físicamente."
+        dialogo = DialogoConfirmacion("Confirmar", msg, self)
         
         if dialogo.exec() and dialogo.resultado:
             try:
                 conexion = sqlite3.connect("bd/database.db")
                 cursor = conexion.cursor()
-                cursor.execute("DELETE FROM Reporte WHERE id_reporte = ?", (id_reporte,))
+                
+                for index in filas_seleccionadas:
+                    row = index.row()
+                    item_id = self.tabla_reportes.item(row, 0)
+                    item_ruta = self.tabla_reportes.item(row, 2)
+                    if not item_id:
+                        continue
+                    id_reporte = item_id.text()
+                    ruta_archivo = item_ruta.text() if item_ruta else 'Sin archivo'
+                    
+                    # Borrado manual en cascada para mantener la integridad referencial en SQLite
+                    cursor.execute("DELETE FROM Microglia WHERE id_analisis IN (SELECT id_analisis FROM Analisis WHERE id_reporte = ?)", (id_reporte,))
+                    cursor.execute("DELETE FROM Analisis WHERE id_reporte = ?", (id_reporte,))
+                    cursor.execute("DELETE FROM Reporte WHERE id_reporte = ?", (id_reporte,))
+                    
+                    try:
+                        if ruta_archivo and ruta_archivo != 'Sin archivo' and os.path.exists(ruta_archivo):
+                            os.remove(ruta_archivo)
+                    except Exception as e:
+                        print(f"No se pudo borrar el archivo físico: {e}")
+                
                 conexion.commit()
                 conexion.close()
-
-                if os.path.exists(ruta_archivo):
-                    os.remove(ruta_archivo)
                 
                 from vistas.utilidades import DialogoNotificacion
-                DialogoNotificacion("Listo", "Reporte eliminado de la BD y del disco.", "info", self).exec()
+                DialogoNotificacion("Listo", "Reporte(s) eliminado(s) de la BD.", "info", self).exec()
                 self.cargar_reportes_bd()
             except Exception as e:
                 from vistas.utilidades import DialogoNotificacion
-                DialogoNotificacion("Error", f"Hubo un pedo al eliminar: {e}", "error", self).exec()
+                DialogoNotificacion("Error", f"Hubo un error al eliminar: {e}", "error", self).exec()
 
     def cerrar_sesion(self):
         from vistas.login import VentanaLogin

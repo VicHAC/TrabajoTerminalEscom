@@ -21,6 +21,8 @@ class DialogoNotificacion(QDialog):
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setModal(True)
         set_app_icon(self)
+        if parent:
+            parent.installEventFilter(self)
 
         layout = QVBoxLayout(self)
         frame = QFrame(self)
@@ -72,12 +74,22 @@ class DialogoNotificacion(QDialog):
         self.setLayout(layout)
         self.setMinimumWidth(450)
 
+    def eventFilter(self, obj, event):
+        from PyQt6.QtCore import QEvent
+        if obj == self.parent() and (event.type() == QEvent.Type.Resize or event.type() == QEvent.Type.Move):
+            self.centrar_en_padre()
+        return super().eventFilter(obj, event)
+
+    def centrar_en_padre(self):
+        if self.parent():
+            p_geom = self.parent().geometry()
+            self.move(p_geom.x() + (p_geom.width() - self.width()) // 2, p_geom.y() + (p_geom.height() - self.height()) // 2)
+
     def showEvent(self, event):
         from PyQt6.QtWidgets import QApplication
         super().showEvent(event)
         if self.parent():
-            p_geom = self.parent().geometry()
-            self.move(p_geom.x() + (p_geom.width() - self.width()) // 2, p_geom.y() + (p_geom.height() - self.height()) // 2)
+            self.centrar_en_padre()
         else:
             screen = QApplication.primaryScreen().geometry()
             self.move((screen.width() - self.width()) // 2, (screen.height() - self.height()) // 2)
@@ -90,6 +102,8 @@ class DialogoConfirmacion(QDialog):
         self.setModal(True)
         self.resultado = False
         set_app_icon(self)
+        if parent:
+            parent.installEventFilter(self)
 
         layout = QVBoxLayout(self)
         frame = QFrame(self)
@@ -144,12 +158,22 @@ class DialogoConfirmacion(QDialog):
     def aceptar(self): self.resultado = True; self.accept()
     def cancelar(self): self.resultado = False; self.reject()
 
+    def eventFilter(self, obj, event):
+        from PyQt6.QtCore import QEvent
+        if obj == self.parent() and (event.type() == QEvent.Type.Resize or event.type() == QEvent.Type.Move):
+            self.centrar_en_padre()
+        return super().eventFilter(obj, event)
+
+    def centrar_en_padre(self):
+        if self.parent():
+            p_geom = self.parent().geometry()
+            self.move(p_geom.x() + (p_geom.width() - self.width()) // 2, p_geom.y() + (p_geom.height() - self.height()) // 2)
+
     def showEvent(self, event):
         from PyQt6.QtWidgets import QApplication
         super().showEvent(event)
         if self.parent():
-            p_geom = self.parent().geometry()
-            self.move(p_geom.x() + (p_geom.width() - self.width()) // 2, p_geom.y() + (p_geom.height() - self.height()) // 2)
+            self.centrar_en_padre()
         else:
             screen = QApplication.primaryScreen().geometry()
             self.move((screen.width() - self.width()) // 2, (screen.height() - self.height()) // 2)
