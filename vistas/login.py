@@ -50,6 +50,8 @@ class VentanaLogin(QWidget):
         self.input_password = QLineEdit()
         self.input_password.setPlaceholderText("Contraseña")
         self.input_password.setEchoMode(QLineEdit.EchoMode.Password)
+        self.input_usuario.returnPressed.connect(self.verificar_login)
+        self.input_password.returnPressed.connect(self.verificar_login)
 
         btn_ingresar = QPushButton("Iniciar Sesión")
         btn_ingresar.setStyleSheet("background-color: #24292f; color: #FFFFFF; padding: 10px; border-radius: 6px; font-size: 14px;")

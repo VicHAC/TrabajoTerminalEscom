@@ -36,6 +36,7 @@ from PyQt6.QtWidgets import (
     QToolTip,
     QTreeWidget,
     QTreeWidgetItem,
+    QScrollArea,
 )
 from PyQt6.QtCore import QTimer
 
@@ -536,47 +537,247 @@ class InteractiveLabelDetail(QLabel):
     def __init__(self, parent_dialog):
         super().__init__()
         self.parent_dialog = parent_dialog
+        
+        # Crear cursor de lápiz
+        from PyQt6.QtGui import QPixmap, QPainter, QPen, QCursor
+        from PyQt6.QtCore import Qt
+        pixmap = QPixmap(16, 16)
+        pixmap.fill(Qt.GlobalColor.transparent)
+        painter = QPainter(pixmap)
+        painter.setPen(QPen(Qt.GlobalColor.white, 1.5))
+        # Dibujar un lapiz simple blanco
+        painter.drawLine(0, 15, 5, 10)
+        painter.drawLine(5, 10, 15, 0)
+        painter.drawLine(15, 0, 16, 1)
+        painter.drawLine(16, 1, 6, 11)
+        painter.drawLine(6, 11, 0, 15)
+        painter.end()
+        self.pencil_cursor = QCursor(pixmap, 0, 15)
         self.is_drawing = False
         self.start_pos = None
         self.current_pos = None
         self.mode = "pointer" 
         self.setMouseTracking(True)
+        self.pencil_path = [] # Lista de puntos para unir ramas
+        self.is_dragging_point = False
+        self.dragging_point = None
+
+    def get_point_in_label_coords(self, ox, oy):
+        from PyQt6.QtCore import QPoint
+        pix = self.pixmap()
+        if not pix or pix.isNull(): return None
+        lbl_w, lbl_h = self.width(), self.height()
+        pix_w, pix_h = pix.width(), pix.height()
+        dx = (lbl_w - pix_w) // 2; dy = (lbl_h - pix_h) // 2
+        orig_w, orig_h = self.parent_dialog.get_original_crop_size()
+        if orig_w == 0 or orig_h == 0: return None
+        scale_x = pix_w / orig_w; scale_y = pix_h / orig_h
+        return QPoint(int(ox * scale_x) + dx, int(oy * scale_y) + dy)
+        
+    def point_to_segment_dist_squared(self, p, a, b):
+        x0, y0 = p.x(), p.y()
+        x1, y1 = a.x(), a.y()
+        x2, y2 = b.x(), b.y()
+        dx = x2 - x1
+        dy = y2 - y1
+        if dx == 0 and dy == 0:
+            return (x0 - x1)**2 + (y0 - y1)**2
+        t = ((x0 - x1) * dx + (y0 - y1) * dy) / float(dx*dx + dy*dy)
+        t = max(0.0, min(1.0, t))
+        px = x1 + t * dx
+        py = y1 + t * dy
+        return (x0 - px)**2 + (y0 - py)**2
 
     def mousePressEvent(self, event):
-        if self.mode == "eraser" and event.button() == Qt.MouseButton.LeftButton:
-            # Primero verificar si el clic es para eliminar un área existente
-            coords = self.get_rect_in_original_coords(event.pos(), event.pos())
-            if coords:
-                ox, oy = coords["x"], coords["y"]
-                areas = self.parent_dialog.box.get("removal_areas", [])
-                for i, area in enumerate(areas):
-                    if area["x"] <= ox <= area["x"]+area["w"] and area["y"] <= oy <= area["y"]+area["h"]:
-                        areas.pop(i)
+        if event.button() == Qt.MouseButton.LeftButton:
+            event.accept()
+            if self.mode == "eraser":
+                # Primero verificar si el clic es para eliminar un área existente
+                coords = self.get_rect_in_original_coords(event.pos(), event.pos())
+                if coords:
+                    ox, oy = coords["x"], coords["y"]
+                    areas = self.parent_dialog.box.get("removal_areas", [])
+                    for i, area in enumerate(areas):
+                        if area["x"] <= ox <= area["x"]+area["w"] and area["y"] <= oy <= area["y"]+area["h"]:
+                            areas.pop(i)
+                            self.parent_dialog.actualizar_visibilidad_boton_limpieza()
+                            self.update()
+                            return
+                
+                self.is_drawing = True
+                self.start_pos = event.pos()
+                self.current_pos = event.pos()
+                self.update()
+            elif self.mode == "pencil_line":
+                click_pos = event.pos()
+                connections = self.parent_dialog.box.get("manual_connections", [])
+                
+                for p_idx, path in enumerate(connections):
+                    for pt_idx, pt in enumerate(path):
+                        lbl_pt = self.get_point_in_label_coords(pt[0], pt[1])
+                        if lbl_pt:
+                            dist_sq = (click_pos.x() - lbl_pt.x())**2 + (click_pos.y() - lbl_pt.y())**2
+                            if dist_sq <= 36:
+                                self.is_dragging_point = True
+                                self.dragging_point = (p_idx, pt_idx)
+                                return
+                                
+                for p_idx, path in enumerate(connections):
+                    for pt_idx in range(len(path) - 1):
+                        pA = self.get_point_in_label_coords(path[pt_idx][0], path[pt_idx][1])
+                        pB = self.get_point_in_label_coords(path[pt_idx+1][0], path[pt_idx+1][1])
+                        if pA and pB:
+                            dist_sq = self.point_to_segment_dist_squared(click_pos, pA, pB)
+                            if dist_sq <= 25:
+                                c = self.get_rect_in_original_coords(click_pos, click_pos)
+                                if c:
+                                    path.insert(pt_idx + 1, (c["x"], c["y"]))
+                                    self.is_dragging_point = True
+                                    self.dragging_point = (p_idx, pt_idx + 1)
+                                    self.update()
+                                    return
+                                    
+                if not getattr(self, "is_waiting_second_click", False):
+                    self.is_waiting_second_click = True
+                    self.line_start_point = event.pos()
+                    self.current_pos = event.pos()
+                else:
+                    self.is_waiting_second_click = False
+                    self.current_pos = event.pos()
+                    p1 = self.get_rect_in_original_coords(self.line_start_point, self.line_start_point)
+                    p2 = self.get_rect_in_original_coords(self.current_pos, self.current_pos)
+                    if p1 and p2:
+                        orig_points = [(p1["x"], p1["y"]), (p2["x"], p2["y"])]
+                        if "manual_connections" not in self.parent_dialog.box: self.parent_dialog.box["manual_connections"] = []
+                        self.parent_dialog.box["manual_connections"].append(orig_points)
                         self.parent_dialog.actualizar_visibilidad_boton_limpieza()
-                        self.update()
-                        return
-            
-            self.is_drawing = True
-            self.start_pos = event.pos()
-            self.current_pos = event.pos()
-            self.update()
+                    self.line_start_point = None
+                    self.current_pos = None
+                self.update()
+                
+            elif self.mode == "pencil_freehand":
+                self.is_drawing_freehand = True
+                self.pencil_path = [event.pos()]
+                self.update()
+                
+            elif self.mode == "eraser_union":
+                self.is_drawing_eraser = True
+                self.current_pos = event.pos()
+                self.erase_at_position(event.pos())
+                self.update()
 
 
     def mouseMoveEvent(self, event):
-        if self.is_drawing:
+        event.accept()
+        if getattr(self, "is_dragging_point", False) and getattr(self, "dragging_point", None):
+            c = self.get_rect_in_original_coords(event.pos(), event.pos())
+            if c:
+                p_idx, pt_idx = self.dragging_point
+                self.parent_dialog.box["manual_connections"][p_idx][pt_idx] = (c["x"], c["y"])
+                self.update()
+        elif self.mode == "pencil_line" and getattr(self, "is_waiting_second_click", False):
+            self.current_pos = event.pos()
+            self.update()
+        elif getattr(self, "is_drawing_freehand", False):
+            self.pencil_path.append(event.pos())
+            self.update()
+        elif getattr(self, "is_drawing_eraser", False) or self.is_drawing:
+            self.current_pos = event.pos()
+            if self.mode == "eraser_union" and getattr(self, "is_drawing_eraser", False):
+                self.erase_at_position(event.pos())
+            self.update()
+        elif self.mode == "eraser_union":
             self.current_pos = event.pos()
             self.update()
 
+    def leaveEvent(self, event):
+        self.current_pos = None
+        self.update()
+
+    def erase_at_position(self, pos):
+        import os
+        path_esqueleto = self.parent_dialog.crop_path.replace("/crops/", "/esqueletos/").replace("\\crops\\", "\\esqueletos\\")
+        if os.path.exists(path_esqueleto):
+            import cv2; import numpy as np
+            img = cv2.imread(path_esqueleto, cv2.IMREAD_GRAYSCALE)
+            if img is not None:
+                from PyQt6.QtCore import QPoint
+                # Map the 16x16 label square to original crop coordinates
+                p1 = QPoint(pos.x() - 8, pos.y() - 8)
+                p2 = QPoint(pos.x() + 8, pos.y() + 8)
+                c = self.get_rect_in_original_coords(p1, p2)
+                if c:
+                    x, y, w, h = c["x"], c["y"], c["w"], c["h"]
+                    # Poner a 0 (negro) los píxeles dentro del cuadro de la goma
+                    img[y:y+h, x:x+w] = 0
+                    
+                    # Guardar imagen y actualizar estado
+                    cv2.imwrite(path_esqueleto, img)
+                    self.parent_dialog.box["esqueleto_modificado"] = True
+                    
+                    # Forzar recarga del pixmap
+                    for f in self.parent_dialog.fases_disponibles:
+                        if f["nombre"] == "ESQUELETIZADO":
+                            f["pixmap"] = None
+                            break
+                            
+                    # Filtrar puntos de manual_connections que estén dentro del cuadro de la goma
+                    if "manual_connections" in self.parent_dialog.box:
+                        new_connections = []
+                        for path in self.parent_dialog.box["manual_connections"]:
+                            new_path = []
+                            for pt in path:
+                                if not (x <= pt[0] <= x + w and y <= pt[1] <= y + h):
+                                    new_path.append(pt)
+                            if len(new_path) > 1:
+                                new_connections.append(new_path)
+                        self.parent_dialog.box["manual_connections"] = new_connections
+                    
+                    # Refrescar vista
+                    self.parent_dialog.actualizar_vista()
+                    
+                    # Refrescar vista global en el visor padre si está en modo esqueleto
+                    if hasattr(self.parent_dialog.parent(), "pixmaps_globales") and "Esqueleto" in self.parent_dialog.parent().pixmaps_globales:
+                        pixmap_esqueleto = self.parent_dialog.parent().construir_imagen_global("esqueletos")
+                        self.parent_dialog.parent().pixmaps_globales["Esqueleto"] = pixmap_esqueleto
+                        if self.parent_dialog.parent().combo_vista.currentText() == "Esqueleto":
+                            self.parent_dialog.parent().visor_imagen.set_view_mode("Esqueleto", pixmap_esqueleto)
+
     def mouseReleaseEvent(self, event):
+        event.accept()
         if self.is_drawing:
             self.is_drawing = False
-            area = self.get_rect_in_original_coords(self.start_pos, self.current_pos)
-            if area:
-                if "removal_areas" not in self.parent_dialog.box: self.parent_dialog.box["removal_areas"] = []
-                self.parent_dialog.box["removal_areas"].append(area)
-                self.parent_dialog.actualizar_visibilidad_boton_limpieza()
-            self.start_pos = None; self.current_pos = None
-            self.update()
+            if self.mode == "eraser":
+                area = self.get_rect_in_original_coords(self.start_pos, self.current_pos)
+                if area:
+                    if "removal_areas" not in self.parent_dialog.box: self.parent_dialog.box["removal_areas"] = []
+                    self.parent_dialog.box["removal_areas"].append(area)
+                    self.parent_dialog.actualizar_visibilidad_boton_limpieza()
+                    self.parent_dialog.actualizar_offsets()
+        
+        if self.mode == "pencil_line":
+            if getattr(self, "is_dragging_point", False):
+                self.is_dragging_point = False
+                self.dragging_point = None
+        elif self.mode == "pencil_freehand":
+            if getattr(self, "is_drawing_freehand", False):
+                self.is_drawing_freehand = False
+                orig_points = []
+                for p in getattr(self, "pencil_path", []):
+                    c = self.get_rect_in_original_coords(p, p)
+                    if c: orig_points.append((c["x"], c["y"]))
+                if len(orig_points) > 1:
+                    if "manual_connections" not in self.parent_dialog.box: self.parent_dialog.box["manual_connections"] = []
+                    self.parent_dialog.box["manual_connections"].append(orig_points)
+                    self.parent_dialog.actualizar_visibilidad_boton_limpieza()
+
+        elif self.mode == "eraser_union":
+            if getattr(self, "is_drawing_eraser", False):
+                self.is_drawing_eraser = False
+                    
+        self.start_pos = None; self.current_pos = None
+        self.pencil_path = []
+        self.update()
 
     def get_rect_in_original_coords(self, p1, p2):
         pix = self.pixmap()
@@ -609,11 +810,51 @@ class InteractiveLabelDetail(QLabel):
                 rw = int(area["w"] * scale_x); rh = int(area["h"] * scale_y)
                 painter.drawRect(rx, ry, rw, rh)
                 painter.drawLine(rx, ry, rx + rw, ry + rh); painter.drawLine(rx + rw, ry, rx, ry + rh)
-        if self.is_drawing and self.start_pos and self.current_pos:
-            painter.setPen(QPen(QColor(220, 53, 69, 150), 2, Qt.PenStyle.DashLine))
-            rx = min(self.start_pos.x(), self.current_pos.x()); ry = min(self.start_pos.y(), self.current_pos.y())
-            rw = abs(self.current_pos.x() - self.start_pos.x()); rh = abs(self.current_pos.y() - self.start_pos.y())
+        if self.mode == "eraser" and self.start_pos and self.current_pos:
+            # print("Drawing eraser rect")
+            painter.setPen(QPen(QColor(255, 0, 0, 100), 1, Qt.PenStyle.DashLine))
+            painter.setBrush(QColor(255, 0, 0, 50))
+            rx = min(self.start_pos.x(), self.current_pos.x())
+            ry = min(self.start_pos.y(), self.current_pos.y())
+            rw = abs(self.current_pos.x() - self.start_pos.x())
+            rh = abs(self.current_pos.y() - self.start_pos.y())
             painter.drawRect(rx, ry, rw, rh)
+            
+        # Dibujar cuadrito azul de la goma pixel-por-pixel
+        if self.mode == "eraser_union" and getattr(self, "current_pos", None):
+            painter.setPen(QPen(QColor(0, 120, 255), 1.5))
+            painter.setBrush(QColor(0, 120, 255, 80)) # Azul semi-transparente
+            painter.drawRect(self.current_pos.x() - 8, self.current_pos.y() - 8, 16, 16)
+        
+        # Dibujar pincel libre
+        if getattr(self, "is_drawing_freehand", False) and getattr(self, "pencil_path", None) and len(self.pencil_path) > 1:
+            painter.setPen(QPen(QColor(255, 255, 0), 2, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
+            for i in range(len(self.pencil_path) - 1):
+                painter.drawLine(self.pencil_path[i], self.pencil_path[i+1])
+                
+        # Dibujar la línea recta del lápiz mientras se espera el segundo clic
+        if self.mode == "pencil_line" and getattr(self, "is_waiting_second_click", False) and getattr(self, "line_start_point", None) and self.current_pos:
+            painter.setPen(QPen(QColor(255, 255, 0), 2, Qt.PenStyle.DashLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
+            painter.drawLine(self.line_start_point, self.current_pos)
+
+        # Dibujar conexiones ya guardadas (solo si estamos en modo esqueleto)
+        if self.parent_dialog.fases_disponibles[self.parent_dialog.indice_fase]["nombre"] == "ESQUELETIZADO":
+            connections = self.parent_dialog.box.get("manual_connections", [])
+            if connections:
+                painter.setPen(QPen(Qt.GlobalColor.white, 2))
+                # Necesitamos mapear de original a label
+                pix = self.pixmap()
+                lbl_w, lbl_h = self.width(), self.height()
+                pix_w, pix_h = pix.width(), pix.height()
+                dx = (lbl_w - pix_w) // 2; dy = (lbl_h - pix_h) // 2
+                orig_w, orig_h = self.parent_dialog.get_original_crop_size()
+                if orig_w > 0 and orig_h > 0:
+                    scale_x = pix_w / orig_w; scale_y = pix_h / orig_h
+                    for path in connections:
+                        for i in range(len(path) - 1):
+                            p1 = QPoint(int(path[i][0] * scale_x) + dx, int(path[i][1] * scale_y) + dy)
+                            p2 = QPoint(int(path[i+1][0] * scale_x) + dx, int(path[i+1][1] * scale_y) + dy)
+                            painter.drawLine(p1, p2)
         painter.end()
 
 class DialogoVistaCelular(QDialog):
@@ -635,6 +876,7 @@ class DialogoVistaCelular(QDialog):
         self.box = box
         self.crop_path = box["crop_path"]
         self.pixmap_mem_filtrado = pixmap_mem
+        self.drag_position = None
 
         self.fases_disponibles = []
         self.preparar_fases()
@@ -651,6 +893,15 @@ class DialogoVistaCelular(QDialog):
         main_layout = QVBoxLayout(self)
         frame = QFrame(self)
         frame.setStyleSheet("QFrame { background-color: #FFFFFF; border-radius: 12px; border: 2px solid #003366; } QLabel { border: none; }")
+        
+        def start_drag(event):
+            from PyQt6.QtCore import Qt
+            if event.button() == Qt.MouseButton.LeftButton:
+                if self.window().windowHandle():
+                    self.window().windowHandle().startSystemMove()
+                event.accept()
+
+        frame.mousePressEvent = start_drag
         layout = QVBoxLayout(frame)
         
         nombre_archivo = os.path.basename(self.crop_path)
@@ -658,6 +909,7 @@ class DialogoVistaCelular(QDialog):
         lbl_nombre = QLabel(f"Identificador: <b>{nombre_archivo}</b>")
         lbl_nombre.setAlignment(Qt.AlignmentFlag.AlignCenter)
         lbl_nombre.setStyleSheet("font-size: 15px; color: #003366; border: none;")
+        lbl_nombre.mousePressEvent = start_drag
         
         header_layout.setContentsMargins(10, 10, 10, 0)
         self.btn_cerrar_x = QPushButton()
@@ -685,6 +937,7 @@ class DialogoVistaCelular(QDialog):
         self.lbl_fase = QLabel("FASE: ORIGINAL")
         self.lbl_fase.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.lbl_fase.setStyleSheet("font-size: 13px; font-weight: bold; color: #555; margin-bottom: 5px;")
+        self.lbl_fase.mousePressEvent = start_drag
         layout.addWidget(self.lbl_fase)
 
         # Contenedor de imagen con botones de navegación lateral
@@ -734,7 +987,7 @@ class DialogoVistaCelular(QDialog):
         self.btn_tool_limpieza = QPushButton("Off")
         self.btn_tool_limpieza.setCheckable(True)
         self.btn_tool_limpieza.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_tool_limpieza.setStyleSheet("QPushButton { padding: 5px 15px; background-color: #f8f9fa; border: 1px solid #ddd; border-radius: 4px; font-weight: bold; font-size: 11px; } QPushButton:checked { background-color: #dc3545; color: white; border-color: #dc3545; }")
+        self.btn_tool_limpieza.setStyleSheet("QPushButton { padding: 4px 16px; background-color: #e1e4e8; border: 2px solid #d1d5da; border-radius: 12px; font-weight: bold; color: #586069; font-size: 11px; } QPushButton:checked { background-color: #2da44e; border-color: #2da44e; color: white; }")
         self.btn_tool_limpieza.clicked.connect(self.toggle_modo_limpieza)
         
         self.btn_aplicar_limpieza = QPushButton("Eliminar áreas")
@@ -749,12 +1002,74 @@ class DialogoVistaCelular(QDialog):
         self.btn_limpiar_todo.hide()
         self.btn_limpiar_todo.clicked.connect(self.deshacer_limpieza)
         
+        # Herramientas de unión de ramas (Esqueleto)
+        self.frame_tools_esqueleto = QFrame()
+        self.frame_tools_esqueleto.setStyleSheet("QFrame { border: none; background: transparent; }")
+        layout_tools_esqueleto = QHBoxLayout(self.frame_tools_esqueleto)
+        layout_tools_esqueleto.setContentsMargins(0,0,0,0)
+        
+        self.frame_subtools_union = QFrame()
+        self.frame_subtools_union.setStyleSheet("QFrame { background-color: #f1f3f5; border-radius: 6px; margin-left: 10px; }")
+        layout_sub = QHBoxLayout(self.frame_subtools_union)
+        layout_sub.setContentsMargins(5,2,5,2)
+        
+        self.btn_sub_pincel = QPushButton("Pincel")
+        self.btn_sub_linea = QPushButton("Línea Recta")
+        self.btn_sub_goma = QPushButton("Goma")
+        
+        estilo_sub = "QPushButton { padding: 3px 8px; background-color: #e9ecef; border: 1px solid #ced4da; border-radius: 4px; font-size: 10px; color: #495057; } QPushButton:checked { background-color: #007bff; color: white; border-color: #007bff; font-weight: bold; }"
+        for btn in [self.btn_sub_pincel, self.btn_sub_linea, self.btn_sub_goma]:
+            btn.setCheckable(True)
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn.setStyleSheet(estilo_sub)
+            btn.clicked.connect(self.cambiar_subherramienta)
+            layout_sub.addWidget(btn)
+        
+        self.btn_sub_linea.setChecked(False)
+        self.frame_subtools_union.hide()
+        
+        lbl_unir = QLabel("Unir Ramas:")
+        lbl_unir.setStyleSheet("font-size: 11px; font-weight: bold; color: #555;")
+        
+        self.btn_tool_unir = QPushButton("Off")
+        self.btn_tool_unir.setCheckable(True)
+        self.btn_tool_unir.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_tool_unir.setStyleSheet("QPushButton { padding: 4px 16px; background-color: #e1e4e8; border: 2px solid #d1d5da; border-radius: 12px; font-weight: bold; color: #586069; font-size: 11px; } QPushButton:checked { background-color: #2da44e; border-color: #2da44e; color: white; }")
+        self.btn_tool_unir.clicked.connect(self.toggle_modo_union)
+        
+        self.btn_ver_sobrepuesta = QPushButton("Ver Original")
+        self.btn_ver_sobrepuesta.setCheckable(True)
+        self.btn_ver_sobrepuesta.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_ver_sobrepuesta.setStyleSheet("QPushButton { padding: 4px 12px; background-color: #e1e4e8; border: 2px solid #d1d5da; border-radius: 12px; font-weight: bold; color: #586069; font-size: 11px; } QPushButton:checked { background-color: #0969da; border-color: #0969da; color: white; }")
+        self.btn_ver_sobrepuesta.clicked.connect(self.actualizar_vista)
+        
+        self.btn_aplicar_union = QPushButton("Guardar Unión")
+        self.btn_aplicar_union.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_aplicar_union.setStyleSheet("QPushButton { padding: 5px 15px; background-color: #007bff; color: white; border-radius: 4px; font-weight: bold; font-size: 11px; }")
+        self.btn_aplicar_union.hide()
+        self.btn_aplicar_union.clicked.connect(self.aplicar_union_esqueleto)
+        
+        self.btn_deshacer_union = QPushButton("Deshacer")
+        self.btn_deshacer_union.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_deshacer_union.setStyleSheet("QPushButton { padding: 5px; background-color: #6c757d; color: white; border-radius: 4px; font-size: 11px; }")
+        self.btn_deshacer_union.hide()
+        self.btn_deshacer_union.clicked.connect(self.deshacer_union)
+        
+        layout_tools_esqueleto.addWidget(lbl_unir)
+        layout_tools_esqueleto.addWidget(self.btn_tool_unir)
+        layout_tools_esqueleto.addWidget(self.btn_ver_sobrepuesta)
+        layout_tools_esqueleto.addWidget(self.frame_subtools_union)
+        layout_tools_esqueleto.addWidget(self.btn_aplicar_union)
+        layout_tools_esqueleto.addWidget(self.btn_deshacer_union)
+        layout_tools_esqueleto.addStretch()
+        
         layout_tools_limpieza.addWidget(QLabel("Limpieza:"))
         layout_tools_limpieza.addWidget(self.btn_tool_limpieza)
         layout_tools_limpieza.addStretch()
         layout_tools_limpieza.addWidget(self.btn_limpiar_todo)
         layout_tools_limpieza.addWidget(self.btn_aplicar_limpieza)
         layout.addWidget(self.frame_tools_limpieza)
+        layout.addWidget(self.frame_tools_esqueleto)
 
 
         
@@ -797,15 +1112,7 @@ class DialogoVistaCelular(QDialog):
             
         layout.addWidget(self.frame_offsets)
         
-        # Solo mostrar si el padre está en fase de filtrado (previsualización)
-        if hasattr(parent, "combo_vista") and parent.combo_vista.currentText() == "Previsualización":
-            self.frame_offsets.show()
-            self.frame_tools_limpieza.show()
-            self.resize(500, 780)
-        else:
-            self.frame_offsets.hide()
-            self.frame_tools_limpieza.hide()
-            self.resize(450, 520)
+        # La visibilidad se controla en actualizar_vista()
 
 
         layout.addSpacing(10)
@@ -866,6 +1173,9 @@ class DialogoVistaCelular(QDialog):
             self.fases_disponibles.append({"nombre": "ESQUELETIZADO", "path": path_esqueleto, "pixmap": None})
 
     def actualizar_vista(self):
+        from PyQt6.QtCore import Qt
+        from PyQt6.QtGui import QPainter
+        
         fase = self.fases_disponibles[self.indice_fase]
         self.lbl_fase.setText(f"FASE: {fase['nombre']}")
         
@@ -874,18 +1184,63 @@ class DialogoVistaCelular(QDialog):
             pixmap = QPixmap(fase["path"])
             
         if pixmap and not pixmap.isNull():
-            self.label_imagen.setPixmap(pixmap.scaled(380, 380, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+            # Si estamos en ESQUELETIZADO y el botón de ver sobrepuesta está activo, combinar con la original
+            if fase["nombre"] == "ESQUELETIZADO" and getattr(self, "btn_ver_sobrepuesta", None) and self.btn_ver_sobrepuesta.isChecked():
+                pix_orig = QPixmap(self.crop_path)
+                if pix_orig and not pix_orig.isNull():
+                    combined = QPixmap(pix_orig.size())
+                    combined.fill(Qt.GlobalColor.black)
+                    
+                    painter = QPainter(combined)
+                    painter.drawPixmap(0, 0, pix_orig)
+                    painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_Screen)
+                    painter.setOpacity(0.8)
+                    painter.drawPixmap(0, 0, pixmap)
+                    painter.end()
+                    
+                    self.label_imagen.setPixmap(combined.scaled(380, 380, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+                else:
+                    self.label_imagen.setPixmap(pixmap.scaled(380, 380, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+            else:
+                self.label_imagen.setPixmap(pixmap.scaled(380, 380, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
         else:
             self.label_imagen.setText(f"No se pudo cargar la imagen de {fase['nombre']}.")
             
         # Actualizar visibilidad de offsets según la fase seleccionada en el diálogo
         # self.frame_offsets.setVisible(fase["nombre"] == "FILTRADO")
 
-        # Actualizar estado de botones de navegación
-        self.btn_ant.setEnabled(self.indice_fase > 0)
-        self.btn_sig.setEnabled(self.indice_fase < len(self.fases_disponibles) - 1)
-        self.btn_ant.show()
-        self.btn_sig.show()
+        self.btn_ant.setVisible(self.indice_fase > 0)
+        self.btn_sig.setVisible(self.indice_fase < len(self.fases_disponibles) - 1)
+        self.btn_comparativa.setVisible(len(self.fases_disponibles) == 3)
+
+        # Actualizar visibilidad de herramientas según la fase
+        if fase["nombre"] == "FILTRADO":
+            filtros_activos = True
+            if self.parent() and hasattr(self.parent(), "combo_vista"):
+                if self.parent().combo_vista.currentText() != "Previsualización":
+                    filtros_activos = False
+            elif len(self.fases_disponibles) >= 3:
+                filtros_activos = False
+
+            if not filtros_activos:
+                self.frame_offsets.hide()
+                self.frame_tools_limpieza.hide()
+                self.resize(450, 520)
+            else:
+                self.frame_offsets.show()
+                self.frame_tools_limpieza.show()
+                self.resize(500, 780)
+            self.frame_tools_esqueleto.hide()
+        elif fase["nombre"] == "ESQUELETIZADO":
+            self.frame_offsets.hide()
+            self.frame_tools_limpieza.hide()
+            self.frame_tools_esqueleto.show()
+            self.resize(500, 600)
+        else:
+            self.frame_offsets.hide()
+            self.frame_tools_limpieza.hide()
+            self.frame_tools_esqueleto.hide()
+            self.resize(450, 520)
 
 
     def actualizar_offsets(self):
@@ -927,16 +1282,127 @@ class DialogoVistaCelular(QDialog):
             self.label_imagen.mode = "eraser"
             self.label_imagen.setCursor(Qt.CursorShape.CrossCursor)
             self.btn_tool_limpieza.setText("On")
+            self.btn_tool_unir.blockSignals(True)
+            self.btn_tool_unir.setChecked(False)
+            self.btn_tool_unir.setText("Off")
+            self.btn_tool_unir.blockSignals(False)
         else:
             self.label_imagen.mode = "pointer"
             self.label_imagen.setCursor(Qt.CursorShape.ArrowCursor)
             self.btn_tool_limpieza.setText("Off")
 
+    def cambiar_subherramienta(self):
+        sender = self.sender()
+        if not sender:
+            # Desmarcar todo si no se llamó desde un botón específico
+            self.btn_sub_pincel.setChecked(False)
+            self.btn_sub_linea.setChecked(False)
+            self.btn_sub_goma.setChecked(False)
+            self.label_imagen.mode = "pointer"
+            self.label_imagen.setCursor(Qt.CursorShape.ArrowCursor)
+            return
+
+        self.btn_sub_pincel.setChecked(sender == self.btn_sub_pincel)
+        self.btn_sub_linea.setChecked(sender == self.btn_sub_linea)
+        self.btn_sub_goma.setChecked(sender == self.btn_sub_goma)
+        
+        if sender == self.btn_sub_goma:
+            self.label_imagen.mode = "eraser_union"
+            self.label_imagen.setCursor(Qt.CursorShape.BlankCursor)
+        elif sender == self.btn_sub_pincel:
+            self.label_imagen.mode = "pencil_freehand"
+            self.label_imagen.setCursor(self.label_imagen.pencil_cursor)
+        elif sender == self.btn_sub_linea:
+            self.label_imagen.mode = "pencil_line"
+            self.label_imagen.setCursor(self.label_imagen.pencil_cursor)
+
+    def toggle_modo_union(self, checked):
+        if checked:
+            self.frame_subtools_union.show()
+            # En lugar de seleccionar un modo por defecto, desmarcamos todos para obligar al usuario a elegir
+            self.btn_sub_pincel.setChecked(False)
+            self.btn_sub_linea.setChecked(False)
+            self.btn_sub_goma.setChecked(False)
+            self.label_imagen.mode = "pointer"
+            self.label_imagen.setCursor(Qt.CursorShape.ArrowCursor)
+            
+            self.btn_tool_unir.setText("On")
+            self.actualizar_visibilidad_boton_limpieza()
+            self.btn_tool_limpieza.blockSignals(True)
+            self.btn_tool_limpieza.setChecked(False)
+            self.btn_tool_limpieza.setText("Off")
+            self.btn_tool_limpieza.blockSignals(False)
+        else:
+            self.frame_subtools_union.hide()
+            self.label_imagen.mode = "pointer"
+            self.label_imagen.setCursor(Qt.CursorShape.ArrowCursor)
+            self.btn_tool_unir.setText("Off")
+            self.actualizar_visibilidad_boton_limpieza()
+
+    def aplicar_union_esqueleto(self):
+        from vistas.utilidades import DialogoConfirmacion
+        diag = DialogoConfirmacion("Unir Ramas", "¿Confirmas que deseas guardar estas uniones en el esqueleto?")
+        if diag.exec():
+            path_esqueleto = self.crop_path.replace("/crops/", "/esqueletos/").replace("\\crops\\", "\\esqueletos\\")
+            if os.path.exists(path_esqueleto):
+                import cv2; import numpy as np
+                img = cv2.imread(path_esqueleto, cv2.IMREAD_GRAYSCALE)
+                if img is not None:
+                    for path in self.box.get("manual_connections", []):
+                        for i in range(len(path) - 1):
+                            p1 = (path[i][0], path[i][1])
+                            p2 = (path[i+1][0], path[i+1][1])
+                            cv2.line(img, p1, p2, 255, 2) # Dibujar línea blanca de 2px para capturar la forma exacta dibujada
+                    
+                    # Ejecutar skeletonize para asegurar que las líneas se reduzcan a un esqueleto perfecto de 1px de grosor
+                    from skimage.morphology import skeletonize
+                    img_bool = img > 0
+                    skeleton = skeletonize(img_bool)
+                    img = (skeleton * 255).astype(np.uint8)
+                    
+                    cv2.imwrite(path_esqueleto, img)
+                    self.box["esqueleto_modificado"] = True
+                    # Limpiar conexiones ya aplicadas
+                    self.box["manual_connections"] = []
+                    self.actualizar_visibilidad_boton_limpieza() # Reutilizamos para el botón guardar
+                    self.actualizar_vista()
+                    self.label_imagen.update()
+                    
+                    # Desactivar modo unión tras guardar cambios
+                    self.btn_tool_unir.setChecked(False)
+                    self.toggle_modo_union(False)
+                    
+                    # Refrescar imagen global si es necesario
+                    if hasattr(self.parent(), "pixmaps_globales") and "Esqueleto" in self.parent().pixmaps_globales:
+                        pixmap_esqueleto = self.parent().construir_imagen_global("esqueletos")
+                        self.parent().pixmaps_globales["Esqueleto"] = pixmap_esqueleto
+                        if self.parent().combo_vista.currentText() == "Esqueleto":
+                            self.parent().visor_imagen.set_view_mode("Esqueleto", pixmap_esqueleto)
+                            
+                    self.mostrar_notificacion("Éxito", "Las ramas se han unido correctamente.", "info")
 
     def actualizar_visibilidad_boton_limpieza(self):
         has_areas = len(self.box.get("removal_areas", [])) > 0
         self.btn_aplicar_limpieza.setVisible(has_areas)
         self.btn_limpiar_todo.setVisible(has_areas)
+        
+        has_uniones = len(self.box.get("manual_connections", [])) > 0
+        is_union_on = self.btn_tool_unir.isChecked()
+        self.btn_aplicar_union.setVisible(has_uniones or is_union_on)
+        self.btn_deshacer_union.setVisible(has_uniones)
+
+    def deshacer_union(self):
+        if "manual_connections" in self.box and len(self.box["manual_connections"]) > 0:
+            self.box["manual_connections"].pop()
+        self.actualizar_visibilidad_boton_limpieza()
+        self.label_imagen.update()
+
+    def deshacer_limpieza(self):
+        if "removal_areas" in self.box and len(self.box["removal_areas"]) > 0:
+            self.box["removal_areas"].pop()
+        self.actualizar_visibilidad_boton_limpieza()
+        self.actualizar_offsets()
+        self.label_imagen.update()
 
     def aplicar_limpieza(self):
         from vistas.utilidades import DialogoConfirmacion
@@ -968,6 +1434,12 @@ class DialogoVistaCelular(QDialog):
     def mostrar_notificacion(self, t, m, tipo):
         from vistas.utilidades import DialogoNotificacion
         DialogoNotificacion(t, m, tipo, self).exec()
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            if self.window().windowHandle():
+                self.window().windowHandle().startSystemMove()
+            event.accept()
 
 
 
@@ -1071,6 +1543,7 @@ class InteractiveImageViewer(QLabel):
         self._current_pixmap = None
         self.boxes = []
         self.hovered_index = -1
+        self.active_index = -1
         self.view_mode = "Original"
         self.current_tool = "pointer" 
         self.is_drawing = False
@@ -1148,7 +1621,11 @@ class InteractiveImageViewer(QLabel):
                     elif self.view_mode == "Esqueleto": crop_path = crop_path.replace("/crops/", "/esqueletos/").replace("\\crops\\", "\\esqueletos\\")
 
                     if os.path.exists(crop_path) or pixmap_mem:
+                        self.active_index = self.hovered_index
+                        self.draw_current_state()
                         DialogoVistaCelular(self.boxes[self.hovered_index], pixmap_mem, self.view_mode, self.window()).exec()
+                        self.active_index = -1
+                        self.draw_current_state()
 
                 else:
                     self.is_panning = True
@@ -1272,19 +1749,32 @@ class InteractiveImageViewer(QLabel):
         for i, box in enumerate(self.boxes):
             rect = QRect(int(box["x"] * actual_scale), int(box["y"] * actual_scale), int(box["w"] * actual_scale), int(box["h"] * actual_scale))
             
-            # Detectar si tiene offsets (solo en modo previsualización)
+            # Detectar si tiene offsets (solo en modo previsualización o filtrada)
             has_offset = False
-            if self.view_mode == "Previsualización":
+            if self.view_mode in ["Previsualización", "Filtrada"]:
                 offs = box.get("offsets", {})
                 if offs.get("clahe", 0) != 0 or offs.get("gauss", 0) != 0 or offs.get("otsu", 0) != 0:
                     has_offset = True
 
-            if i == self.hovered_index and self.current_tool != "draw":
-                color = QColor(255, 165, 0) if has_offset else QColor(0, 255, 0)
+            # Detectar si el esqueleto ha sido modificado (en modo esqueleto)
+            has_skeleton_modified = False
+            if self.view_mode == "Esqueleto":
+                if box.get("esqueleto_modificado", False):
+                    has_skeleton_modified = True
+
+            # Si es modificado (offset o esqueleto), usar color amarillo/naranja
+            is_modified = has_offset or has_skeleton_modified
+
+            if i == self.active_index:
+                color = QColor(9, 105, 218) # Azul GitHub
+                pen = QPen(color)
+                pen.setWidth(max(2, int(pix_w * 0.003 * actual_scale)))
+            elif i == self.hovered_index and self.current_tool != "draw":
+                color = QColor(255, 215, 0) if is_modified else QColor(0, 255, 0)
                 pen = QPen(color)
                 pen.setWidth(max(2, int(pix_w * 0.003 * actual_scale)))
             else:
-                color = QColor(255, 165, 0, 180) if has_offset else QColor(0, 255, 0, 120)
+                color = QColor(255, 215, 0, 180) if is_modified else QColor(0, 255, 0, 120)
                 pen = QPen(color)
                 pen.setWidth(max(1, int(pix_w * 0.0015 * actual_scale)))
                 
@@ -1292,7 +1782,7 @@ class InteractiveImageViewer(QLabel):
             painter.setBrush(Qt.BrushStyle.NoBrush)
             painter.drawRect(rect)
             
-            if has_offset:
+            if is_modified:
                 painter.drawText(rect.x() + 2, rect.y() + 12, "*")
 
             
@@ -1694,10 +2184,7 @@ class VentanaInvestigador(QMainWindow):
             
         self.btn_corregir_filtrado.hide()
         self.btn_corregir_filtrado.setStyleSheet(estilo_btn_menu + "QPushButton { color: #0969da; font-weight: bold; }")
-        
-        self.btn_cerrar_sesion = QPushButton("Cerrar Sesión")
-        self.btn_cerrar_sesion.setStyleSheet(estilo_btn_menu + "QPushButton { color: #dc3545; font-weight: bold; }")
-        self.menu_lateral.addWidget(self.btn_cerrar_sesion)
+
 
         # Conectar el botón de historial
         self.btn_historial.clicked.connect(self.abrir_historial)
@@ -1907,29 +2394,38 @@ class VentanaInvestigador(QMainWindow):
         self.btn_descargar_reporte.setEnabled(False)
         self.btn_finalizar_reporte.setEnabled(False)
 
+        # Activar/Desactivar controles de zoom a partir del conteo (paso 1 o mayor)
+        zoom_activado = (paso >= 1)
+        self.sld_nivel_zoom.setEnabled(zoom_activado)
+        self.btn_zoom_reset.setEnabled(zoom_activado)
+        self.btn_bloquear_zoom.setEnabled(zoom_activado)
+
+        # Habilitación estricta de botones según la etapa actual de análisis (se desactiva la etapa anterior)
+        self.btn_cargar.setEnabled(paso == 0)
+        self.btn_conteo.setEnabled(paso == 1)
+        self.btn_filtrar.setEnabled(paso == 2)
+        self.btn_ramas.setEnabled(paso == 3)
+
         if paso == 0:
-            self.btn_cargar.setEnabled(True); self.btn_conteo.setEnabled(False); self.btn_filtrar.setEnabled(False); self.btn_ramas.setEnabled(False); self.combo_vista.setEnabled(False)
+            self.combo_vista.setEnabled(False)
             self.btn_herramienta_caja.hide(); self.btn_herramienta_eliminar.hide()
         elif paso == 1:
-            self.btn_cargar.setEnabled(True); self.btn_conteo.setEnabled(True); self.btn_filtrar.setEnabled(False); self.btn_ramas.setEnabled(False); self.combo_vista.setEnabled(False)
+            self.combo_vista.setEnabled(False)
             self.btn_herramienta_caja.hide(); self.btn_herramienta_eliminar.hide()
         elif paso == 2:
-            self.btn_cargar.setEnabled(False); self.btn_conteo.setEnabled(False); self.btn_filtrar.setEnabled(True); self.btn_ramas.setEnabled(False); self.combo_vista.setEnabled(True)
+            self.combo_vista.setEnabled(True)
             self.btn_herramienta_caja.show(); self.btn_herramienta_eliminar.show()
             self.btn_herramienta_caja.setEnabled(True); self.btn_herramienta_eliminar.setEnabled(True)
-            self.sld_nivel_zoom.setEnabled(True); self.btn_zoom_reset.setEnabled(True); self.btn_bloquear_zoom.setEnabled(True)
         elif paso == 3:
-            self.btn_cargar.setEnabled(False); self.btn_conteo.setEnabled(False); self.btn_filtrar.setEnabled(False); self.btn_ramas.setEnabled(True)
+            self.combo_vista.setEnabled(True)
             self.btn_herramienta_caja.hide(); self.btn_herramienta_caja.setChecked(False)
             self.btn_herramienta_eliminar.hide(); self.btn_herramienta_eliminar.setChecked(False)
             self.visor_imagen.current_tool = "pointer"
         elif paso == 4:
-            self.btn_cargar.setEnabled(False); self.btn_conteo.setEnabled(False); self.btn_filtrar.setEnabled(False); self.btn_ramas.setEnabled(False)
             self.btn_corregir_filtrado.show()
             self.btn_herramienta_caja.hide(); self.btn_herramienta_eliminar.hide()
             self.btn_obtener_metricas.setEnabled(True)
         elif paso == 5:
-            self.btn_cargar.setEnabled(False); self.btn_conteo.setEnabled(False); self.btn_filtrar.setEnabled(False); self.btn_ramas.setEnabled(False)
             self.btn_corregir_filtrado.show()
             self.btn_herramienta_caja.hide(); self.btn_herramienta_eliminar.hide()
             self.btn_obtener_metricas.setEnabled(False)
@@ -1938,6 +2434,8 @@ class VentanaInvestigador(QMainWindow):
             self.btn_finalizar_reporte.setEnabled(True)
         
         if paso not in [4, 5]: self.btn_corregir_filtrado.hide()
+        
+        self.actualizar_botones_navegacion()
         
         # Guardado automático de progreso al cambiar de fase
         if paso > 0:
@@ -2069,11 +2567,22 @@ class VentanaInvestigador(QMainWindow):
                         self.pixmaps_globales["Esqueleto"] = pix_e
                         self.combo_vista.addItem("Esqueleto")
                 
-                self.combo_vista.setCurrentText("Original")
+                # Seleccionar la vista correspondiente al paso donde se quedó el análisis
+                if paso >= 4:
+                    modo_default = "Esqueleto"
+                elif paso == 3:
+                    modo_default = "Filtrada"
+                else:
+                    modo_default = "Original"
+
+                self.combo_vista.setCurrentText(modo_default)
                 self.combo_vista.blockSignals(False)
                 self.combo_vista.setEnabled(paso >= 2)
                 
+                # Sincronizar el visor con el modo cargado
+                self.visor_imagen.set_view_mode(modo_default, self.pixmaps_globales.get(modo_default))
                 self.actualizar_estado_flujo(paso)
+                self.actualizar_botones_navegacion()
                 self.mostrar_notificacion("Éxito", f"Continuando análisis: {os.path.basename(ruta)}", "info")
             else:
                 # ÚLTIMA IMAGEN COMPLETADA -> CARGAR MÉTRICAS Y PEDIR NUEVA IMAGEN
@@ -2160,6 +2669,31 @@ class VentanaInvestigador(QMainWindow):
 
     def execute_microglia_counting(self):
         if not self.ruta_imagen_actual: self.mostrar_notificacion("Advertencia", "Por favor, carga una imagen primero.", "warning"); return
+        
+        # Si ya se ejecutó y estamos en un paso avanzado, dar opción de sólo volver a editar o reprocesar con IA
+        if self.paso_actual >= 2:
+            from PyQt6.QtWidgets import QMessageBox
+            msg = QMessageBox(self)
+            msg.setIcon(QMessageBox.Icon.Question)
+            msg.setWindowTitle("Regresar a Detección")
+            msg.setText("¿Qué deseas hacer al regresar al paso de Detección (Conteo)?")
+            
+            btn_edit = msg.addButton("Editar detecciones manualmente", QMessageBox.ButtonRole.ActionRole)
+            btn_yolo = msg.addButton("Volver a procesar con IA (YOLO)", QMessageBox.ButtonRole.ActionRole)
+            btn_cancel = msg.addButton("Cancelar", QMessageBox.ButtonRole.RejectRole)
+            
+            msg.exec()
+            clicked = msg.clickedButton()
+            if clicked == btn_edit:
+                self.actualizar_estado_flujo(2)
+                self.combo_vista.blockSignals(True)
+                self.combo_vista.setCurrentText("Original")
+                self.combo_vista.blockSignals(False)
+                self.cambiar_vista_global("Original")
+                return
+            elif clicked == btn_cancel or clicked is None:
+                return
+                
         dialogo = DialogoCarga("Cargando IA y aplicando conteo...\nPor favor, espera.", self); dialogo.show()
         from PyQt6.QtWidgets import QApplication; QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor); QApplication.processEvents()
         try:
@@ -2223,6 +2757,10 @@ class VentanaInvestigador(QMainWindow):
 
     def ejecutar_filtrado(self):
         if not self.ruta_imagen_actual or not self.visor_imagen.boxes: self.mostrar_notificacion("Advertencia", "Aplica el conteo primero.", "warning"); return
+        
+        # Guardar paso previo para poder regresar al cancelar
+        self.paso_previo = self.paso_actual
+        
         import cv2; import numpy as np
         self.crops_en_memoria.clear()
         self.crops_filtrados_temp.clear()
@@ -2357,11 +2895,20 @@ class VentanaInvestigador(QMainWindow):
         self.combo_vista.blockSignals(True)
         idx = self.combo_vista.findText("Previsualización")
         if idx >= 0: self.combo_vista.removeItem(idx)
-        self.combo_vista.setCurrentText("Original")
-        self.combo_vista.blockSignals(False)
-        self.cambiar_vista_global("Original")
         
-        self.actualizar_estado_flujo(1) # Reactivate main buttons
+        # Volver a la vista previa del paso restaurado
+        paso_restaurar = getattr(self, "paso_previo", 2)
+        vista_restaurar = "Original"
+        if paso_restaurar >= 3:
+            vista_restaurar = "Filtrada"
+        if paso_restaurar >= 4:
+            vista_restaurar = "Esqueleto"
+            
+        self.combo_vista.setCurrentText(vista_restaurar)
+        self.combo_vista.blockSignals(False)
+        self.cambiar_vista_global(vista_restaurar)
+        
+        self.actualizar_estado_flujo(paso_restaurar)
 
     def mostrar_ramas_morfologia(self):
         if not self.ruta_imagen_actual or not self.visor_imagen.boxes: self.mostrar_notificacion("Advertencia", "Aplica el conteo y filtrado primero.", "warning"); return
@@ -2414,6 +2961,7 @@ class VentanaInvestigador(QMainWindow):
         for box in self.visor_imagen.boxes:
             box["offsets"] = {"clahe": 0, "gauss": 0, "otsu": 0}
             box["removal_areas"] = []
+            box["esqueleto_modificado"] = False
             
         self.actualizar_estado_flujo(2)
 
