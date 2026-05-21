@@ -392,7 +392,6 @@ class DialogoComparativo(QDialog):
         set_app_icon(self)
         
         self.fases = fases
-        self.modo_sobrepuesto = False
         
         main_layout = QVBoxLayout(self)
         self.frame = QFrame(self)
@@ -446,87 +445,17 @@ class DialogoComparativo(QDialog):
             v_layout.addWidget(lbl_img)
             self.layout_lado_lado.addLayout(v_layout)
         
-        # Widget para vista sobrepuesta
-        self.widget_sobrepuesto = QWidget()
-        self.widget_sobrepuesto.hide()
-        layout_s = QVBoxLayout(self.widget_sobrepuesto)
-        self.lbl_img_sobrepuesto = QLabel()
-        self.lbl_img_sobrepuesto.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout_s.addWidget(self.lbl_img_sobrepuesto)
-        
         self.layout_principal.addWidget(self.widget_lado_lado)
-        self.layout_principal.addWidget(self.widget_sobrepuesto)
         
         self.layout_principal.addSpacing(15)
         
-        layout_botones = QHBoxLayout()
-        
-        self.btn_toggle = QPushButton("Ver Sobrepuesto")
-        self.btn_toggle.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_toggle.setStyleSheet("""
-            QPushButton { padding: 8px 20px; background-color: #007bff; border-radius: 6px; font-weight: bold; color: white; font-size: 13px;}
-            QPushButton:hover { background-color: #0069d9; }
-        """)
-        self.btn_toggle.clicked.connect(self.toggle_modo)
-        
-        btn_cerrar = QPushButton("Cerrar")
-        btn_cerrar.setCursor(Qt.CursorShape.PointingHandCursor)
-        btn_cerrar.setStyleSheet("""
-            QPushButton { padding: 8px 20px; background-color: #dc3545; border-radius: 6px; font-weight: bold; color: white; font-size: 14px;}
-            QPushButton:hover { background-color: #c82333; }
-        """)
-        btn_cerrar.clicked.connect(self.accept)
-        
-        layout_botones.addStretch()
-        layout_botones.addWidget(self.btn_toggle)
-        layout_botones.addStretch()
-        
-        self.layout_principal.addLayout(layout_botones)
         main_layout.addWidget(self.frame)
         self.setLayout(main_layout)
-
-    def toggle_modo(self):
-        self.modo_sobrepuesto = not self.modo_sobrepuesto
-        if self.modo_sobrepuesto:
-            self.lbl_titulo.setText("<b>Esqueleto Sobrepuesto en Original</b>")
-            self.btn_toggle.setText("Ver Proceso Completo")
-            self.widget_lado_lado.hide()
-            self.widget_sobrepuesto.show()
-            self.setFixedSize(500, 500)
-            self.generar_sobrepuesto()
-        else:
-            self.lbl_titulo.setText("<b>Comparativa del Proceso de la Microglía</b>")
-            self.btn_toggle.setText("Ver Sobrepuesto")
-            self.widget_sobrepuesto.hide()
-            self.widget_lado_lado.show()
-            self.setFixedSize(950, 500)
-            
-        # Recentrar ventana
-        self.ajustar_posicion()
 
     def ajustar_posicion(self):
         if self.parent():
             p_geom = self.parent().geometry()
             self.move(p_geom.x() + (p_geom.width() - self.width()) // 2, p_geom.y() + (p_geom.height() - self.height()) // 2)
-
-    def generar_sobrepuesto(self):
-        # Original (Fase 0)
-        pix_orig = self.fases[0]["pixmap"] if self.fases[0]["pixmap"] else QPixmap(self.fases[0]["path"])
-        # Esqueleto (Fase 2)
-        pix_esq = self.fases[2]["pixmap"] if self.fases[2]["pixmap"] else QPixmap(self.fases[2]["path"])
-        
-        if pix_orig and pix_esq and not pix_orig.isNull() and not pix_esq.isNull():
-            final_pix = pix_orig.copy()
-            painter = QPainter(final_pix)
-            
-            # Usamos modo 'Screen' que es ideal para sobreponer blanco sobre fondos oscuros
-            # Ignora el negro (0) y resalta el blanco (1).
-            painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_Screen)
-            painter.setOpacity(0.9) # Alta opacidad para que las líneas blancas sean nítidas
-            
-            painter.drawPixmap(0, 0, pix_esq)
-            painter.end()
-            self.lbl_img_sobrepuesto.setPixmap(final_pix.scaled(380, 380, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
 
     def showEvent(self, event):
         super().showEvent(event)
@@ -647,6 +576,7 @@ class InteractiveLabelDetail(QLabel):
                     p1 = self.get_rect_in_original_coords(self.line_start_point, self.line_start_point)
                     p2 = self.get_rect_in_original_coords(self.current_pos, self.current_pos)
                     if p1 and p2:
+                        self.parent_dialog._push_undo_state()
                         orig_points = [(p1["x"], p1["y"]), (p2["x"], p2["y"])]
                         if "manual_connections" not in self.parent_dialog.box: self.parent_dialog.box["manual_connections"] = []
                         self.parent_dialog.box["manual_connections"].append(orig_points)
@@ -663,6 +593,7 @@ class InteractiveLabelDetail(QLabel):
             elif self.mode == "eraser_union":
                 self.is_drawing_eraser = True
                 self.current_pos = event.pos()
+                self.parent_dialog._push_undo_state()
                 self.erase_at_position(event.pos())
                 self.update()
 
@@ -695,53 +626,38 @@ class InteractiveLabelDetail(QLabel):
         self.update()
 
     def erase_at_position(self, pos):
-        import os
-        path_esqueleto = self.parent_dialog.crop_path.replace("/crops/", "/esqueletos/").replace("\\crops\\", "\\esqueletos\\")
-        if os.path.exists(path_esqueleto):
-            import cv2; import numpy as np
-            img = cv2.imread(path_esqueleto, cv2.IMREAD_GRAYSCALE)
-            if img is not None:
-                from PyQt6.QtCore import QPoint
-                # Map the 16x16 label square to original crop coordinates
-                p1 = QPoint(pos.x() - 8, pos.y() - 8)
-                p2 = QPoint(pos.x() + 8, pos.y() + 8)
-                c = self.get_rect_in_original_coords(p1, p2)
-                if c:
-                    x, y, w, h = c["x"], c["y"], c["w"], c["h"]
-                    # Poner a 0 (negro) los píxeles dentro del cuadro de la goma
-                    img[y:y+h, x:x+w] = 0
-                    
-                    # Guardar imagen y actualizar estado
-                    cv2.imwrite(path_esqueleto, img)
-                    self.parent_dialog.box["esqueleto_modificado"] = True
-                    
-                    # Forzar recarga del pixmap
-                    for f in self.parent_dialog.fases_disponibles:
-                        if f["nombre"] == "ESQUELETIZADO":
-                            f["pixmap"] = None
-                            break
-                            
-                    # Filtrar puntos de manual_connections que estén dentro del cuadro de la goma
-                    if "manual_connections" in self.parent_dialog.box:
-                        new_connections = []
-                        for path in self.parent_dialog.box["manual_connections"]:
-                            new_path = []
-                            for pt in path:
-                                if not (x <= pt[0] <= x + w and y <= pt[1] <= y + h):
-                                    new_path.append(pt)
-                            if len(new_path) > 1:
-                                new_connections.append(new_path)
-                        self.parent_dialog.box["manual_connections"] = new_connections
-                    
-                    # Refrescar vista
-                    self.parent_dialog.actualizar_vista()
-                    
-                    # Refrescar vista global en el visor padre si está en modo esqueleto
-                    if hasattr(self.parent_dialog.parent(), "pixmaps_globales") and "Esqueleto" in self.parent_dialog.parent().pixmaps_globales:
-                        pixmap_esqueleto = self.parent_dialog.parent().construir_imagen_global("esqueletos")
-                        self.parent_dialog.parent().pixmaps_globales["Esqueleto"] = pixmap_esqueleto
-                        if self.parent_dialog.parent().combo_vista.currentText() == "Esqueleto":
-                            self.parent_dialog.parent().visor_imagen.set_view_mode("Esqueleto", pixmap_esqueleto)
+        """Borra píxeles en la imagen de esqueleto EN MEMORIA (no en disco)."""
+        import numpy as np
+        skeleton_img = getattr(self.parent_dialog, 'skeleton_working', None)
+        if skeleton_img is None:
+            return
+        from PyQt6.QtCore import QPoint
+        # Map the 16x16 label square to original crop coordinates
+        p1 = QPoint(pos.x() - 8, pos.y() - 8)
+        p2 = QPoint(pos.x() + 8, pos.y() + 8)
+        c = self.get_rect_in_original_coords(p1, p2)
+        if c:
+            x, y, w, h = c["x"], c["y"], c["w"], c["h"]
+            # Poner a 0 (negro) los píxeles dentro del cuadro de la goma
+            self.parent_dialog.skeleton_working[y:y+h, x:x+w] = 0
+            self.parent_dialog.skeleton_has_changes = True
+            
+            # Filtrar puntos de manual_connections que estén dentro del cuadro de la goma
+            if "manual_connections" in self.parent_dialog.box:
+                new_connections = []
+                for path in self.parent_dialog.box["manual_connections"]:
+                    new_path = []
+                    for pt in path:
+                        if not (x <= pt[0] <= x + w and y <= pt[1] <= y + h):
+                            new_path.append(pt)
+                    if len(new_path) > 1:
+                        new_connections.append(new_path)
+                self.parent_dialog.box["manual_connections"] = new_connections
+            
+            # Actualizar el pixmap en memoria y refrescar vista
+            self.parent_dialog._actualizar_pixmap_esqueleto_memoria()
+            self.parent_dialog.actualizar_vista()
+            self.parent_dialog.actualizar_visibilidad_boton_limpieza()
 
     def mouseReleaseEvent(self, event):
         event.accept()
@@ -767,6 +683,7 @@ class InteractiveLabelDetail(QLabel):
                     c = self.get_rect_in_original_coords(p, p)
                     if c: orig_points.append((c["x"], c["y"]))
                 if len(orig_points) > 1:
+                    self.parent_dialog._push_undo_state()
                     if "manual_connections" not in self.parent_dialog.box: self.parent_dialog.box["manual_connections"] = []
                     self.parent_dialog.box["manual_connections"].append(orig_points)
                     self.parent_dialog.actualizar_visibilidad_boton_limpieza()
@@ -874,7 +791,7 @@ class DialogoVistaCelular(QDialog):
         set_app_icon(self)
         
         self.box = box
-        self.crop_path = box["crop_path"]
+        self.crop_path = box["crop_path"].replace("\\", "/")
         self.pixmap_mem_filtrado = pixmap_mem
         self.drag_position = None
 
@@ -1013,17 +930,41 @@ class DialogoVistaCelular(QDialog):
         layout_sub = QHBoxLayout(self.frame_subtools_union)
         layout_sub.setContentsMargins(5,2,5,2)
         
-        self.btn_sub_pincel = QPushButton("Pincel")
-        self.btn_sub_linea = QPushButton("Línea Recta")
-        self.btn_sub_goma = QPushButton("Goma")
+        self.btn_sub_pincel = QPushButton()
+        self.btn_sub_pincel.setIcon(QIcon("assets/buttons/editar.png"))
+        self.btn_sub_pincel.setIconSize(QSize(20, 20))
+        self.btn_sub_pincel.setToolTip("Pincel")
         
-        estilo_sub = "QPushButton { padding: 3px 8px; background-color: #e9ecef; border: 1px solid #ced4da; border-radius: 4px; font-size: 10px; color: #495057; } QPushButton:checked { background-color: #007bff; color: white; border-color: #007bff; font-weight: bold; }"
+        self.btn_sub_linea = QPushButton()
+        self.btn_sub_linea.setIcon(QIcon("assets/buttons/recta.png"))
+        self.btn_sub_linea.setIconSize(QSize(20, 20))
+        self.btn_sub_linea.setToolTip("Línea Recta")
+        
+        self.btn_sub_goma = QPushButton()
+        self.btn_sub_goma.setIcon(QIcon("assets/buttons/goma.png"))
+        self.btn_sub_goma.setIconSize(QSize(20, 20))
+        self.btn_sub_goma.setToolTip("Goma")
+        
+        estilo_sub = "QPushButton { background-color: transparent; border: none; padding: 2px; } QPushButton:hover { background-color: #ddf4ff; border-radius: 17px; } QPushButton:checked { background-color: #cce5ff; border: 1px solid #007bff; border-radius: 17px; }"
         for btn in [self.btn_sub_pincel, self.btn_sub_linea, self.btn_sub_goma]:
             btn.setCheckable(True)
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
             btn.setStyleSheet(estilo_sub)
+            btn.setFixedSize(34, 34)
             btn.clicked.connect(self.cambiar_subherramienta)
             layout_sub.addWidget(btn)
+        
+        # Botón de deshacer paso a paso (dentro del sub-frame de herramientas)
+        self.btn_deshacer_paso = QPushButton()
+        self.btn_deshacer_paso.setIcon(QIcon("assets/buttons/deshacer.png"))
+        self.btn_deshacer_paso.setIconSize(QSize(20, 20))
+        self.btn_deshacer_paso.setToolTip("Deshacer último paso")
+        self.btn_deshacer_paso.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_deshacer_paso.setStyleSheet("QPushButton { background-color: transparent; border: none; padding: 2px; } QPushButton:hover { background-color: #ddf4ff; border-radius: 17px; } QPushButton:disabled { opacity: 0.4; }")
+        self.btn_deshacer_paso.setFixedSize(34, 34)
+        self.btn_deshacer_paso.clicked.connect(self.deshacer_paso)
+        self.btn_deshacer_paso.setEnabled(False)
+        layout_sub.addWidget(self.btn_deshacer_paso)
         
         self.btn_sub_linea.setChecked(False)
         self.frame_subtools_union.hide()
@@ -1043,24 +984,29 @@ class DialogoVistaCelular(QDialog):
         self.btn_ver_sobrepuesta.setStyleSheet("QPushButton { padding: 4px 12px; background-color: #e1e4e8; border: 2px solid #d1d5da; border-radius: 12px; font-weight: bold; color: #586069; font-size: 11px; } QPushButton:checked { background-color: #0969da; border-color: #0969da; color: white; }")
         self.btn_ver_sobrepuesta.clicked.connect(self.actualizar_vista)
         
-        self.btn_aplicar_union = QPushButton("Guardar Unión")
+        self.btn_aplicar_union = QPushButton("Guardar")
         self.btn_aplicar_union.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_aplicar_union.setStyleSheet("QPushButton { padding: 5px 15px; background-color: #007bff; color: white; border-radius: 4px; font-weight: bold; font-size: 11px; }")
+        self.btn_aplicar_union.setStyleSheet("QPushButton { padding: 5px 15px; background-color: #007bff; color: white; border-radius: 4px; font-weight: bold; font-size: 11px; } QPushButton:disabled { background-color: #cccccc; color: #666666; }")
         self.btn_aplicar_union.hide()
+        self.btn_aplicar_union.setEnabled(False)
         self.btn_aplicar_union.clicked.connect(self.aplicar_union_esqueleto)
         
-        self.btn_deshacer_union = QPushButton("Deshacer")
-        self.btn_deshacer_union.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_deshacer_union.setStyleSheet("QPushButton { padding: 5px; background-color: #6c757d; color: white; border-radius: 4px; font-size: 11px; }")
-        self.btn_deshacer_union.hide()
-        self.btn_deshacer_union.clicked.connect(self.deshacer_union)
+        self.btn_reset = QPushButton()
+        self.btn_reset.setIcon(QIcon("assets/buttons/reset.png"))
+        self.btn_reset.setIconSize(QSize(20, 20))
+        self.btn_reset.setToolTip("Restablecer")
+        self.btn_reset.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_reset.setStyleSheet("QPushButton { background-color: transparent; border: none; padding: 2px; } QPushButton:hover { background-color: #ffdddd; border-radius: 17px; }")
+        self.btn_reset.setFixedSize(34, 34)
+        self.btn_reset.hide()
+        self.btn_reset.clicked.connect(self.restablecer_esqueleto)
         
         layout_tools_esqueleto.addWidget(lbl_unir)
         layout_tools_esqueleto.addWidget(self.btn_tool_unir)
         layout_tools_esqueleto.addWidget(self.btn_ver_sobrepuesta)
         layout_tools_esqueleto.addWidget(self.frame_subtools_union)
         layout_tools_esqueleto.addWidget(self.btn_aplicar_union)
-        layout_tools_esqueleto.addWidget(self.btn_deshacer_union)
+        layout_tools_esqueleto.addWidget(self.btn_reset)
         layout_tools_esqueleto.addStretch()
         
         layout_tools_limpieza.addWidget(QLabel("Limpieza:"))
@@ -1155,11 +1101,12 @@ class DialogoVistaCelular(QDialog):
         self.actualizar_vista()
 
     def preparar_fases(self):
+        self.undo_stack = []  # Pila de estados para deshacer paso a paso
         # Fase 0: Original
         self.fases_disponibles.append({"nombre": "ORIGINAL", "path": self.crop_path, "pixmap": None})
         
         # Fase 1: Filtrado
-        path_filtrado = self.crop_path.replace("/crops/", "/filtradas/").replace("\\crops\\", "\\filtradas\\")
+        path_filtrado = self.crop_path.replace("\\", "/").replace("/crops/", "/filtradas/")
 
         if self.pixmap_mem_filtrado:
             self.fases_disponibles.append({"nombre": "FILTRADO", "path": path_filtrado, "pixmap": self.pixmap_mem_filtrado})
@@ -1167,9 +1114,14 @@ class DialogoVistaCelular(QDialog):
             self.fases_disponibles.append({"nombre": "FILTRADO", "path": path_filtrado, "pixmap": None})
             
         # Fase 2: Esqueletizado
-        path_esqueleto = self.crop_path.replace("/crops/", "/esqueletos/").replace("\\crops\\", "\\esqueletos\\")
+        path_esqueleto = self.crop_path.replace("\\", "/").replace("/crops/", "/esqueletos/")
 
         if os.path.exists(path_esqueleto):
+            import cv2; import numpy as np
+            # Cargar en memoria: backup (intocable) + working (editable)
+            self.skeleton_backup = cv2.imread(path_esqueleto, cv2.IMREAD_GRAYSCALE)
+            self.skeleton_working = self.skeleton_backup.copy() if self.skeleton_backup is not None else None
+            self.skeleton_has_changes = False
             self.fases_disponibles.append({"nombre": "ESQUELETIZADO", "path": path_esqueleto, "pixmap": None})
 
     def actualizar_vista(self):
@@ -1183,6 +1135,13 @@ class DialogoVistaCelular(QDialog):
         if not pixmap:
             pixmap = QPixmap(fase["path"])
             
+        # Si estamos en ESQUELETIZADO, usar la imagen en memoria (skeleton_working)
+        if fase["nombre"] == "ESQUELETIZADO" and getattr(self, 'skeleton_working', None) is not None:
+            from PyQt6.QtGui import QImage
+            h_img, w_img = self.skeleton_working.shape
+            qimg = QImage(self.skeleton_working.data, w_img, h_img, w_img, QImage.Format.Format_Grayscale8)
+            pixmap = QPixmap.fromImage(qimg)
+        
         if pixmap and not pixmap.isNull():
             # Si estamos en ESQUELETIZADO y el botón de ver sobrepuesta está activo, combinar con la original
             if fase["nombre"] == "ESQUELETIZADO" and getattr(self, "btn_ver_sobrepuesta", None) and self.btn_ver_sobrepuesta.isChecked():
@@ -1205,9 +1164,6 @@ class DialogoVistaCelular(QDialog):
                 self.label_imagen.setPixmap(pixmap.scaled(380, 380, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
         else:
             self.label_imagen.setText(f"No se pudo cargar la imagen de {fase['nombre']}.")
-            
-        # Actualizar visibilidad de offsets según la fase seleccionada en el diálogo
-        # self.frame_offsets.setVisible(fase["nombre"] == "FILTRADO")
 
         self.btn_ant.setVisible(self.indice_fase > 0)
         self.btn_sig.setVisible(self.indice_fase < len(self.fases_disponibles) - 1)
@@ -1339,47 +1295,95 @@ class DialogoVistaCelular(QDialog):
             self.btn_tool_unir.setText("Off")
             self.actualizar_visibilidad_boton_limpieza()
 
+    def _actualizar_pixmap_esqueleto_memoria(self):
+        """Genera un QPixmap a partir de skeleton_working y lo asigna a la fase ESQUELETIZADO."""
+        if self.skeleton_working is None:
+            return
+        from PyQt6.QtGui import QImage
+        h_img, w_img = self.skeleton_working.shape
+        qimg = QImage(self.skeleton_working.data, w_img, h_img, w_img, QImage.Format.Format_Grayscale8)
+        pix = QPixmap.fromImage(qimg)
+        for f in self.fases_disponibles:
+            if f["nombre"] == "ESQUELETIZADO":
+                f["pixmap"] = pix
+                break
+
     def aplicar_union_esqueleto(self):
+        """Guarda todos los cambios (goma + uniones) al esqueleto en disco."""
+        import cv2; import numpy as np
+        from skimage.morphology import skeletonize
+
+        if self.skeleton_working is None:
+            return
+
+        # Generar la imagen final con las uniones de ramas aplicadas sobre el working actual
+        img_final = self.skeleton_working.copy()
+        for conn_path in self.box.get("manual_connections", []):
+            for i in range(len(conn_path) - 1):
+                p1 = (conn_path[i][0], conn_path[i][1])
+                p2 = (conn_path[i+1][0], conn_path[i+1][1])
+                cv2.line(img_final, p1, p2, 255, 2)
+
+        # Skeletonize para limpiar uniones a 1px
+        if len(self.box.get("manual_connections", [])) > 0:
+            img_bool = img_final > 0
+            skeleton = skeletonize(img_bool)
+            img_final = (skeleton * 255).astype(np.uint8)
+
+        # Mostrar previsualización del resultado final
+        self.skeleton_working = img_final
+        self._actualizar_pixmap_esqueleto_memoria()
+        self.actualizar_vista()
+        self.label_imagen.update()
+
+        # Preguntar si desea guardar permanentemente
         from vistas.utilidades import DialogoConfirmacion
-        diag = DialogoConfirmacion("Unir Ramas", "¿Confirmas que deseas guardar estas uniones en el esqueleto?")
+        diag = DialogoConfirmacion("Guardar Cambios", "¿Confirmas que deseas guardar estos cambios?")
         if diag.exec():
-            path_esqueleto = self.crop_path.replace("/crops/", "/esqueletos/").replace("\\crops\\", "\\esqueletos\\")
-            if os.path.exists(path_esqueleto):
-                import cv2; import numpy as np
-                img = cv2.imread(path_esqueleto, cv2.IMREAD_GRAYSCALE)
-                if img is not None:
-                    for path in self.box.get("manual_connections", []):
-                        for i in range(len(path) - 1):
-                            p1 = (path[i][0], path[i][1])
-                            p2 = (path[i+1][0], path[i+1][1])
-                            cv2.line(img, p1, p2, 255, 2) # Dibujar línea blanca de 2px para capturar la forma exacta dibujada
-                    
-                    # Ejecutar skeletonize para asegurar que las líneas se reduzcan a un esqueleto perfecto de 1px de grosor
-                    from skimage.morphology import skeletonize
-                    img_bool = img > 0
-                    skeleton = skeletonize(img_bool)
-                    img = (skeleton * 255).astype(np.uint8)
-                    
-                    cv2.imwrite(path_esqueleto, img)
-                    self.box["esqueleto_modificado"] = True
-                    # Limpiar conexiones ya aplicadas
-                    self.box["manual_connections"] = []
-                    self.actualizar_visibilidad_boton_limpieza() # Reutilizamos para el botón guardar
-                    self.actualizar_vista()
-                    self.label_imagen.update()
-                    
-                    # Desactivar modo unión tras guardar cambios
-                    self.btn_tool_unir.setChecked(False)
-                    self.toggle_modo_union(False)
-                    
-                    # Refrescar imagen global si es necesario
-                    if hasattr(self.parent(), "pixmaps_globales") and "Esqueleto" in self.parent().pixmaps_globales:
-                        pixmap_esqueleto = self.parent().construir_imagen_global("esqueletos")
-                        self.parent().pixmaps_globales["Esqueleto"] = pixmap_esqueleto
-                        if self.parent().combo_vista.currentText() == "Esqueleto":
-                            self.parent().visor_imagen.set_view_mode("Esqueleto", pixmap_esqueleto)
-                            
-                    self.mostrar_notificacion("Éxito", "Las ramas se han unido correctamente.", "info")
+            # Guardar permanentemente en disco
+            path_esqueleto = self.crop_path.replace("\\", "/").replace("/crops/", "/esqueletos/")
+            cv2.imwrite(path_esqueleto, img_final)
+            self.box["esqueleto_modificado"] = True
+            # Limpiar conexiones ya aplicadas
+            self.box["manual_connections"] = []
+            # Actualizar backup a la versión guardada
+            self.skeleton_backup = img_final.copy()
+            self.skeleton_has_changes = False
+            self.undo_stack = []
+            self.actualizar_visibilidad_boton_limpieza()
+            self.actualizar_vista()
+            self.label_imagen.update()
+
+            # Desactivar modo unión tras guardar cambios
+            self.btn_tool_unir.setChecked(False)
+            self.toggle_modo_union(False)
+
+            # Refrescar imagen global
+            self._refrescar_imagen_global_esqueleto()
+
+            self.mostrar_notificacion("Éxito", "Los cambios se han guardado correctamente.", "info")
+        else:
+            # Revertir: recalcular working desde el estado actual sin las uniones
+            # (las uniones no se habían aplicado al working antes, solo temporalmente)
+            # Restaurar skeleton_working al estado previo sin uniones aplicadas
+            # Re-leer desde la versión que teníamos antes de aplicar uniones
+            self.skeleton_working = self.skeleton_backup.copy()
+            self.skeleton_has_changes = False
+            self.box["manual_connections"] = []
+            self.undo_stack = []
+            self._actualizar_pixmap_esqueleto_memoria()
+            self.actualizar_vista()
+            self.label_imagen.update()
+            self.actualizar_visibilidad_boton_limpieza()
+
+    def _refrescar_imagen_global_esqueleto(self):
+        """Método auxiliar para actualizar la imagen global de esqueleto en la ventana principal."""
+        parent_win = self.parent()
+        if parent_win and hasattr(parent_win, "pixmaps_globales") and hasattr(parent_win, "construir_imagen_global"):
+            pixmap_esqueleto = parent_win.construir_imagen_global("esqueletos")
+            parent_win.pixmaps_globales["Esqueleto"] = pixmap_esqueleto
+            if hasattr(parent_win, "combo_vista") and parent_win.combo_vista.currentText() == "Esqueleto":
+                parent_win.visor_imagen.set_view_mode("Esqueleto", pixmap_esqueleto)
 
     def actualizar_visibilidad_boton_limpieza(self):
         has_areas = len(self.box.get("removal_areas", [])) > 0
@@ -1387,14 +1391,96 @@ class DialogoVistaCelular(QDialog):
         self.btn_limpiar_todo.setVisible(has_areas)
         
         has_uniones = len(self.box.get("manual_connections", [])) > 0
+        has_any_changes = has_uniones or getattr(self, 'skeleton_has_changes', False)
+        has_undo_steps = len(getattr(self, 'undo_stack', [])) > 0
         is_union_on = self.btn_tool_unir.isChecked()
-        self.btn_aplicar_union.setVisible(has_uniones or is_union_on)
-        self.btn_deshacer_union.setVisible(has_uniones)
+        # Guardar Cambios: visible si hay cambios pendientes o el modo unión está activo, pero solo habilitado si hay cambios reales
+        self.btn_aplicar_union.setVisible(has_any_changes or is_union_on)
+        self.btn_aplicar_union.setEnabled(has_any_changes)
+        # Restablecer / Reset: visible solo cuando unir ramas está OFF y la imagen ya fue modificada permanentemente (amarillo)
+        is_modified_saved = self.box.get("esqueleto_modificado", False)
+        show_reset = (not is_union_on) and is_modified_saved
+        self.btn_reset.setVisible(show_reset)
+        # Deshacer paso: habilitado si hay pasos en la pila
+        self.btn_deshacer_paso.setEnabled(has_undo_steps)
 
-    def deshacer_union(self):
-        if "manual_connections" in self.box and len(self.box["manual_connections"]) > 0:
-            self.box["manual_connections"].pop()
+    def _push_undo_state(self):
+        """Guarda el estado actual en la pila de deshacer antes de una acción."""
+        import copy
+        state = {
+            'skeleton': self.skeleton_working.copy() if self.skeleton_working is not None else None,
+            'connections': copy.deepcopy(self.box.get("manual_connections", []))
+        }
+        self.undo_stack.append(state)
+        self.skeleton_has_changes = True
+
+    def deshacer_paso(self):
+        """Deshace el último paso individual (una acción de goma o una conexión)."""
+        if not getattr(self, 'undo_stack', None) or len(self.undo_stack) == 0:
+            return
+        state = self.undo_stack.pop()
+        if state['skeleton'] is not None:
+            self.skeleton_working = state['skeleton']
+        self.box["manual_connections"] = state['connections']
+        self.skeleton_has_changes = len(self.undo_stack) > 0
+        self._actualizar_pixmap_esqueleto_memoria()
         self.actualizar_visibilidad_boton_limpieza()
+        self.actualizar_vista()
+        self.label_imagen.update()
+
+    def restablecer_esqueleto(self):
+        """Revierte los cambios al estado original.
+        - Si unir ramas está ON: Revierte los cambios temporales en memoria al último backup guardado.
+        - Si unir ramas está OFF: Recalcula y restaura el esqueleto original sin modificaciones a partir de la imagen filtrada.
+        """
+        import numpy as np
+        is_union_on = self.btn_tool_unir.isChecked()
+        
+        if not is_union_on:
+            from vistas.utilidades import DialogoConfirmacion
+            diag = DialogoConfirmacion(
+                "Restaurar Esqueleto",
+                "¿Confirmas que deseas restaurar este esqueleto al original?\nSe perderán permanentemente todos los cambios manuales guardados."
+            )
+            if diag.exec():
+                path_filtrado = self.crop_path.replace("\\", "/").replace("/crops/", "/filtradas/")
+                import cv2
+                from skimage.morphology import skeletonize
+                img_raw = cv2.imread(path_filtrado, cv2.IMREAD_GRAYSCALE)
+                if img_raw is not None:
+                    _, bin_img = cv2.threshold(img_raw, 127, 255, cv2.THRESH_BINARY)
+                    img_bool = bin_img > 0
+                    skeleton = skeletonize(img_bool)
+                    img_final = (skeleton * 255).astype(np.uint8)
+                    
+                    path_esqueleto = self.crop_path.replace("\\", "/").replace("/crops/", "/esqueletos/")
+                    cv2.imwrite(path_esqueleto, img_final)
+                    
+                    self.skeleton_working = img_final.copy()
+                    self.skeleton_backup = img_final.copy()
+                    self.box["esqueleto_modificado"] = False
+                    self.box["manual_connections"] = []
+                    self.undo_stack = []
+                    self.skeleton_has_changes = False
+                    
+                    self._actualizar_pixmap_esqueleto_memoria()
+                    self.actualizar_visibilidad_boton_limpieza()
+                    self.actualizar_vista()
+                    self.label_imagen.update()
+                    self._refrescar_imagen_global_esqueleto()
+                    self.mostrar_notificacion("Restablecido", "El esqueleto ha sido restaurado al filtrado original.", "info")
+            return
+
+        # Si unir ramas está ON: Restaurar esqueleto al último estado guardado en disco
+        if getattr(self, 'skeleton_backup', None) is not None:
+            self.skeleton_working = self.skeleton_backup.copy()
+            self.skeleton_has_changes = False
+        # Limpiar todas las conexiones manuales y pila de undo
+        self.box["manual_connections"] = []
+        self.undo_stack = []
+        self._actualizar_pixmap_esqueleto_memoria()
+        self.actualizar_visibilidad_boton_limpieza()
+        self.actualizar_vista()
         self.label_imagen.update()
 
     def deshacer_limpieza(self):
@@ -1619,7 +1705,7 @@ class InteractiveImageViewer(QLabel):
             if self.current_tool == "pointer":
                 if self.hovered_index != -1:
                     crop_path_base = self.boxes[self.hovered_index]["crop_path"]
-                    crop_path = crop_path_base
+                    crop_path = crop_path_base.replace("\\", "/")
                     pixmap_mem = None
                     if hasattr(self.window(), 'crops_filtrados_temp'):
                         nombre_base = os.path.basename(crop_path)
@@ -1630,14 +1716,19 @@ class InteractiveImageViewer(QLabel):
                                 qimg = QImage(arr.data, w, h, w, QImage.Format.Format_Grayscale8)
                                 pixmap_mem = QPixmap.fromImage(qimg)
                     
-                    if self.view_mode == "Filtrada": crop_path = crop_path.replace("/crops/", "/filtradas/").replace("\\crops\\", "\\filtradas\\")
-                    elif self.view_mode == "Esqueleto": crop_path = crop_path.replace("/crops/", "/esqueletos/").replace("\\crops\\", "\\esqueletos\\")
+                    if self.view_mode == "Filtrada": crop_path = crop_path.replace("/crops/", "/filtradas/")
+                    elif self.view_mode == "Esqueleto": crop_path = crop_path.replace("/crops/", "/esqueletos/")
 
                     if os.path.exists(crop_path) or pixmap_mem:
                         self.active_index = self.hovered_index
                         self.draw_current_state()
                         DialogoVistaCelular(self.boxes[self.hovered_index], pixmap_mem, self.view_mode, self.window()).exec()
                         self.active_index = -1
+                        # Refrescar imagen global de esqueleto tras cerrar el diálogo por si hubo ediciones
+                        if self.view_mode == "Esqueleto" and hasattr(self.window(), 'construir_imagen_global'):
+                            pixmap_esqueleto = self.window().construir_imagen_global("esqueletos")
+                            self.window().pixmaps_globales["Esqueleto"] = pixmap_esqueleto
+                            self.window().visor_imagen.set_view_mode("Esqueleto", pixmap_esqueleto)
                         self.draw_current_state()
 
                 else:
@@ -2528,6 +2619,9 @@ class VentanaInvestigador(QMainWindow):
                 if datos_json:
                     datos = json.loads(datos_json)
                     boxes = datos.get("boxes", [])
+                    for b in boxes:
+                        if "crop_path" in b and isinstance(b["crop_path"], str):
+                            b["crop_path"] = b["crop_path"].replace("\\", "/")
                     self.metricas_reporte = datos.get("metricas_acumuladas", [])
                 else: boxes = []; self.metricas_reporte = []
 
@@ -3008,6 +3102,11 @@ class VentanaInvestigador(QMainWindow):
             "tiempo": self.metadatos_imagen.get("tiempo", ""),
             "metricas": metricas_imagen
         })
+        
+        # Limpiar marcas de esqueleto modificado para quitar el resaltado amarillo
+        for box in self.visor_imagen.boxes:
+            box["esqueleto_modificado"] = False
+        self.visor_imagen.draw_current_state()
         
         self.metricas_extraidas_ciclo_actual = True
         self.actualizar_estado_flujo(5)

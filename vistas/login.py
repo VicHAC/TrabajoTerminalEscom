@@ -23,9 +23,13 @@ class VentanaLogin(QWidget):
         self.setWindowIcon(QIcon(self.icon_path))
         self.resize(400, 550)
         
-        layout = QVBoxLayout()
-        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.setContentsMargins(40, 20, 40, 20)
+        # Contenedor central de tamaño fijo para mantener la responsividad
+        contenedor_login = QWidget()
+        contenedor_login.setFixedWidth(320)
+        
+        layout_login = QVBoxLayout(contenedor_login)
+        layout_login.setContentsMargins(0, 0, 0, 0)
+        layout_login.setSpacing(10)
 
         # 1. EL LOGO
         self.logo = QLabel("Aquí va tu logo (assets/logo.png)")
@@ -67,16 +71,19 @@ class VentanaLogin(QWidget):
         label_ayuda.setStyleSheet("color: #888888; font-size: 11px; margin-top: 30px;")
         label_ayuda.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        layout.addWidget(self.logo, alignment=Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(titulo, alignment=Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(subtitulo, alignment=Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(self.input_usuario)
-        layout.addWidget(self.input_password)
-        layout.addWidget(btn_ingresar)
-        layout.addWidget(btn_invitado)
-        layout.addWidget(label_ayuda)
+        layout_login.addWidget(self.logo, alignment=Qt.AlignmentFlag.AlignCenter)
+        layout_login.addWidget(titulo, alignment=Qt.AlignmentFlag.AlignCenter)
+        layout_login.addWidget(subtitulo, alignment=Qt.AlignmentFlag.AlignCenter)
+        layout_login.addWidget(self.input_usuario)
+        layout_login.addWidget(self.input_password)
+        layout_login.addWidget(btn_ingresar)
+        layout_login.addWidget(btn_invitado)
+        layout_login.addWidget(label_ayuda)
 
-        self.setLayout(layout)
+        layout_principal = QVBoxLayout(self)
+        layout_principal.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout_principal.addWidget(contenedor_login)
+        self.setLayout(layout_principal)
 
     def verificar_login(self):
         usuario = self.input_usuario.text()
