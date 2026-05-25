@@ -1994,7 +1994,7 @@ class DialogoHistorial(QDialog):
         self.tree.setIndentation(20)
         self.tree.setAnimated(True)
         from PyQt6.QtWidgets import QAbstractItemView
-        self.tree.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
+        self.tree.setSelectionMode(QAbstractItemView.SelectionMode.MultiSelection)
         self.tree.setStyleSheet("""
             QTreeWidget { border: 1px solid #d0d7de; border-radius: 8px; background-color: #ffffff; alternate-background-color: #f6f8fa; font-size: 11px; outline: none; }
             QTreeWidget::item { height: 32px; border-bottom: 1px solid #f0f0f0; color: #24292f; }

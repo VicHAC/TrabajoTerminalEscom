@@ -233,8 +233,8 @@ class VentanaAdministrador(QMainWindow):
         menu_lateral.addWidget(label_bienvenida)
         menu_lateral.addWidget(label_usuario_logueado)
 
-        self.btn_usuarios = QPushButton("Ver Usuarios")
-        self.btn_reportes = QPushButton("Gestionar Reportes")
+        self.btn_usuarios = QPushButton("Usuarios")
+        self.btn_reportes = QPushButton("Gestionar reportes")
 
         estilo_btn_menu = """
             QPushButton {
@@ -305,7 +305,7 @@ class VentanaAdministrador(QMainWindow):
             QPushButton:disabled { opacity: 0.3; }
         """)
         self.btn_registrar_usuario.setEnabled(True)
-        self.btn_registrar_usuario.setToolTip("Registrar nuevo usuario")
+        self.btn_registrar_usuario.setToolTip("Crear usuario")
         
         self.btn_editar_usuario = QPushButton()
         self.btn_editar_usuario.setIcon(QIcon("assets/buttons/editar.png"))
@@ -379,12 +379,22 @@ class VentanaAdministrador(QMainWindow):
         header_reportes.addWidget(self.btn_eliminar_reporte_fisico)
         
         self.tabla_reportes = QTableWidget()
-        self.tabla_reportes.setColumnCount(5)
-        self.tabla_reportes.setHorizontalHeaderLabels(["ID Reporte", "ID Análisis", "Ruta Archivo", "Fecha Generación", "Creado por"])
-        self.tabla_reportes.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.tabla_reportes.setColumnCount(7)
+        self.tabla_reportes.setHorizontalHeaderLabels([
+            "ID Reporte", 
+            "ID Análisis", 
+            "Nombre del\nReporte", 
+            "Autor", 
+            "Estatus del analisis", 
+            "Fecha de\nGeneración", 
+            "Ruta Archivo"
+        ])
+        self.tabla_reportes.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
+        self.tabla_reportes.horizontalHeader().setStretchLastSection(True)
+        self.tabla_reportes.horizontalHeader().setMinimumHeight(50)
         self.tabla_reportes.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.tabla_reportes.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
-        self.tabla_reportes.setSelectionMode(QTableWidget.SelectionMode.ExtendedSelection)
+        self.tabla_reportes.setSelectionMode(QTableWidget.SelectionMode.MultiSelection)
         
         layout_reportes.addLayout(header_reportes)
         layout_reportes.addWidget(self.tabla_reportes)
@@ -539,10 +549,12 @@ class VentanaAdministrador(QMainWindow):
             cursor.execute("""
                 SELECT 
                     R.id_reporte, 
-                    A.id_analisis, 
-                    COALESCE(I.ruta_archivo, 'Sin archivo'), 
+                    COALESCE(A.id_analisis, 'Sin análisis'), 
+                    COALESCE(R.nombre_reporte, 'Sin nombre'), 
+                    COALESCE(U.nombre_usuario, 'Desconocido'),
+                    CASE WHEN A.paso_actual >= 5 THEN 'Completado' ELSE 'Incompleto' END,
                     COALESCE(A.fecha_analisis, R.fecha_creacion),
-                    COALESCE(U.nombre_usuario, 'Desconocido')
+                    COALESCE(I.ruta_archivo, 'Sin archivo')
                 FROM Reporte R
                 LEFT JOIN Analisis A ON R.id_reporte = A.id_reporte
                 LEFT JOIN Imagen I ON A.id_imagen = I.id_imagen
@@ -555,6 +567,7 @@ class VentanaAdministrador(QMainWindow):
             for fila_idx, fila_datos in enumerate(reportes):
                 for col_idx, dato in enumerate(fila_datos):
                     self.tabla_reportes.setItem(fila_idx, col_idx, QTableWidgetItem(str(dato)))
+            self.tabla_reportes.resizeColumnsToContents()
         except Exception as e:
             print(f"Error al cargar reportes: {e}")
         finally:
@@ -584,7 +597,7 @@ class VentanaAdministrador(QMainWindow):
                 for index in filas_seleccionadas:
                     row = index.row()
                     item_id = self.tabla_reportes.item(row, 0)
-                    item_ruta = self.tabla_reportes.item(row, 2)
+                    item_ruta = self.tabla_reportes.item(row, 6)
                     if not item_id:
                         continue
                     id_reporte = item_id.text()
