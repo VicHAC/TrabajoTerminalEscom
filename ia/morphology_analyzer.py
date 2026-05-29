@@ -18,7 +18,12 @@ class MorphologyAnalyzer:
 
     def _apply_otsu_blur(self, img_path: Path, out_path: Path):
         """Helper method: Applies Gaussian Blur and Otsu Binarization."""
-        img_raw = cv2.imread(str(img_path), cv2.IMREAD_GRAYSCALE)
+        try:
+            with open(img_path, "rb") as f:
+                file_bytes = np.frombuffer(f.read(), dtype=np.uint8)
+            img_raw = cv2.imdecode(file_bytes, cv2.IMREAD_GRAYSCALE)
+        except Exception:
+            img_raw = None
         if img_raw is None:
             return False
 
@@ -27,12 +32,21 @@ class MorphologyAnalyzer:
             img_blurred, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU
         )
 
-        cv2.imwrite(str(out_path), img_binary)
+        is_success, im_buf_arr = cv2.imencode(".png", img_binary)
+        if is_success:
+            im_buf_arr.tofile(str(out_path))
+        else:
+            cv2.imwrite(str(out_path), img_binary)
         return True
 
     def _apply_skeleton(self, img_path: Path, out_path: Path):
         """Helper method: Reduces binary image to a topological skeleton."""
-        img_raw = cv2.imread(str(img_path), cv2.IMREAD_GRAYSCALE)
+        try:
+            with open(img_path, "rb") as f:
+                file_bytes = np.frombuffer(f.read(), dtype=np.uint8)
+            img_raw = cv2.imdecode(file_bytes, cv2.IMREAD_GRAYSCALE)
+        except Exception:
+            img_raw = None
         if img_raw is None:
             return False
 
@@ -40,7 +54,11 @@ class MorphologyAnalyzer:
         skeleton = skeletonize(img_bool)
         skeleton_img = (skeleton * 255).astype(np.uint8)
 
-        cv2.imwrite(str(out_path), skeleton_img)
+        is_success, im_buf_arr = cv2.imencode(".png", skeleton_img)
+        if is_success:
+            im_buf_arr.tofile(str(out_path))
+        else:
+            cv2.imwrite(str(out_path), skeleton_img)
         return True
 
     def execute_filtering(self, global_img_path: str):

@@ -59,7 +59,12 @@ class MicrogliaProcessor:
                 else:
                     raise ValueError("Unsupported TIFF image format.")
             else:
-                img_raw = cv2.imread(image_path, cv2.IMREAD_UNCHANGED)
+                try:
+                    with open(image_path, "rb") as f:
+                        file_bytes = np.frombuffer(f.read(), dtype=np.uint8)
+                    img_raw = cv2.imdecode(file_bytes, cv2.IMREAD_UNCHANGED)
+                except Exception as e:
+                    img_raw = None
                 if img_raw is None:
                     raise ValueError(f"OpenCV could not decode the image file: {image_path}")
                 if len(img_raw.shape) == 3:
@@ -147,7 +152,11 @@ class MicrogliaProcessor:
 
             crop_filename = f"microglia_{i+1}.png"
             crop_path = os.path.join(crops_folder, crop_filename)
-            cv2.imwrite(crop_path, crop_img)
+            is_success, im_buf_arr = cv2.imencode(".png", crop_img)
+            if is_success:
+                im_buf_arr.tofile(crop_path)
+            else:
+                cv2.imwrite(crop_path, crop_img)
 
             detected_boxes_data.append({
                 "x": x1,

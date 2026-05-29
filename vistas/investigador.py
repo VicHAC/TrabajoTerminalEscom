@@ -308,7 +308,12 @@ class DialogoCargarImagen(QDialog):
         try:
             import cv2
             import numpy as np
-            cv_img = cv2.imread(ruta, cv2.IMREAD_UNCHANGED)
+            try:
+                with open(ruta, "rb") as f:
+                    file_bytes = np.frombuffer(f.read(), dtype=np.uint8)
+                cv_img = cv2.imdecode(file_bytes, cv2.IMREAD_UNCHANGED)
+            except Exception:
+                cv_img = None
             if cv_img is not None:
                 if cv_img.dtype == np.uint16:
                     cv_img = ((cv_img - cv_img.min()) / (cv_img.max() - cv_img.min()) * 255).astype(np.uint8)
@@ -1119,7 +1124,12 @@ class DialogoVistaCelular(QDialog):
         if os.path.exists(path_esqueleto):
             import cv2; import numpy as np
             # Cargar en memoria: backup (intocable) + working (editable)
-            self.skeleton_backup = cv2.imread(path_esqueleto, cv2.IMREAD_GRAYSCALE)
+            try:
+                with open(path_esqueleto, "rb") as f:
+                    file_bytes = np.frombuffer(f.read(), dtype=np.uint8)
+                self.skeleton_backup = cv2.imdecode(file_bytes, cv2.IMREAD_GRAYSCALE)
+            except Exception:
+                self.skeleton_backup = None
             self.skeleton_working = self.skeleton_backup.copy() if self.skeleton_backup is not None else None
             self.skeleton_has_changes = False
             self.fases_disponibles.append({"nombre": "ESQUELETIZADO", "path": path_esqueleto, "pixmap": None})
@@ -1138,7 +1148,7 @@ class DialogoVistaCelular(QDialog):
         # Si estamos en ESQUELETIZADO, usar la imagen en memoria (skeleton_working)
         if fase["nombre"] == "ESQUELETIZADO" and getattr(self, 'skeleton_working', None) is not None:
             from PyQt6.QtGui import QImage
-            h_img, w_img = self.skeleton_working.shape
+            h_img, w_img = self.skeleton_working.shape[:2]
             qimg = QImage(self.skeleton_working.data, w_img, h_img, w_img, QImage.Format.Format_Grayscale8)
             pixmap = QPixmap.fromImage(qimg)
         
@@ -1300,7 +1310,7 @@ class DialogoVistaCelular(QDialog):
         if self.skeleton_working is None:
             return
         from PyQt6.QtGui import QImage
-        h_img, w_img = self.skeleton_working.shape
+        h_img, w_img = self.skeleton_working.shape[:2]
         qimg = QImage(self.skeleton_working.data, w_img, h_img, w_img, QImage.Format.Format_Grayscale8)
         pix = QPixmap.fromImage(qimg)
         for f in self.fases_disponibles:
@@ -1342,7 +1352,11 @@ class DialogoVistaCelular(QDialog):
         if diag.exec():
             # Guardar permanentemente en disco
             path_esqueleto = self.crop_path.replace("\\", "/").replace("/crops/", "/esqueletos/")
-            cv2.imwrite(path_esqueleto, img_final)
+            is_success, im_buf_arr = cv2.imencode(".png", img_final)
+            if is_success:
+                im_buf_arr.tofile(path_esqueleto)
+            else:
+                cv2.imwrite(path_esqueleto, img_final)
             self.box["esqueleto_modificado"] = True
             # Limpiar conexiones ya aplicadas
             self.box["manual_connections"] = []
@@ -1446,7 +1460,12 @@ class DialogoVistaCelular(QDialog):
                 path_filtrado = self.crop_path.replace("\\", "/").replace("/crops/", "/filtradas/")
                 import cv2
                 from skimage.morphology import skeletonize
-                img_raw = cv2.imread(path_filtrado, cv2.IMREAD_GRAYSCALE)
+                try:
+                    with open(path_filtrado, "rb") as f:
+                        file_bytes = np.frombuffer(f.read(), dtype=np.uint8)
+                    img_raw = cv2.imdecode(file_bytes, cv2.IMREAD_GRAYSCALE)
+                except Exception:
+                    img_raw = None
                 if img_raw is not None:
                     _, bin_img = cv2.threshold(img_raw, 127, 255, cv2.THRESH_BINARY)
                     img_bool = bin_img > 0
@@ -1454,7 +1473,11 @@ class DialogoVistaCelular(QDialog):
                     img_final = (skeleton * 255).astype(np.uint8)
                     
                     path_esqueleto = self.crop_path.replace("\\", "/").replace("/crops/", "/esqueletos/")
-                    cv2.imwrite(path_esqueleto, img_final)
+                    is_success, im_buf_arr = cv2.imencode(".png", img_final)
+                    if is_success:
+                        im_buf_arr.tofile(path_esqueleto)
+                    else:
+                        cv2.imwrite(path_esqueleto, img_final)
                     
                     self.skeleton_working = img_final.copy()
                     self.skeleton_backup = img_final.copy()
@@ -2628,7 +2651,12 @@ class VentanaInvestigador(QMainWindow):
                 # Cargar imagen
                 from PyQt6.QtGui import QImage, QPixmap
                 import cv2; import numpy as np
-                cv_img = cv2.imread(ruta, cv2.IMREAD_UNCHANGED)
+                try:
+                    with open(ruta, "rb") as f:
+                        file_bytes = np.frombuffer(f.read(), dtype=np.uint8)
+                    cv_img = cv2.imdecode(file_bytes, cv2.IMREAD_UNCHANGED)
+                except Exception:
+                    cv_img = None
                 if cv_img is not None:
                     if cv_img.dtype == np.uint16: cv_img = ((cv_img-cv_img.min())/(cv_img.max()-cv_img.min())*255).astype(np.uint8)
                     if len(cv_img.shape) == 2: h, w = cv_img.shape; qimg = QImage(cv_img.data, w, h, w, QImage.Format.Format_Grayscale8)
@@ -2716,7 +2744,12 @@ class VentanaInvestigador(QMainWindow):
                 if pixmap.isNull():
                     try:
                         import cv2; import numpy as np
-                        cv_img = cv2.imread(ruta_archivo, cv2.IMREAD_UNCHANGED)
+                        try:
+                            with open(ruta_archivo, "rb") as f:
+                                file_bytes = np.frombuffer(f.read(), dtype=np.uint8)
+                            cv_img = cv2.imdecode(file_bytes, cv2.IMREAD_UNCHANGED)
+                        except Exception:
+                            cv_img = None
                         if cv_img is not None:
                             if cv_img.dtype == np.uint16: cv_img = ((cv_img - cv_img.min()) / (cv_img.max() - cv_img.min()) * 255).astype(np.uint8)
                             if len(cv_img.shape) == 2: h, w = cv_img.shape; qimg = QImage(cv_img.data, w, h, w, QImage.Format.Format_Grayscale8)
