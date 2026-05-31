@@ -108,13 +108,35 @@ class DialogoConfirmacion(QDialog):
         layout = QVBoxLayout(self)
         frame = QFrame(self)
         frame.setStyleSheet("""
-            QFrame { background-color: #FFFFFF; border-radius: 12px; border: 1px solid #cf222e; }
+            QFrame { background-color: #FFFFFF; border-radius: 15px; border: 2px solid #cf222e; }
             QLabel { color: #24292f; font-size: 13px; padding: 5px; border: none;}
-            QPushButton { border-radius: 6px; font-weight: 600; padding: 6px 15px; font-size: 13px; border: 1px solid #d0d7de; }
-            QPushButton#btn_eliminar { background-color: #cf222e; color: white; border-color: #a40e26; }
-            QPushButton#btn_eliminar:hover { background-color: #a40e26; }
-            QPushButton#btn_mantener { background-color: #f6f8fa; color: #24292f; }
-            QPushButton#btn_mantener:hover { background-color: #f3f4f6; }
+            QPushButton { border-radius: 8px; font-size: 13px; outline: none; }
+            
+            QPushButton#btn_eliminar { 
+                background-color: transparent; 
+                color: #cf222e; 
+                border: 2px solid #cf222e; 
+                font-weight: bold;
+                padding: 8px 20px;
+            }
+            QPushButton#btn_eliminar:hover { 
+                background-color: #cf222e; 
+                color: white; 
+                border-color: #cf222e;
+            }
+            
+            QPushButton#btn_mantener { 
+                background-color: transparent; 
+                color: #57606a; 
+                border: 2px solid #d0d7de; 
+                font-weight: bold;
+                padding: 8px 20px;
+            }
+            QPushButton#btn_mantener:hover { 
+                background-color: #f3f4f6; 
+                color: #24292f; 
+                border-color: #8c959f;
+            }
         """)
 
         flayout = QVBoxLayout(frame)

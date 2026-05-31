@@ -1592,12 +1592,35 @@ class DialogoConfirmacion(QDialog):
         layout = QVBoxLayout(self)
         frame = QFrame(self)
         frame.setStyleSheet("""
-            QFrame { background-color: #FFFFFF; border-radius: 12px; border: 2px solid #cc0000; }
+            QFrame { background-color: #FFFFFF; border-radius: 15px; border: 2px solid #cf222e; }
             QLabel { color: #333333; font-size: 15px; padding: 10px; border: none;}
-            QPushButton { border-radius: 6px; font-weight: bold; padding: 8px 15px; font-size: 14px; }
-            QPushButton#btn_eliminar { background-color: #cc0000; color: white; }
-            QPushButton#btn_eliminar:hover { background-color: #aa0000; }
-            QPushButton#btn_mantener { background-color: #e0e0e0; color: #333333; }
+            QPushButton { border-radius: 8px; font-size: 13px; outline: none; }
+            
+            QPushButton#btn_eliminar { 
+                background-color: transparent; 
+                color: #cf222e; 
+                border: 2px solid #cf222e; 
+                font-weight: bold;
+                padding: 8px 20px;
+            }
+            QPushButton#btn_eliminar:hover { 
+                background-color: #cf222e; 
+                color: white; 
+                border-color: #cf222e;
+            }
+            
+            QPushButton#btn_mantener { 
+                background-color: transparent; 
+                color: #57606a; 
+                border: 2px solid #d0d7de; 
+                font-weight: bold;
+                padding: 8px 20px;
+            }
+            QPushButton#btn_mantener:hover { 
+                background-color: #f3f4f6; 
+                color: #24292f; 
+                border-color: #8c959f;
+            }
         """)
 
         flayout = QVBoxLayout(frame)
@@ -2123,7 +2146,7 @@ class DialogoHistorial(QDialog):
         from PyQt6.QtWidgets import QAbstractItemView
         self.tree.setSelectionMode(QAbstractItemView.SelectionMode.MultiSelection)
         self.tree.setStyleSheet("""
-            QTreeWidget { border: none; background-color: #ffffff; alternate-background-color: #f6f8fa; font-size: 11px; outline: none; }
+            QTreeWidget { border: 1px solid #d0d7de; border-radius: 6px; background-color: #ffffff; alternate-background-color: #f6f8fa; font-size: 11px; outline: none; }
             QTreeWidget::item { height: 32px; border-bottom: 1px solid #f0f0f0; color: #24292f; }
             QTreeWidget::item:selected { background-color: #0969da; color: #ffffff; }
             QHeaderView::section { background-color: #f6f8fa; padding: 6px; font-weight: bold; border: none; border-bottom: 2px solid #d0d7de; color: #57606a; font-size: 11px; }
@@ -2149,7 +2172,7 @@ class DialogoHistorial(QDialog):
         self.tree_compartidos.setAnimated(True)
         self.tree_compartidos.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.tree_compartidos.setStyleSheet("""
-            QTreeWidget { border: none; background-color: #ffffff; alternate-background-color: #f6f8fa; font-size: 11px; outline: none; }
+            QTreeWidget { border: 1px solid #d0d7de; border-radius: 6px; background-color: #ffffff; alternate-background-color: #f6f8fa; font-size: 11px; outline: none; }
             QTreeWidget::item { height: 32px; border-bottom: 1px solid #f0f0f0; color: #24292f; }
             QTreeWidget::item:selected { background-color: #0969da; color: #ffffff; }
             QHeaderView::section { background-color: #f6f8fa; padding: 6px; font-weight: bold; border: none; border-bottom: 2px solid #d0d7de; color: #57606a; font-size: 11px; }

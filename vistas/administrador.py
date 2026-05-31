@@ -27,7 +27,7 @@ class DialogoCrearUsuario(QDialog):
         self.input_password.setPlaceholderText("Contraseña")
         self.input_password.setEchoMode(QLineEdit.EchoMode.Password)
         self.combo_rol = QComboBox()
-        self.combo_rol.addItems(["Investigador", "Administrador", "Tesista"])
+        self.combo_rol.addItems(["Administrador", "Investigador", "Tesista"])
         self.combo_rol.setStyleSheet("""
             QComboBox {
                 border: 1px solid #d0d7de;
@@ -114,7 +114,7 @@ class DialogoEditarUsuario(QDialog):
         self.input_password.setEchoMode(QLineEdit.EchoMode.Password)
         
         self.combo_rol = QComboBox()
-        self.combo_rol.addItems(["Investigador", "Administrador", "Tesista"])
+        self.combo_rol.addItems(["Administrador", "Investigador", "Tesista"])
         self.combo_rol.setCurrentText(rol_actual) 
         self.combo_rol.setStyleSheet("""
             QComboBox {
@@ -200,6 +200,17 @@ class VentanaAdministrador(QMainWindow):
         from vistas.utilidades import set_app_icon
         set_app_icon(self)
         
+        self.setStyleSheet("""
+            QToolTip {
+                background-color: #24292f;
+                color: #ffffff;
+                border: 1px solid #24292f;
+                border-radius: 4px;
+                padding: 3px 6px;
+                font-size: 10px;
+            }
+        """)
+        
         self.inicializar_ui()
 
     def inicializar_ui(self):
@@ -236,7 +247,19 @@ class VentanaAdministrador(QMainWindow):
         self.btn_usuarios = QPushButton("Usuarios")
         self.btn_reportes = QPushButton("Gestionar reportes")
 
-        estilo_btn_menu = """
+        self.estilo_activo = """
+            QPushButton {
+                background-color: #ddf4ff; 
+                text-align: left; 
+                padding: 10px; 
+                font-weight: bold;
+                color: #0969da;
+                border: none;
+                border-radius: 6px;
+                font-size: 12px;
+            }
+        """
+        self.estilo_inactivo = """
             QPushButton {
                 background-color: transparent; 
                 text-align: left; 
@@ -251,8 +274,9 @@ class VentanaAdministrador(QMainWindow):
                 border-radius: 6px;
             }
         """
+        
         for btn in [self.btn_usuarios, self.btn_reportes]:
-            btn.setStyleSheet(estilo_btn_menu)
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
             menu_lateral.addWidget(btn)
 
         # Boton de cerrar sesión
@@ -338,14 +362,42 @@ class VentanaAdministrador(QMainWindow):
         header_usuarios.addWidget(self.btn_registrar_usuario)
         header_usuarios.addWidget(self.btn_editar_usuario)
         header_usuarios.addWidget(self.btn_eliminar_usuario)
+        self.btn_eliminar_usuario.installEventFilter(self)
         
         self.tabla_usuarios = QTableWidget()
-        self.tabla_usuarios.setColumnCount(4)
-        self.tabla_usuarios.setHorizontalHeaderLabels(["ID", "Nombre de Usuario", "Rol", "Fecha Creación"])
+        self.tabla_usuarios.setColumnCount(5)
+        self.tabla_usuarios.setHorizontalHeaderLabels(["ID", "Nombre de Usuario", "Rol", "Fecha Creación", "Colaborador"])
         self.tabla_usuarios.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.tabla_usuarios.verticalHeader().setVisible(False)
+        self.tabla_usuarios.setCornerButtonEnabled(False)
         self.tabla_usuarios.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.tabla_usuarios.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
-        self.tabla_usuarios.setSelectionMode(QTableWidget.SelectionMode.ExtendedSelection)
+        self.tabla_usuarios.setSelectionMode(QTableWidget.SelectionMode.MultiSelection)
+        self.tabla_usuarios.setStyleSheet("""
+            QTableWidget {
+                background-color: #ffffff;
+                border: 1px solid #d0d7de;
+                gridline-color: #f0f0f0;
+                color: #24292f;
+                font-size: 12px;
+                border-radius: 6px;
+                outline: none;
+            }
+            QTableWidget::item {
+                padding: 6px;
+                border: none;
+            }
+            QHeaderView::section {
+                background-color: #f6f8fa;
+                color: #57606a;
+                padding: 6px;
+                font-weight: bold;
+                font-size: 11px;
+                border: 1px solid #d0d7de;
+                border-top: none;
+                border-left: none;
+            }
+        """)
         
         layout_usuarios.addLayout(header_usuarios)
         layout_usuarios.addWidget(self.tabla_usuarios)
@@ -377,6 +429,7 @@ class VentanaAdministrador(QMainWindow):
         header_reportes.addWidget(titulo_reportes)
         header_reportes.addStretch()
         header_reportes.addWidget(self.btn_eliminar_reporte_fisico)
+        self.btn_eliminar_reporte_fisico.installEventFilter(self)
         
         self.tabla_reportes = QTableWidget()
         self.tabla_reportes.setColumnCount(7)
@@ -392,9 +445,36 @@ class VentanaAdministrador(QMainWindow):
         self.tabla_reportes.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
         self.tabla_reportes.horizontalHeader().setStretchLastSection(True)
         self.tabla_reportes.horizontalHeader().setMinimumHeight(50)
+        self.tabla_reportes.verticalHeader().setVisible(False)
+        self.tabla_reportes.setCornerButtonEnabled(False)
         self.tabla_reportes.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.tabla_reportes.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.tabla_reportes.setSelectionMode(QTableWidget.SelectionMode.MultiSelection)
+        self.tabla_reportes.setStyleSheet("""
+            QTableWidget {
+                background-color: #ffffff;
+                border: 1px solid #d0d7de;
+                gridline-color: #f0f0f0;
+                color: #24292f;
+                font-size: 12px;
+                border-radius: 6px;
+                outline: none;
+            }
+            QTableWidget::item {
+                padding: 6px;
+                border: none;
+            }
+            QHeaderView::section {
+                background-color: #f6f8fa;
+                color: #57606a;
+                padding: 6px;
+                font-weight: bold;
+                font-size: 11px;
+                border: 1px solid #d0d7de;
+                border-top: none;
+                border-left: none;
+            }
+        """)
         
         layout_reportes.addLayout(header_reportes)
         layout_reportes.addWidget(self.tabla_reportes)
@@ -420,14 +500,40 @@ class VentanaAdministrador(QMainWindow):
         self.tabla_reportes.itemSelectionChanged.connect(self.actualizar_estado_boton_borrar)
 
         self.cargar_usuarios_bd()
+        self.actualizar_estilo_menu()
+
+    def eventFilter(self, obj, event):
+        from PyQt6.QtCore import QEvent, QPoint
+        from PyQt6.QtWidgets import QToolTip
+        if event.type() == QEvent.Type.ToolTip:
+            if obj in (self.btn_eliminar_usuario, self.btn_eliminar_reporte_fisico):
+                # Obtener la posición global de la esquina inferior del botón
+                global_pos = obj.mapToGlobal(obj.rect().bottomLeft())
+                # Mostrar el tooltip desplazado a la izquierda (por ejemplo, -95px en X) para que se vea completo
+                custom_x = global_pos.x() - 95
+                custom_y = global_pos.y() - 15
+                QToolTip.showText(QPoint(custom_x, custom_y), obj.toolTip(), obj)
+                return True
+        return super().eventFilter(obj, event)
+
+    def actualizar_estilo_menu(self):
+        index = self.stack.currentIndex()
+        if index == 0:
+            self.btn_usuarios.setStyleSheet(self.estilo_activo)
+            self.btn_reportes.setStyleSheet(self.estilo_inactivo)
+        else:
+            self.btn_usuarios.setStyleSheet(self.estilo_inactivo)
+            self.btn_reportes.setStyleSheet(self.estilo_activo)
 
     def mostrar_vista_usuarios(self):
         self.stack.setCurrentIndex(0)
         self.cargar_usuarios_bd()
+        self.actualizar_estilo_menu()
 
     def mostrar_vista_reportes(self):
         self.stack.setCurrentIndex(1)
         self.cargar_reportes_bd()
+        self.actualizar_estilo_menu()
 
     def cargar_usuarios_bd(self):
         self.tabla_usuarios.blockSignals(True)
@@ -437,12 +543,33 @@ class VentanaAdministrador(QMainWindow):
             cursor = conexion.cursor()
             cursor.execute("SELECT id_usuario, nombre_usuario, rol, fecha_creacion FROM Usuario")
             usuarios = cursor.fetchall()
-            conexion.close()
 
             self.tabla_usuarios.setRowCount(len(usuarios))
             for fila_idx, fila_datos in enumerate(usuarios):
-                for col_idx, dato in enumerate(fila_datos):
-                    self.tabla_usuarios.setItem(fila_idx, col_idx, QTableWidgetItem(str(dato)))
+                id_u, name, rol, fecha = fila_datos
+                
+                # Obtener colaboradores
+                cursor.execute("""
+                    SELECT DISTINCT 
+                        CASE 
+                            WHEN RC.id_propietario = ? THEN U2.nombre_usuario
+                            ELSE U1.nombre_usuario
+                        END
+                    FROM ReporteCompartido RC
+                    JOIN Usuario U1 ON RC.id_propietario = U1.id_usuario
+                    JOIN Usuario U2 ON RC.id_destinatario = U2.id_usuario
+                    WHERE RC.id_propietario = ? OR RC.id_destinatario = ?
+                """, (id_u, id_u, id_u))
+                colabs = [r[0] for r in cursor.fetchall() if r[0] is not None]
+                colab_text = f"Sí ({', '.join(colabs)})" if colabs else "No"
+                
+                self.tabla_usuarios.setItem(fila_idx, 0, QTableWidgetItem(str(id_u)))
+                self.tabla_usuarios.setItem(fila_idx, 1, QTableWidgetItem(str(name)))
+                self.tabla_usuarios.setItem(fila_idx, 2, QTableWidgetItem(str(rol)))
+                self.tabla_usuarios.setItem(fila_idx, 3, QTableWidgetItem(str(fecha)))
+                self.tabla_usuarios.setItem(fila_idx, 4, QTableWidgetItem(colab_text))
+                
+            conexion.close()
         except Exception as e:
             print(f"Error al cargar usuarios: {e}")
         finally:
