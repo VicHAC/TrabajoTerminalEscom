@@ -109,6 +109,9 @@ class VentanaLogin(QWidget):
                 if rol == "Administrador":
                     from vistas.administrador import VentanaAdministrador
                     self.dashboard = VentanaAdministrador(id_usuario=id_user)
+                elif rol == "Tesista":
+                    from vistas.tesista import VentanaTesista
+                    self.dashboard = VentanaTesista(id_usuario=id_user, rol=rol, nombre_usuario=usuario)
                 else:
                     from vistas.investigador import VentanaInvestigador
                     self.dashboard = VentanaInvestigador(id_usuario=id_user, rol=rol, nombre_usuario=usuario)
@@ -123,7 +126,7 @@ class VentanaLogin(QWidget):
             DialogoNotificacion("Error", f"Falla en (BD): {e}", "error", self).exec()
 
     def login_invitado(self):
-        from vistas.investigador import VentanaInvestigador
-        self.dashboard = VentanaInvestigador(id_usuario=0, rol="Invitado", nombre_usuario="Invitado")
+        from vistas.invitado import VentanaInvitado
+        self.dashboard = VentanaInvitado(id_usuario=0, rol="Invitado", nombre_usuario="Invitado")
         self.dashboard.show()
         self.close()

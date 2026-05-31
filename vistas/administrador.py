@@ -27,7 +27,7 @@ class DialogoCrearUsuario(QDialog):
         self.input_password.setPlaceholderText("Contraseña")
         self.input_password.setEchoMode(QLineEdit.EchoMode.Password)
         self.combo_rol = QComboBox()
-        self.combo_rol.addItems(["Investigador", "Administrador"])
+        self.combo_rol.addItems(["Investigador", "Administrador", "Tesista"])
         self.combo_rol.setStyleSheet("""
             QComboBox {
                 border: 1px solid #d0d7de;
@@ -114,7 +114,7 @@ class DialogoEditarUsuario(QDialog):
         self.input_password.setEchoMode(QLineEdit.EchoMode.Password)
         
         self.combo_rol = QComboBox()
-        self.combo_rol.addItems(["Investigador", "Administrador"])
+        self.combo_rol.addItems(["Investigador", "Administrador", "Tesista"])
         self.combo_rol.setCurrentText(rol_actual) 
         self.combo_rol.setStyleSheet("""
             QComboBox {

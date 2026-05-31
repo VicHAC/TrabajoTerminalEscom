@@ -90,6 +90,19 @@ def inicializar_bd():
             crop_path TEXT,
             FOREIGN KEY (id_analisis) REFERENCES Analisis(id_analisis)
         );
+
+        CREATE TABLE IF NOT EXISTS ReporteCompartido (
+            id_reporte_compartido INTEGER PRIMARY KEY AUTOINCREMENT,
+            id_reporte INTEGER NOT NULL,
+            id_propietario INTEGER NOT NULL,
+            id_destinatario INTEGER NOT NULL,
+            estado TEXT DEFAULT 'Pendiente',
+            comentarios TEXT,
+            fecha_compartido DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (id_reporte) REFERENCES Reporte(id_reporte),
+            FOREIGN KEY (id_propietario) REFERENCES Usuario(id_usuario),
+            FOREIGN KEY (id_destinatario) REFERENCES Usuario(id_usuario)
+        );
     ''')
 
     # 2. Migraciones (Para asegurar columnas nuevas en instalaciones existentes)
