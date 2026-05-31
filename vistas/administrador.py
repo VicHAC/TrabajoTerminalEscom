@@ -387,6 +387,10 @@ class VentanaAdministrador(QMainWindow):
                 padding: 6px;
                 border: none;
             }
+            QTableWidget::item:selected {
+                background-color: #ddf4ff;
+                color: #0969da;
+            }
             QHeaderView::section {
                 background-color: #f6f8fa;
                 color: #57606a;
@@ -463,6 +467,10 @@ class VentanaAdministrador(QMainWindow):
             QTableWidget::item {
                 padding: 6px;
                 border: none;
+            }
+            QTableWidget::item:selected {
+                background-color: #ddf4ff;
+                color: #0969da;
             }
             QHeaderView::section {
                 background-color: #f6f8fa;

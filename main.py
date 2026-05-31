@@ -1,6 +1,13 @@
 import sys
 import os
 
+# Solución para el bug de cursor gigante en Linux (Ubuntu) con escalado de pantalla
+if sys.platform.startswith("linux"):
+    # Evitamos forzar 'xcb' para evitar errores de librerías faltantes como libxcb-cursor0
+    # En su lugar, forzamos a Wayland a usar DPI estándar de 96 y definimos el tamaño de cursor de X11
+    os.environ["QT_WAYLAND_FORCE_DPI"] = "96"
+    os.environ["XCURSOR_SIZE"] = "24"
+
 from bd.database import inicializar_bd
 from PyQt6.QtWidgets import QApplication
 from PyQt6.QtGui import QIcon
