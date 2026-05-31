@@ -366,7 +366,7 @@ class VentanaAdministrador(QMainWindow):
         
         self.tabla_usuarios = QTableWidget()
         self.tabla_usuarios.setColumnCount(5)
-        self.tabla_usuarios.setHorizontalHeaderLabels(["ID", "Nombre de Usuario", "Rol", "Fecha Creación", "Colaborador"])
+        self.tabla_usuarios.setHorizontalHeaderLabels(["ID", "Nombre de Usuario", "Rol", "Fecha Creación", "Última Conexión"])
         self.tabla_usuarios.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.tabla_usuarios.verticalHeader().setVisible(False)
         self.tabla_usuarios.setCornerButtonEnabled(False)
@@ -436,12 +436,13 @@ class VentanaAdministrador(QMainWindow):
         self.btn_eliminar_reporte_fisico.installEventFilter(self)
         
         self.tabla_reportes = QTableWidget()
-        self.tabla_reportes.setColumnCount(7)
+        self.tabla_reportes.setColumnCount(8)
         self.tabla_reportes.setHorizontalHeaderLabels([
             "ID Reporte", 
             "ID Análisis", 
             "Nombre del\nReporte", 
             "Autor", 
+            "Colaborador",
             "Estatus del analisis", 
             "Fecha de\nGeneración", 
             "Ruta Archivo"
@@ -556,26 +557,22 @@ class VentanaAdministrador(QMainWindow):
             for fila_idx, fila_datos in enumerate(usuarios):
                 id_u, name, rol, fecha = fila_datos
                 
-                # Obtener colaboradores
+                # Obtener última conexión de la tabla Sesion
                 cursor.execute("""
-                    SELECT DISTINCT 
-                        CASE 
-                            WHEN RC.id_propietario = ? THEN U2.nombre_usuario
-                            ELSE U1.nombre_usuario
-                        END
-                    FROM ReporteCompartido RC
-                    JOIN Usuario U1 ON RC.id_propietario = U1.id_usuario
-                    JOIN Usuario U2 ON RC.id_destinatario = U2.id_usuario
-                    WHERE RC.id_propietario = ? OR RC.id_destinatario = ?
-                """, (id_u, id_u, id_u))
-                colabs = [r[0] for r in cursor.fetchall() if r[0] is not None]
-                colab_text = f"Sí ({', '.join(colabs)})" if colabs else "No"
+                    SELECT fecha_inicio 
+                    FROM Sesion 
+                    WHERE id_usuario = ? 
+                    ORDER BY fecha_inicio DESC 
+                    LIMIT 1
+                """, (id_u,))
+                res_ses = cursor.fetchone()
+                conexion_text = res_ses[0] if res_ses else "Sin actividad"
                 
                 self.tabla_usuarios.setItem(fila_idx, 0, QTableWidgetItem(str(id_u)))
                 self.tabla_usuarios.setItem(fila_idx, 1, QTableWidgetItem(str(name)))
                 self.tabla_usuarios.setItem(fila_idx, 2, QTableWidgetItem(str(rol)))
                 self.tabla_usuarios.setItem(fila_idx, 3, QTableWidgetItem(str(fecha)))
-                self.tabla_usuarios.setItem(fila_idx, 4, QTableWidgetItem(colab_text))
+                self.tabla_usuarios.setItem(fila_idx, 4, QTableWidgetItem(conexion_text))
                 
             conexion.close()
         except Exception as e:
@@ -687,6 +684,13 @@ class VentanaAdministrador(QMainWindow):
                     COALESCE(A.id_analisis, 'Sin análisis'), 
                     COALESCE(R.nombre_reporte, 'Sin nombre'), 
                     COALESCE(U.nombre_usuario, 'Desconocido'),
+                    COALESCE(
+                        (SELECT U2.nombre_usuario 
+                         FROM ReporteCompartido RC 
+                         JOIN Usuario U2 ON RC.id_destinatario = U2.id_usuario 
+                         WHERE RC.id_reporte = R.id_reporte LIMIT 1),
+                        'Sin colaborador'
+                    ),
                     CASE WHEN A.paso_actual >= 5 THEN 'Completado' ELSE 'Incompleto' END,
                     COALESCE(A.fecha_analisis, R.fecha_creacion),
                     COALESCE(I.ruta_archivo, 'Sin archivo')
@@ -732,7 +736,7 @@ class VentanaAdministrador(QMainWindow):
                 for index in filas_seleccionadas:
                     row = index.row()
                     item_id = self.tabla_reportes.item(row, 0)
-                    item_ruta = self.tabla_reportes.item(row, 6)
+                    item_ruta = self.tabla_reportes.item(row, 7)
                     if not item_id:
                         continue
                     id_reporte = item_id.text()

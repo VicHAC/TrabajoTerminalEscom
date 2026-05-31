@@ -1961,10 +1961,13 @@ class InteractiveImageViewer(QLabel):
 
 
 class DialogoCompartirReporte(QDialog):
-    def __init__(self, id_usuario, id_reporte, parent=None):
+    def __init__(self, id_usuario, id_reportes, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Compartir Reporte")
-        self.setFixedSize(400, 200)
+        self.id_usuario = id_usuario
+        self.id_reportes = id_reportes if isinstance(id_reportes, list) else [id_reportes]
+        
+        self.setWindowTitle("Compartir Reportes" if len(self.id_reportes) > 1 else "Compartir Reporte")
+        self.setFixedSize(400, 210)
         from vistas.utilidades import set_app_icon
         set_app_icon(self)
         
@@ -1972,7 +1975,12 @@ class DialogoCompartirReporte(QDialog):
         layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(15)
         
-        lbl_msg = QLabel("<b>Compartir Reporte Científico</b><br>Selecciona al Investigador o Tesista con el que deseas compartir el acceso a este reporte:")
+        msg_text = (
+            f"<b>Compartir {len(self.id_reportes)} Reportes Científicos</b><br>Selecciona al Investigador o Tesista con el que deseas compartir el acceso a estos reportes:"
+            if len(self.id_reportes) > 1 else
+            "<b>Compartir Reporte Científico</b><br>Selecciona al Investigador o Tesista con el que deseas compartir el acceso a este reporte:"
+        )
+        lbl_msg = QLabel(msg_text)
         lbl_msg.setWordWrap(True)
         lbl_msg.setStyleSheet("font-size: 12px; color: #24292f;")
         layout.addWidget(lbl_msg)
@@ -2014,9 +2022,6 @@ class DialogoCompartirReporte(QDialog):
         btn_layout.addWidget(btn_cancelar)
         btn_layout.addWidget(self.btn_compartir)
         layout.addLayout(btn_layout)
-        
-        self.id_usuario = id_usuario
-        self.id_reporte = id_reporte
 
     def compartir_reporte(self):
         index = self.combo_usuarios.currentIndex()
@@ -2028,19 +2033,23 @@ class DialogoCompartirReporte(QDialog):
         from bd.database import conectar
         conn = conectar(); cur = conn.cursor()
         try:
-            # Verificar si ya está compartido con este usuario
-            cur.execute("SELECT COUNT(*) FROM ReporteCompartido WHERE id_reporte = ? AND id_destinatario = ?", (self.id_reporte, dest_id))
-            if cur.fetchone()[0] > 0:
-                from vistas.utilidades import DialogoNotificacion
-                DialogoNotificacion("Atención", "Este reporte ya está compartido con ese usuario.", "warning", self).exec()
-                self.reject()
-                return
+            exito_count = 0
+            for id_rep in self.id_reportes:
+                # Verificar si ya está compartido con este usuario
+                cur.execute("SELECT COUNT(*) FROM ReporteCompartido WHERE id_reporte = ? AND id_destinatario = ?", (id_rep, dest_id))
+                if cur.fetchone()[0] > 0:
+                    continue # Omitir si ya está compartido
+                
+                cur.execute("INSERT INTO ReporteCompartido (id_reporte, id_propietario, id_destinatario, estado) VALUES (?, ?, ?, 'Pendiente')", 
+                            (id_rep, self.id_usuario, dest_id))
+                exito_count += 1
             
-            cur.execute("INSERT INTO ReporteCompartido (id_reporte, id_propietario, id_destinatario, estado) VALUES (?, ?, ?, 'Pendiente')", 
-                        (self.id_reporte, self.id_usuario, dest_id))
             conn.commit()
             from vistas.utilidades import DialogoNotificacion
-            DialogoNotificacion("Éxito", "Acceso al reporte compartido exitosamente.", "info", self).exec()
+            if exito_count > 0:
+                DialogoNotificacion("Éxito", f"Acceso a {exito_count} reporte(s) compartido exitosamente.", "info", self).exec()
+            else:
+                DialogoNotificacion("Atención", "Los reportes seleccionados ya estaban compartidos con este usuario.", "warning", self).exec()
             self.accept()
         except Exception as e:
             logging.error(f"Error guardar compartido: {e}")
@@ -2064,9 +2073,19 @@ class DialogoHistorial(QDialog):
         main_layout = QVBoxLayout(self)
         self.frame = QFrame()
         self.frame.setStyleSheet("""
-            QFrame { background-color: #FFFFFF; border-radius: 15px; border: 2px solid #3a61a0; }
+            QFrame { background-color: #FFFFFF; border-radius: 0px; border: 2px solid #3a61a0; }
             QLabel { color: #333333; border: none; }
-            QPushButton { border-radius: 8px; font-weight: bold; padding: 10px; }
+            QPushButton { border-radius: 0px; font-weight: bold; padding: 10px; }
+            QToolTip {
+                background-color: #24292f;
+                color: #ffffff;
+                border: 1px solid #30363d;
+                padding: 3px 6px;
+                font-size: 10px;
+                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+                border-radius: 4px;
+                font-weight: normal;
+            }
         """)
         
         flayout = QVBoxLayout(self.frame)
@@ -2075,10 +2094,25 @@ class DialogoHistorial(QDialog):
         header_layout = QHBoxLayout()
         header_layout.setContentsMargins(15, 10, 15, 0)
         
-        lbl_titulo = QLabel("<b>Historial Colaborativo de Reportes</b>")
+        lbl_titulo = QLabel("<b>Historial de Reportes</b>")
         lbl_titulo.setStyleSheet("font-size: 15px; color: #3a61a0;")
         lbl_titulo.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
+        self.btn_compartir_icon = QPushButton()
+        self.btn_compartir_icon.setIcon(QIcon("assets/buttons/compartir.png"))
+        self.btn_compartir_icon.setIconSize(QSize(22, 22))
+        self.btn_compartir_icon.setFixedSize(35, 35)
+        self.btn_compartir_icon.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_compartir_icon.setStyleSheet("""
+            QPushButton { background-color: transparent; border: 1px solid transparent; outline: none; }
+            QPushButton:hover { background-color: #ddf4ff; border-radius: 17px; }
+            QPushButton:disabled { opacity: 0.3; }
+        """)
+        self.btn_compartir_icon.setEnabled(False)
+        self.btn_compartir_icon.setVisible(self.rol == "Investigador")
+        self.btn_compartir_icon.setToolTip("Compartir seleccionados")
+        self.btn_compartir_icon.clicked.connect(self.abrir_compartir)
+
         self.btn_borrar_icon = QPushButton()
         self.btn_borrar_icon.setIcon(QIcon("assets/buttons/borrar.png"))
         self.btn_borrar_icon.setIconSize(QSize(22, 22))
@@ -2102,16 +2136,22 @@ class DialogoHistorial(QDialog):
         self.btn_cerrar_x.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_cerrar_x.setStyleSheet("""
             QPushButton { background-color: transparent; border: 1px solid transparent; outline: none; }
-            QPushButton:hover { background-color: #f6f8fa; border-radius: 17px; }
+            QPushButton:hover { background-color: #ddf4ff; border-radius: 17px; }
         """)
         self.btn_cerrar_x.enterEvent = lambda e: self.btn_cerrar_x.setIcon(QIcon("assets/buttons/xroja.png"))
         self.btn_cerrar_x.leaveEvent = lambda e: self.btn_cerrar_x.setIcon(QIcon("assets/buttons/xneg.png"))
         self.btn_cerrar_x.clicked.connect(self.reject)
+        self.btn_cerrar_x.setToolTip("Cerrar")
+        
+        self.btn_compartir_icon.installEventFilter(self)
+        self.btn_borrar_icon.installEventFilter(self)
+        self.btn_cerrar_x.installEventFilter(self)
         
         header_layout.addSpacing(70) # Ajuste para centrar título
         header_layout.addStretch()
         header_layout.addWidget(lbl_titulo)
         header_layout.addStretch()
+        header_layout.addWidget(self.btn_compartir_icon)
         header_layout.addWidget(self.btn_borrar_icon)
         header_layout.addWidget(self.btn_cerrar_x)
         
@@ -2120,8 +2160,8 @@ class DialogoHistorial(QDialog):
         # Tab Widget para separar reportes propios de compartidos
         self.tabs = QTabWidget()
         self.tabs.setStyleSheet("""
-            QTabWidget::panel { border: 1px solid #d0d7de; border-radius: 8px; background-color: white; }
-            QTabBar::tab { background: #f6f8fa; border: 1px solid #d0d7de; border-bottom: none; border-top-left-radius: 6px; border-top-right-radius: 6px; padding: 8px 16px; font-weight: bold; font-size: 11px; color: #57606a; }
+            QTabWidget::panel { border: 1px solid #d0d7de; border-radius: 0px; background-color: white; }
+            QTabBar::tab { background: #f6f8fa; border: 1px solid #d0d7de; border-bottom: none; border-top-left-radius: 0px; border-top-right-radius: 0px; padding: 8px 16px; font-weight: bold; font-size: 11px; color: #57606a; }
             QTabBar::tab:selected { background: white; border-color: #d0d7de; border-bottom: 2px solid white; color: #0969da; }
             QTabBar::tab:hover { background: #eaf2ff; }
         """)
@@ -2132,21 +2172,25 @@ class DialogoHistorial(QDialog):
         layout_p.setContentsMargins(10, 10, 10, 10)
         
         self.tree = QTreeWidget()
-        self.tree.setHeaderLabels(["Reporte / Imagen", "Fecha de Creación", "Estado", "Detecciones", "Acciones"])
-        self.tree.setColumnWidth(0, 250)
+        self.tree.setHeaderLabels(["Reporte / Imagen", "Fecha de Creación", "Estado", "Detecciones", "Validación", "Descargar"])
+        from PyQt6.QtWidgets import QHeaderView
+        self.tree.header().setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
+        self.tree.header().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         self.tree.setColumnWidth(1, 130)
         self.tree.setColumnWidth(2, 160)
         self.tree.setColumnWidth(3, 100)
-        self.tree.setColumnWidth(4, 120)
-        from PyQt6.QtWidgets import QHeaderView
-        self.tree.header().setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
+        self.tree.setColumnWidth(4, 90)
+        self.tree.setColumnWidth(5, 90)
+        self.tree.header().setSectionResizeMode(4, QHeaderView.ResizeMode.Fixed)
+        self.tree.header().setSectionResizeMode(5, QHeaderView.ResizeMode.Fixed)
         self.tree.header().setStretchLastSection(False)
         self.tree.setIndentation(20)
         self.tree.setAnimated(True)
         from PyQt6.QtWidgets import QAbstractItemView
         self.tree.setSelectionMode(QAbstractItemView.SelectionMode.MultiSelection)
         self.tree.setStyleSheet("""
-            QTreeWidget { border: 1px solid #d0d7de; border-radius: 6px; background-color: #ffffff; alternate-background-color: #f6f8fa; font-size: 11px; outline: none; }
+            QTreeWidget { border: none; background-color: #ffffff; alternate-background-color: #f6f8fa; font-size: 11px; outline: none; }
+            QTreeWidget:focus { border: none; outline: none; }
             QTreeWidget::item { height: 32px; border-bottom: 1px solid #f0f0f0; color: #24292f; }
             QTreeWidget::item:selected { background-color: #0969da; color: #ffffff; }
             QHeaderView::section { background-color: #f6f8fa; padding: 6px; font-weight: bold; border: none; border-bottom: 2px solid #d0d7de; color: #57606a; font-size: 11px; }
@@ -2160,25 +2204,31 @@ class DialogoHistorial(QDialog):
         layout_c.setContentsMargins(10, 10, 10, 10)
         
         self.tree_compartidos = QTreeWidget()
-        self.tree_compartidos.setHeaderLabels(["Reporte / Imagen", "Propietario", "Fecha Compartido", "Estado de Seguimiento", "Acciones"])
-        self.tree_compartidos.setColumnWidth(0, 250)
-        self.tree_compartidos.setColumnWidth(1, 130)
-        self.tree_compartidos.setColumnWidth(2, 130)
-        self.tree_compartidos.setColumnWidth(3, 160)
-        self.tree_compartidos.setColumnWidth(4, 120)
-        self.tree_compartidos.header().setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
+        self.tree_compartidos.setHeaderLabels(["Reporte / Imagen", "Propietario / Colaborador", "Fecha Compartido", "Estado de Seguimiento", "Detecciones", "Validación", "Descargar"])
+        from PyQt6.QtWidgets import QHeaderView
+        self.tree_compartidos.header().setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
+        self.tree_compartidos.header().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        self.tree_compartidos.setColumnWidth(1, 150)
+        self.tree_compartidos.setColumnWidth(2, 120)
+        self.tree_compartidos.setColumnWidth(3, 150)
+        self.tree_compartidos.setColumnWidth(4, 100)
+        self.tree_compartidos.setColumnWidth(5, 90)
+        self.tree_compartidos.setColumnWidth(6, 90)
+        self.tree_compartidos.header().setSectionResizeMode(5, QHeaderView.ResizeMode.Fixed)
+        self.tree_compartidos.header().setSectionResizeMode(6, QHeaderView.ResizeMode.Fixed)
         self.tree_compartidos.header().setStretchLastSection(False)
         self.tree_compartidos.setIndentation(20)
         self.tree_compartidos.setAnimated(True)
         self.tree_compartidos.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.tree_compartidos.setStyleSheet("""
-            QTreeWidget { border: 1px solid #d0d7de; border-radius: 6px; background-color: #ffffff; alternate-background-color: #f6f8fa; font-size: 11px; outline: none; }
+            QTreeWidget { border: none; background-color: #ffffff; alternate-background-color: #f6f8fa; font-size: 11px; outline: none; }
+            QTreeWidget:focus { border: none; outline: none; }
             QTreeWidget::item { height: 32px; border-bottom: 1px solid #f0f0f0; color: #24292f; }
             QTreeWidget::item:selected { background-color: #0969da; color: #ffffff; }
             QHeaderView::section { background-color: #f6f8fa; padding: 6px; font-weight: bold; border: none; border-bottom: 2px solid #d0d7de; color: #57606a; font-size: 11px; }
         """)
         layout_c.addWidget(self.tree_compartidos)
-        self.tabs.addTab(self.tab_compartidos, "Compartidos conmigo")
+        self.tabs.addTab(self.tab_compartidos, "Compartidos")
         
         flayout.addWidget(self.tabs)
         
@@ -2190,31 +2240,6 @@ class DialogoHistorial(QDialog):
         
         btn_layout = QHBoxLayout()
         
-        self.btn_compartir = QPushButton("Compartir Acceso")
-        self.btn_compartir.setEnabled(False)
-        self.btn_compartir.setVisible(self.rol == "Investigador")
-        self.btn_compartir.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_compartir.setStyleSheet("""
-            QPushButton { 
-                background-color: transparent; 
-                border: 2px solid #0969da; 
-                color: #0969da; 
-                border-radius: 8px; 
-                font-weight: bold; 
-                padding: 10px 20px; 
-            }
-            QPushButton:hover { 
-                background-color: #0969da; 
-                color: white; 
-            }
-            QPushButton:disabled { 
-                background-color: transparent; 
-                border: 2px solid #d0d7de; 
-                color: #8c959f; 
-            }
-        """)
-        self.btn_compartir.clicked.connect(self.abrir_compartir)
-
         self.btn_cargar = QPushButton("Cargar / Retomar")
         self.btn_cargar.setEnabled(False)
         self.btn_cargar.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -2223,7 +2248,7 @@ class DialogoHistorial(QDialog):
                 background-color: transparent; 
                 border: 2px solid #2da44e; 
                 color: #2da44e; 
-                border-radius: 8px; 
+                border-radius: 0px; 
                 font-weight: bold; 
                 padding: 10px 20px; 
             }
@@ -2240,12 +2265,27 @@ class DialogoHistorial(QDialog):
         self.btn_cargar.clicked.connect(self.aceptar_seleccion)
         
         btn_layout.addStretch()
-        btn_layout.addWidget(self.btn_compartir)
         btn_layout.addWidget(self.btn_cargar)
         
         flayout.addLayout(btn_layout);        main_layout.addWidget(self.frame)
         self.actualizar_estado_boton_borrar() # Asegurar estado inicial
+        if self.rol == "Tesista":
+            self.tabs.setCurrentIndex(1)
         self.resize(950, 650)
+
+    def eventFilter(self, obj, event):
+        from PyQt6.QtCore import QEvent, QPoint
+        from PyQt6.QtWidgets import QToolTip
+        if event.type() == QEvent.Type.ToolTip:
+            if obj in (self.btn_compartir_icon, self.btn_borrar_icon, self.btn_cerrar_x):
+                # Obtener la posición global de la esquina inferior del botón
+                global_pos = obj.mapToGlobal(obj.rect().bottomLeft())
+                # Mostrar el tooltip cercano al botón para una perfecta visualización
+                custom_x = global_pos.x() - 25
+                custom_y = global_pos.y() - 5
+                QToolTip.showText(QPoint(custom_x, custom_y), obj.toolTip(), obj)
+                return True
+        return super().eventFilter(obj, event)
 
     def abrir_compartir(self):
         tab_index = self.tabs.currentIndex()
@@ -2256,8 +2296,9 @@ class DialogoHistorial(QDialog):
         
         if not selected_reports: return
         
-        id_rep = selected_reports[0].data(0, Qt.ItemDataRole.UserRole)["id"]
-        diag = DialogoCompartirReporte(self.id_usuario, id_rep, self)
+        # Obtener todos los IDs de reportes seleccionados
+        id_reps = [item.data(0, Qt.ItemDataRole.UserRole)["id"] for item in selected_reports]
+        diag = DialogoCompartirReporte(self.id_usuario, id_reps, self)
         diag.exec()
         self.cargar_datos()
 
@@ -2315,14 +2356,14 @@ class DialogoHistorial(QDialog):
             num_seleccionados = len(selected_reports)
             self.btn_borrar_icon.setEnabled(num_seleccionados > 0)
             self.btn_cargar.setEnabled(num_seleccionados == 1)
-            self.btn_compartir.setEnabled(self.rol == "Investigador" and num_seleccionados == 1)
+            self.btn_compartir_icon.setEnabled(self.rol == "Investigador" and num_seleccionados > 0)
         else:
             selected_items = self.tree_compartidos.selectedItems()
             selected_reports = [item for item in selected_items if item.data(0, Qt.ItemDataRole.UserRole) and item.data(0, Qt.ItemDataRole.UserRole).get("type") == "reporte"]
             num_seleccionados = len(selected_reports)
             self.btn_borrar_icon.setEnabled(False) # No se pueden borrar reportes compartidos
             self.btn_cargar.setEnabled(num_seleccionados == 1)
-            self.btn_compartir.setEnabled(False)
+            self.btn_compartir_icon.setEnabled(False)
 
     def showEvent(self, event):
         super().showEvent(event)
@@ -2362,7 +2403,14 @@ class DialogoHistorial(QDialog):
                     elif sh_estado == 'Validado':
                         estado_texto = f"Validado ({sh_user})"
                 
-                rep_item = QTreeWidgetItem(self.tree, [nombre, str(fecha), estado_texto, ""])
+                # Obtener total de detecciones para este reporte
+                cur.execute("""
+                    SELECT SUM(A.cantidad_microglias) FROM Analisis A
+                    WHERE A.id_reporte = ?
+                """, (id_rep,))
+                total_det = cur.fetchone()[0] or 0
+
+                rep_item = QTreeWidgetItem(self.tree, [nombre, str(fecha), estado_texto, str(total_det), "", ""])
                 rep_item.setData(0, Qt.ItemDataRole.UserRole, {"type": "reporte", "id": id_rep})
                 
                 cur.execute("""
@@ -2373,8 +2421,8 @@ class DialogoHistorial(QDialog):
                 análisis = cur.fetchall()
                 for an in análisis:
                     id_an, ruta, f_an, paso, cant = an
-                    st = "Completado" if paso >= 5 else f"Paso {paso}"
-                    an_item = QTreeWidgetItem(rep_item, [os.path.basename(ruta), str(f_an), st, str(cant)])
+                    st = f"Completado ({cant})" if paso >= 5 else f"Paso {paso}"
+                    an_item = QTreeWidgetItem(rep_item, [os.path.basename(ruta), str(f_an), st, "", "", ""])
                     an_item.setData(0, Qt.ItemDataRole.UserRole, {"type": "analisis", "id": id_an, "id_reporte": id_rep})
                     an_item.setDisabled(True)
                 rep_item.setExpanded(True)
@@ -2383,11 +2431,29 @@ class DialogoHistorial(QDialog):
                 cur.execute("SELECT COUNT(*) FROM Analisis WHERE id_reporte = ? AND paso_actual >= 5", (id_rep,))
                 completados = cur.fetchone()[0]
                 
-                container = QWidget()
-                layout_c = QHBoxLayout(container)
-                layout_c.setContentsMargins(0, 0, 0, 0)
-                layout_c.setSpacing(6)
-                layout_c.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                # Botón de Validar (si aplica)
+                # El reporte tiene una colaboración (es_modificado es True si share_info existe y está Modificado),
+                # y el usuario es el Investigador.
+                if es_modificado and self.rol == "Investigador":
+                    btn_valid = QPushButton()
+                    btn_valid.setIcon(QIcon("assets/buttons/validar.png"))
+                    btn_valid.setIconSize(QSize(18, 18))
+                    btn_valid.setFixedSize(30, 30)
+                    btn_valid.setCursor(Qt.CursorShape.PointingHandCursor)
+                    btn_valid.setStyleSheet("""
+                        QPushButton { background-color: transparent; border: 1px solid transparent; outline: none; }
+                        QPushButton:hover { background-color: #ddf4ff; border-radius: 15px; }
+                        QPushButton:disabled { opacity: 0.1; }
+                    """)
+                    btn_valid.setToolTip("Validar reporte")
+                    btn_valid.clicked.connect(lambda checked, r_id=id_rep: self.validar_reporte(r_id))
+                    
+                    container_val = QWidget()
+                    layout_v = QHBoxLayout(container_val)
+                    layout_v.addWidget(btn_valid)
+                    layout_v.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                    layout_v.setContentsMargins(0, 0, 0, 0)
+                    self.tree.setItemWidget(rep_item, 4, container_val)
                 
                 # Botón de Descargar
                 btn_dl = QPushButton()
@@ -2397,49 +2463,69 @@ class DialogoHistorial(QDialog):
                 btn_dl.setCursor(Qt.CursorShape.PointingHandCursor)
                 btn_dl.setStyleSheet("""
                     QPushButton { background-color: transparent; border: 1px solid transparent; outline: none; }
-                    QPushButton:hover { background-color: #f0f0f0; border-radius: 15px; }
+                    QPushButton:hover { background-color: #ddf4ff; border-radius: 15px; }
                     QPushButton:disabled { opacity: 0.1; }
                 """)
                 btn_dl.setEnabled(completados > 0)
                 btn_dl.setToolTip("Descargar")
                 btn_dl.clicked.connect(lambda checked, r_id=id_rep: self.descargar_reporte_id(r_id))
-                layout_c.addWidget(btn_dl)
                 
-                # Botón de Validar (si aplica)
-                if es_modificado and self.rol == "Investigador":
-                    btn_valid = QPushButton("Validar")
-                    btn_valid.setFixedSize(65, 26)
-                    btn_valid.setCursor(Qt.CursorShape.PointingHandCursor)
-                    btn_valid.setStyleSheet("""
-                        QPushButton { background-color: #2da44e; color: white; font-weight: bold; font-size: 10px; border-radius: 5px; border: none; }
-                        QPushButton:hover { background-color: #2c974b; }
-                    """)
-                    btn_valid.setToolTip("Validar cambios hechos por el tesista")
-                    btn_valid.clicked.connect(lambda checked, r_id=id_rep: self.validar_reporte(r_id))
-                    layout_c.addWidget(btn_valid)
+                container_dl = QWidget()
+                layout_d = QHBoxLayout(container_dl)
+                layout_d.addWidget(btn_dl)
+                layout_d.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                layout_d.setContentsMargins(0, 0, 0, 0)
+                self.tree.setItemWidget(rep_item, 5, container_dl)
                 
-                self.tree.setItemWidget(rep_item, 4, container)
-                
-            # 2. Cargar Reportes Compartidos Conmigo
+            # 2. Cargar Reportes Compartidos (Enviados y Recibidos)
             cur.execute("""
-                SELECT RC.id_reporte, R.nombre_reporte, RC.fecha_compartido, RC.estado, U.nombre_usuario
+                SELECT 
+                    RC.id_reporte, 
+                    R.nombre_reporte, 
+                    RC.fecha_compartido, 
+                    RC.estado, 
+                    U_prop.nombre_usuario AS propietario_name,
+                    U_dest.nombre_usuario AS destinatario_name,
+                    RC.id_propietario,
+                    RC.id_destinatario
                 FROM ReporteCompartido RC
                 JOIN Reporte R ON RC.id_reporte = R.id_reporte
-                JOIN Usuario U ON RC.id_propietario = U.id_usuario
-                WHERE RC.id_destinatario = ?
+                JOIN Usuario U_prop ON RC.id_propietario = U_prop.id_usuario
+                JOIN Usuario U_dest ON RC.id_destinatario = U_dest.id_usuario
+                WHERE RC.id_destinatario = ? OR RC.id_propietario = ?
                 ORDER BY RC.fecha_compartido DESC
-            """, (self.id_usuario,))
+            """, (self.id_usuario, self.id_usuario))
             compartidos = cur.fetchall()
             for comp in compartidos:
-                id_rep, nombre, fecha, estado_compartido, propietario = comp
+                id_rep, nombre, fecha, estado_compartido, propietario_name, destinatario_name, id_prop, id_dest = comp
                 
-                estado_texto = "Pendiente de trabajo"
-                if estado_compartido == 'Modificado':
-                    estado_texto = "Modificado por ti"
-                elif estado_compartido == 'Validado':
-                    estado_texto = "Validado por Investigador"
+                if id_prop == self.id_usuario:
+                    # Reporte que YO compartí con alguien más
+                    rol_text = f"Para: {destinatario_name}"
+                    if estado_compartido == 'Pendiente':
+                        estado_texto = "Pendiente de trabajo"
+                    elif estado_compartido == 'Modificado':
+                        estado_texto = f"Modificado (por {destinatario_name})"
+                    else:
+                        estado_texto = "Validado (por ti)"
+                else:
+                    # Reporte que compartieron CONMIGO
+                    rol_text = f"De: {propietario_name}"
+                    if estado_compartido == 'Pendiente':
+                        estado_texto = "Pendiente de trabajo"
+                    elif estado_compartido == 'Modificado':
+                        estado_texto = "Modificado por ti"
+                    else:
+                        estado_texto = "Validado por Investigador"
                 
-                rep_item = QTreeWidgetItem(self.tree_compartidos, [nombre, propietario, str(fecha), estado_texto, ""])
+                # Obtener total de detecciones para este reporte
+                cur.execute("""
+                    SELECT SUM(A.cantidad_microglias) FROM Analisis A
+                    WHERE A.id_reporte = ?
+                """, (id_rep,))
+                total_det = cur.fetchone()[0] or 0
+
+                rep_item = QTreeWidgetItem(self.tree_compartidos, [nombre, rol_text, str(fecha), estado_texto, str(total_det), "", ""])
                 rep_item.setData(0, Qt.ItemDataRole.UserRole, {"type": "reporte", "id": id_rep})
                 
                 cur.execute("""
@@ -2450,8 +2536,8 @@ class DialogoHistorial(QDialog):
                 análisis = cur.fetchall()
                 for an in análisis:
                     id_an, ruta, f_an, paso, cant = an
-                    st = "Completado" if paso >= 5 else f"Paso {paso}"
-                    an_item = QTreeWidgetItem(rep_item, [os.path.basename(ruta), "", str(f_an), st, str(cant)])
+                    st = f"Completado ({cant})" if paso >= 5 else f"Paso {paso}"
+                    an_item = QTreeWidgetItem(rep_item, [os.path.basename(ruta), "", str(f_an), st, "", "", ""])
                     an_item.setData(0, Qt.ItemDataRole.UserRole, {"type": "analisis", "id": id_an, "id_reporte": id_rep})
                     an_item.setDisabled(True)
                 rep_item.setExpanded(True)
@@ -2460,6 +2546,31 @@ class DialogoHistorial(QDialog):
                 cur.execute("SELECT COUNT(*) FROM Analisis WHERE id_reporte = ? AND paso_actual >= 5", (id_rep,))
                 completados = cur.fetchone()[0]
                 
+                # Botón de Validar (si aplica)
+                # El reporte tiene una colaboración (es compartido), el usuario es el Investigador (id_prop == self.id_usuario)
+                # y el tesista terminó con el análisis (estado_compartido == 'Modificado')
+                if id_prop == self.id_usuario and estado_compartido == 'Modificado':
+                    btn_valid = QPushButton()
+                    btn_valid.setIcon(QIcon("assets/buttons/validar.png"))
+                    btn_valid.setIconSize(QSize(18, 18))
+                    btn_valid.setFixedSize(30, 30)
+                    btn_valid.setCursor(Qt.CursorShape.PointingHandCursor)
+                    btn_valid.setStyleSheet("""
+                        QPushButton { background-color: transparent; border: 1px solid transparent; outline: none; }
+                        QPushButton:hover { background-color: #ddf4ff; border-radius: 15px; }
+                        QPushButton:disabled { opacity: 0.1; }
+                    """)
+                    btn_valid.setToolTip("Validar reporte")
+                    btn_valid.clicked.connect(lambda checked, r_id=id_rep: self.validar_reporte(r_id))
+                    
+                    container_val = QWidget()
+                    layout_v = QHBoxLayout(container_val)
+                    layout_v.addWidget(btn_valid)
+                    layout_v.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                    layout_v.setContentsMargins(0, 0, 0, 0)
+                    self.tree_compartidos.setItemWidget(rep_item, 5, container_val)
+                
+                # Botón de Descargar
                 btn_dl = QPushButton()
                 btn_dl.setIcon(QIcon("assets/buttons/download.png"))
                 btn_dl.setIconSize(QSize(18, 18))
@@ -2467,19 +2578,19 @@ class DialogoHistorial(QDialog):
                 btn_dl.setCursor(Qt.CursorShape.PointingHandCursor)
                 btn_dl.setStyleSheet("""
                     QPushButton { background-color: transparent; border: 1px solid transparent; outline: none; }
-                    QPushButton:hover { background-color: #f0f0f0; border-radius: 15px; }
+                    QPushButton:hover { background-color: #ddf4ff; border-radius: 15px; }
                     QPushButton:disabled { opacity: 0.1; }
                 """)
                 btn_dl.setEnabled(completados > 0)
                 btn_dl.setToolTip("Descargar")
                 btn_dl.clicked.connect(lambda checked, r_id=id_rep: self.descargar_reporte_id(r_id))
                 
-                container = QWidget()
-                layout_c = QHBoxLayout(container)
-                layout_c.addWidget(btn_dl)
-                layout_c.setAlignment(Qt.AlignmentFlag.AlignCenter)
-                layout_c.setContentsMargins(0, 0, 0, 0)
-                self.tree_compartidos.setItemWidget(rep_item, 4, container)
+                container_dl = QWidget()
+                layout_d = QHBoxLayout(container_dl)
+                layout_d.addWidget(btn_dl)
+                layout_d.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                layout_d.setContentsMargins(0, 0, 0, 0)
+                self.tree_compartidos.setItemWidget(rep_item, 6, container_dl)
                 
         except Exception as e: 
             logging.error(f"Error historial: {e}")

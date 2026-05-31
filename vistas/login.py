@@ -106,6 +106,16 @@ class VentanaLogin(QWidget):
             if resultado:
                 id_user, rol = resultado
                 
+                # Registrar sesión de usuario
+                try:
+                    con_ses = sqlite3.connect("bd/database.db")
+                    cur_ses = con_ses.cursor()
+                    cur_ses.execute("INSERT INTO Sesion (id_usuario) VALUES (?)", (id_user,))
+                    con_ses.commit()
+                    con_ses.close()
+                except Exception as e_ses:
+                    print(f"Error al registrar sesión: {e_ses}")
+                
                 if rol == "Administrador":
                     from vistas.administrador import VentanaAdministrador
                     self.dashboard = VentanaAdministrador(id_usuario=id_user)
