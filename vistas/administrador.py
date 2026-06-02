@@ -1,6 +1,7 @@
 import sqlite3
 import hashlib
 import os
+from bd.database import conectar
 from PyQt6.QtWidgets import (QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, 
                              QPushButton, QLabel, QTableWidget, QTableWidgetItem, 
                              QHeaderView, QFrame, QDialog, QLineEdit, QComboBox,
@@ -78,7 +79,7 @@ class DialogoCrearUsuario(QDialog):
         pass_hash = hashlib.sha256(password.encode()).hexdigest()
         
         try:
-            conexion = sqlite3.connect("bd/database.db")
+            conexion = conectar()
             cursor = conexion.cursor()
             cursor.execute("INSERT INTO Usuario (nombre_usuario, contrasenia_hash, rol) VALUES (?, ?, ?)", 
                            (usuario, pass_hash, rol))
@@ -164,7 +165,7 @@ class DialogoEditarUsuario(QDialog):
             return
             
         try:
-            conexion = sqlite3.connect("bd/database.db")
+            conexion = conectar()
             cursor = conexion.cursor()
             
             if nueva_pass: 
@@ -227,8 +228,7 @@ class VentanaAdministrador(QMainWindow):
         # Obtener nombre del administrador logueado
         nombre_admin = "Administrador"
         try:
-            import sqlite3
-            conexion = sqlite3.connect("bd/database.db")
+            conexion = conectar()
             cursor = conexion.cursor()
             cursor.execute("SELECT nombre_usuario FROM Usuario WHERE id_usuario = ?", (self.id_usuario,))
             res = cursor.fetchone()
@@ -549,7 +549,7 @@ class VentanaAdministrador(QMainWindow):
         self.tabla_usuarios.blockSignals(True)
         self.tabla_usuarios.setRowCount(0)
         try:
-            conexion = sqlite3.connect("bd/database.db")
+            conexion = conectar()
             cursor = conexion.cursor()
             cursor.execute("SELECT id_usuario, nombre_usuario, rol, fecha_creacion FROM Usuario")
             usuarios = cursor.fetchall()
@@ -661,7 +661,7 @@ class VentanaAdministrador(QMainWindow):
         
         if dialogo.exec() and dialogo.resultado:
             try:
-                conexion = sqlite3.connect("bd/database.db")
+                conexion = conectar()
                 cursor = conexion.cursor()
                 for id_val in ids_a_eliminar:
                     cursor.execute("DELETE FROM Usuario WHERE id_usuario = ?", (id_val,))
@@ -677,7 +677,7 @@ class VentanaAdministrador(QMainWindow):
     def cargar_reportes_bd(self):
         self.tabla_reportes.setRowCount(0)
         try:
-            conexion = sqlite3.connect("bd/database.db")
+            conexion = conectar()
             cursor = conexion.cursor()
             cursor.execute("""
                 SELECT 
@@ -754,7 +754,7 @@ class VentanaAdministrador(QMainWindow):
         
         if dialogo.exec() and dialogo.resultado:
             try:
-                conexion = sqlite3.connect("bd/database.db")
+                conexion = conectar()
                 cursor = conexion.cursor()
                 
                 for index in filas_seleccionadas:

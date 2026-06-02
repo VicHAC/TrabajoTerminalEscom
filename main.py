@@ -105,6 +105,19 @@ def main():
     """
     app.setStyleSheet(estilo_global)
 
+    # Auto-iniciar servidor en segundo plano si la configuración está en modo servidor
+    from red.config import obtener_modo_operacion
+    if obtener_modo_operacion() == "servidor":
+        try:
+            from red.servidor_thread import iniciar_servidor_global
+            iniciar_servidor_global(port=5000)
+        except Exception as e:
+            print(f"Error al iniciar servidor en segundo plano: {e}")
+            
+    # Asegurar apagado del servidor al salir de la aplicación
+    from red.servidor_thread import detener_servidor_global
+    app.aboutToQuit.connect(detener_servidor_global)
+
     ventana = VentanaLogin()
     ventana.setObjectName("ventana_login")
     ventana.show()

@@ -67,6 +67,11 @@ class VentanaLogin(QWidget):
         btn_invitado.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_invitado.clicked.connect(self.login_invitado)
         
+        btn_config_red = QPushButton("Configuración de Red")
+        btn_config_red.setStyleSheet("background-color: transparent; color: #0969da; border: none; font-weight: normal; font-size: 13px;")
+        btn_config_red.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_config_red.clicked.connect(self.abrir_config_red)
+        
         label_ayuda = QLabel("¿No tienes una cuenta? Comunícate con el administrador")
         label_ayuda.setStyleSheet("color: #888888; font-size: 11px; margin-top: 30px;")
         label_ayuda.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -78,12 +83,18 @@ class VentanaLogin(QWidget):
         layout_login.addWidget(self.input_password)
         layout_login.addWidget(btn_ingresar)
         layout_login.addWidget(btn_invitado)
+        layout_login.addWidget(btn_config_red)
         layout_login.addWidget(label_ayuda)
 
         layout_principal = QVBoxLayout(self)
         layout_principal.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout_principal.addWidget(contenedor_login)
         self.setLayout(layout_principal)
+
+    def abrir_config_red(self):
+        from red.config_gui import DialogoConfigRed
+        dialogo = DialogoConfigRed(self)
+        dialogo.exec()
 
     def verificar_login(self):
         usuario = self.input_usuario.text()
@@ -96,8 +107,9 @@ class VentanaLogin(QWidget):
 
         pass_hash = hashlib.sha256(password.encode()).hexdigest()
 
+        from bd.database import conectar
         try:
-            conexion = sqlite3.connect("bd/database.db")
+            conexion = conectar()
             cursor = conexion.cursor()
             cursor.execute("SELECT id_usuario, rol FROM Usuario WHERE nombre_usuario = ? AND contrasenia_hash = ?", (usuario, pass_hash))
             resultado = cursor.fetchone()
@@ -108,7 +120,7 @@ class VentanaLogin(QWidget):
                 
                 # Registrar sesión de usuario
                 try:
-                    con_ses = sqlite3.connect("bd/database.db")
+                    con_ses = conectar()
                     cur_ses = con_ses.cursor()
                     cur_ses.execute("INSERT INTO Sesion (id_usuario) VALUES (?)", (id_user,))
                     con_ses.commit()

@@ -1113,12 +1113,21 @@ class DialogoVistaCelular(QDialog):
         self.actualizar_vista()
 
     def preparar_fases(self):
+        from red.config import es_cliente
+        if es_cliente():
+            from red.cliente import asegurar_archivo_local
+            asegurar_archivo_local(self.crop_path)
+            
         self.undo_stack = []  # Pila de estados para deshacer paso a paso
         # Fase 0: Original
         self.fases_disponibles.append({"nombre": "ORIGINAL", "path": self.crop_path, "pixmap": None})
         
         # Fase 1: Filtrado
         path_filtrado = self.crop_path.replace("\\", "/").replace("/crops/", "/filtradas/")
+        
+        if es_cliente():
+            from red.cliente import asegurar_archivo_local
+            asegurar_archivo_local(path_filtrado)
 
         if self.pixmap_mem_filtrado:
             self.fases_disponibles.append({"nombre": "FILTRADO", "path": path_filtrado, "pixmap": self.pixmap_mem_filtrado})
@@ -1127,6 +1136,10 @@ class DialogoVistaCelular(QDialog):
             
         # Fase 2: Esqueletizado
         path_esqueleto = self.crop_path.replace("\\", "/").replace("/crops/", "/esqueletos/")
+        
+        if es_cliente():
+            from red.cliente import asegurar_archivo_local
+            asegurar_archivo_local(path_esqueleto)
 
         if os.path.exists(path_esqueleto):
             import cv2; import numpy as np
@@ -1772,6 +1785,11 @@ class InteractiveImageViewer(QLabel):
                     if self.view_mode == "Filtrada": crop_path = crop_path.replace("/crops/", "/filtradas/")
                     elif self.view_mode == "Esqueleto": crop_path = crop_path.replace("/crops/", "/esqueletos/")
 
+                    from red.config import es_cliente
+                    if es_cliente():
+                        from red.cliente import asegurar_archivo_local
+                        asegurar_archivo_local(crop_path)
+
                     if os.path.exists(crop_path) or pixmap_mem:
                         self.active_index = self.hovered_index
                         self.draw_current_state()
@@ -1967,102 +1985,7 @@ class InteractiveImageViewer(QLabel):
         if self.original_pixmap: self.draw_current_state()
 
 
-class DialogoCompartirReporte(QDialog):
-    def __init__(self, id_usuario, id_reportes, parent=None):
-        super().__init__(parent)
-        self.id_usuario = id_usuario
-        self.id_reportes = id_reportes if isinstance(id_reportes, list) else [id_reportes]
-        
-        self.setWindowTitle("Compartir Reportes" if len(self.id_reportes) > 1 else "Compartir Reporte")
-        self.setFixedSize(400, 210)
-        from vistas.utilidades import set_app_icon
-        set_app_icon(self)
-        
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(15)
-        
-        msg_text = (
-            f"<b>Compartir {len(self.id_reportes)} Reportes Científicos</b><br>Selecciona al Investigador o Tesista con el que deseas compartir el acceso a estos reportes:"
-            if len(self.id_reportes) > 1 else
-            "<b>Compartir Reporte Científico</b><br>Selecciona al Investigador o Tesista con el que deseas compartir el acceso a este reporte:"
-        )
-        lbl_msg = QLabel(msg_text)
-        lbl_msg.setWordWrap(True)
-        lbl_msg.setStyleSheet("font-size: 12px; color: #24292f;")
-        layout.addWidget(lbl_msg)
-        
-        self.combo_usuarios = QComboBox()
-        self.combo_usuarios.setStyleSheet("""
-            QComboBox { background-color: white; border: 1px solid #d0d7de; border-radius: 6px; padding: 6px 10px; font-size: 12px; color: #24292f; }
-            QComboBox::drop-down { border: none; }
-            QComboBox QAbstractItemView { background-color: white; border: 1px solid #d0d7de; selection-background-color: #eaf2ff; }
-        """)
-        layout.addWidget(self.combo_usuarios)
-        
-        # Cargar usuarios disponibles (Investigadores y Tesistas que no sean el usuario actual)
-        from bd.database import conectar
-        self.usuarios_list = []
-        conn = conectar(); cur = conn.cursor()
-        try:
-            cur.execute("SELECT id_usuario, nombre_usuario, rol FROM Usuario WHERE id_usuario != ? AND rol IN ('Investigador', 'Tesista')", (id_usuario,))
-            rows = cur.fetchall()
-            for r in rows:
-                id_u, name, rol = r
-                self.combo_usuarios.addItem(f"{name} ({rol})")
-                self.usuarios_list.append(id_u)
-        except Exception as e:
-            logging.error(f"Error cargar compartidos: {e}")
-        finally:
-            conn.close()
-            
-        btn_layout = QHBoxLayout()
-        btn_cancelar = QPushButton("Cancelar")
-        btn_cancelar.setStyleSheet("background-color: #f6f8fa; border: 1px solid #d0d7de; border-radius: 6px; padding: 8px 16px; font-weight: bold;")
-        btn_cancelar.clicked.connect(self.reject)
-        
-        self.btn_compartir = QPushButton("Compartir")
-        self.btn_compartir.setStyleSheet("background-color: #0969da; color: white; border-radius: 6px; padding: 8px 16px; font-weight: bold; border: none;")
-        self.btn_compartir.clicked.connect(self.compartir_reporte)
-        
-        btn_layout.addStretch()
-        btn_layout.addWidget(btn_cancelar)
-        btn_layout.addWidget(self.btn_compartir)
-        layout.addLayout(btn_layout)
-
-    def compartir_reporte(self):
-        index = self.combo_usuarios.currentIndex()
-        if index < 0 or index >= len(self.usuarios_list):
-            self.reject()
-            return
-        dest_id = self.usuarios_list[index]
-        
-        from bd.database import conectar
-        conn = conectar(); cur = conn.cursor()
-        try:
-            exito_count = 0
-            for id_rep in self.id_reportes:
-                # Verificar si ya está compartido con este usuario
-                cur.execute("SELECT COUNT(*) FROM ReporteCompartido WHERE id_reporte = ? AND id_destinatario = ?", (id_rep, dest_id))
-                if cur.fetchone()[0] > 0:
-                    continue # Omitir si ya está compartido
-                
-                cur.execute("INSERT INTO ReporteCompartido (id_reporte, id_propietario, id_destinatario, estado) VALUES (?, ?, ?, 'Pendiente')", 
-                            (id_rep, self.id_usuario, dest_id))
-                exito_count += 1
-            
-            conn.commit()
-            from vistas.utilidades import DialogoNotificacion
-            if exito_count > 0:
-                DialogoNotificacion("Éxito", f"Acceso a {exito_count} reporte(s) compartido exitosamente.", "info", self).exec()
-            else:
-                DialogoNotificacion("Atención", "Los reportes seleccionados ya estaban compartidos con este usuario.", "warning", self).exec()
-            self.accept()
-        except Exception as e:
-            logging.error(f"Error guardar compartido: {e}")
-            self.reject()
-        finally:
-            conn.close()
+from procesamiento.compartir_reporte import DialogoCompartirReporte
 
 
 class DialogoHistorial(QDialog):
@@ -2825,13 +2748,14 @@ class VentanaBaseAnalisis(ValidacionReporteMixin, QMainWindow):
         self.btn_finalizar_reporte = QPushButton("Finalizar reporte")
         
         self.btn_corregir_filtrado = QPushButton("Corregir Filtrado")
-
+        self.btn_config_red = QPushButton("Configuración Red")
 
         estilo_btn_menu = "QPushButton { background-color: transparent; text-align: left; padding: 8px 10px; font-weight: normal; color: #333333; border: 1px solid transparent; outline: none; font-size: 11px;} QPushButton:hover { background-color: #F0F0F0; border-radius: 5px; } QPushButton:disabled { color: #aaaaaa; }"
         lista_botones = [
             self.btn_cargar, self.btn_conteo, self.btn_filtrar, self.btn_ramas, 
             self.btn_obtener_metricas, 
-            self.btn_descargar_reporte, self.btn_finalizar_reporte, self.btn_corregir_filtrado
+            self.btn_descargar_reporte, self.btn_finalizar_reporte, self.btn_corregir_filtrado,
+            self.btn_config_red
         ]
         for btn in lista_botones: 
             btn.setStyleSheet(estilo_btn_menu)
@@ -2883,6 +2807,7 @@ class VentanaBaseAnalisis(ValidacionReporteMixin, QMainWindow):
         btn_aceptar_filtro.clicked.connect(self.confirmar_filtrado)
         btn_cancelar_filtro.clicked.connect(self.cancelar_filtrado)
 
+        self.menu_lateral.addWidget(self.btn_config_red)
         self.menu_lateral.addStretch()
         self.btn_cerrar_sesion = QPushButton("Cerrar Sesión"); self.btn_cerrar_sesion.setStyleSheet("QPushButton { background-color: transparent; border: 2px solid #cc0000; color: #cc0000; font-weight: bold; border-radius: 8px; padding: 10px; margin-top: 20px; } QPushButton:hover { background-color: #cc0000; color: white; }"); self.menu_lateral.addWidget(self.btn_cerrar_sesion)
         frame_menu = QFrame(); frame_menu.setObjectName("menu_lateral"); frame_menu.setFixedWidth(200); frame_menu.setLayout(self.menu_lateral)
@@ -3247,6 +3172,7 @@ class VentanaBaseAnalisis(ValidacionReporteMixin, QMainWindow):
         layout_principal.addWidget(frame_menu); layout_principal.addLayout(area_imagen, stretch=1); widget_central.setLayout(layout_principal); self.setCentralWidget(widget_central)
         
         self.btn_cargar.clicked.connect(self.cargar_imagen); self.btn_cerrar_sesion.clicked.connect(self.cerrar_sesion); self.btn_conteo.clicked.connect(self.execute_microglia_counting); self.btn_filtrar.clicked.connect(self.ejecutar_filtrado); self.btn_ramas.clicked.connect(self.mostrar_ramas_morfologia); self.btn_corregir_filtrado.clicked.connect(self.corregir_filtrado)
+        self.btn_config_red.clicked.connect(self.abrir_config_red)
         
         self.btn_obtener_metricas.clicked.connect(self.obtener_metricas)
         self.btn_agregar_imagen_reporte.clicked.connect(self.agregar_imagen_reporte)
@@ -3469,6 +3395,10 @@ class VentanaBaseAnalisis(ValidacionReporteMixin, QMainWindow):
             # 2. Decidir si retomar o empezar nueva imagen
             if paso < 5:
                 # RETOMAR ANÁLISIS INCOMPLETO
+                from red.config import es_cliente
+                if es_cliente():
+                    from red.cliente import asegurar_archivo_local
+                    ruta = asegurar_archivo_local(ruta)
                 self.ruta_imagen_actual = ruta
                 self.metadatos_imagen = {"campo": campo, "tiempo": tiempo}
                 self.id_analisis_actual = id_an
@@ -3480,6 +3410,9 @@ class VentanaBaseAnalisis(ValidacionReporteMixin, QMainWindow):
                     for b in boxes:
                         if "crop_path" in b and isinstance(b["crop_path"], str):
                             b["crop_path"] = b["crop_path"].replace("\\", "/")
+                            if es_cliente():
+                                from red.cliente import asegurar_archivo_local
+                                asegurar_archivo_local(b["crop_path"])
                     self.metricas_reporte = datos.get("metricas_acumuladas", [])
                 else: boxes = []; self.metricas_reporte = []
 
@@ -3953,6 +3886,11 @@ class VentanaBaseAnalisis(ValidacionReporteMixin, QMainWindow):
         from vistas.login import VentanaLogin
         self.ventana_login = VentanaLogin(); self.ventana_login.setObjectName("ventana_login"); self.ventana_login.show(); self.close()
 
+    def abrir_config_red(self):
+        from red.config_gui import DialogoConfigRed
+        dialogo = DialogoConfigRed(self)
+        dialogo.exec()
+
     def execute_microglia_counting(self):
         if not self.ruta_imagen_actual: self.mostrar_notificacion("Advertencia", "Por favor, carga una imagen primero.", "warning"); return
         
@@ -3983,9 +3921,14 @@ class VentanaBaseAnalisis(ValidacionReporteMixin, QMainWindow):
         dialogo = DialogoCarga("Cargando IA y aplicando conteo...\nPor favor, espera.", self); dialogo.show()
         from PyQt6.QtWidgets import QApplication; QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor); QApplication.processEvents()
         try:
-            from procesamiento.deteccion import ejecutar_conteo_ia
             output_dir = os.path.join(os.getcwd(), "analisis_resultados")
-            crops_folder, count, boxes_data = ejecutar_conteo_ia(self.ruta_imagen_actual, base_output_folder=output_dir)
+            from red.config import es_cliente
+            if es_cliente():
+                from red.cliente import cliente_ejecutar_conteo_ia
+                crops_folder, count, boxes_data = cliente_ejecutar_conteo_ia(self.ruta_imagen_actual, base_output_folder=output_dir)
+            else:
+                from procesamiento.deteccion import ejecutar_conteo_ia
+                crops_folder, count, boxes_data = ejecutar_conteo_ia(self.ruta_imagen_actual, base_output_folder=output_dir)
             self.visor_imagen.set_image_and_boxes(self.pixmaps_globales["Original"], boxes_data)
 
             dialogo.close(); QApplication.restoreOverrideCursor(); self.actualizar_estado_flujo(2); self.mostrar_notificacion("2. Detección", f"Se detectaron {count} posibles microglías.\n\nUsa las herramientas superiores si necesitas agregar o eliminar selecciones.", "info")
@@ -4004,6 +3947,12 @@ class VentanaBaseAnalisis(ValidacionReporteMixin, QMainWindow):
         if not orig_pixmap: return
         from procesamiento.deteccion import recortar_y_guardar_manual
         ruta_guardado, nombre_archivo = recortar_y_guardar_manual(orig_pixmap, x, y, w, h, crops_folder)
+        
+        from red.config import es_cliente
+        if es_cliente():
+            from red.cliente import cliente_subir_archivo
+            cliente_subir_archivo(ruta_guardado)
+
         nueva_caja = {"x": x, "y": y, "w": w, "h": h, "crop_path": ruta_guardado, "offsets": {"clahe": 0, "gauss": 0, "otsu": 0}, "removal_areas": []}
 
         self.visor_imagen.boxes.append(nueva_caja); self.visor_imagen.draw_current_state(); self.actualizar_etiqueta_conteo(len(self.visor_imagen.boxes))
@@ -4024,9 +3973,16 @@ class VentanaBaseAnalisis(ValidacionReporteMixin, QMainWindow):
             nombre_archivo = os.path.basename(box["crop_path"])
             ruta_recorte = os.path.join(base_dir, carpeta_origen, nombre_archivo)
             
+            from red.config import es_cliente
+            if es_cliente():
+                from red.cliente import asegurar_archivo_local
+                asegurar_archivo_local(ruta_recorte)
+            
             # Salvaguarda: si no existe en la carpeta relativa actual, intentar por ruta absoluta del crop
             if not os.path.exists(ruta_recorte) and "crop_path" in box:
                 ruta_recorte = box["crop_path"].replace("\\", "/").replace("/crops/", f"/{carpeta_origen}/")
+                if es_cliente():
+                    asegurar_archivo_local(ruta_recorte)
                 
             if os.path.exists(ruta_recorte):
                 try:
@@ -4143,7 +4099,13 @@ class VentanaBaseAnalisis(ValidacionReporteMixin, QMainWindow):
             for nombre, bin_img in self.crops_filtrados_temp.items():
                 out_path = os.path.join(filtradas_dir, nombre)
                 is_success, im_buf_arr = cv2.imencode(".png", bin_img)
-                if is_success: im_buf_arr.tofile(out_path); count += 1
+                if is_success: 
+                    im_buf_arr.tofile(out_path)
+                    count += 1
+                    from red.config import es_cliente
+                    if es_cliente():
+                        from red.cliente import cliente_subir_archivo
+                        cliente_subir_archivo(out_path)
             dialogo.close(); QApplication.restoreOverrideCursor()
             
             if count > 0:
@@ -4190,18 +4152,28 @@ class VentanaBaseAnalisis(ValidacionReporteMixin, QMainWindow):
         if not self.ruta_imagen_actual or not self.visor_imagen.boxes: self.mostrar_notificacion("Advertencia", "Aplica el conteo y filtrado primero.", "warning"); return
         base_name = Path(self.ruta_imagen_actual).stem; filtradas_dir = os.path.join(os.getcwd(), "analisis_resultados", base_name, "filtradas"); esqueletos_dir = os.path.join(os.getcwd(), "analisis_resultados", base_name, "esqueletos"); os.makedirs(esqueletos_dir, exist_ok=True)
         from PyQt6.QtWidgets import QApplication; count = 0
-        from procesamiento.esqueletizado import generar_esqueleto_de_archivo
         import cv2
+        from red.config import es_cliente
         try:
             dialogo = DialogoCarga("Generando esqueletos topológicos...\nPor favor, espera.", self); dialogo.show(); QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor); QApplication.processEvents()
             for box in self.visor_imagen.boxes:
                 crop_path = box["crop_path"]; nombre = os.path.basename(crop_path); fil_path = os.path.join(filtradas_dir, nombre)
-                if os.path.exists(fil_path):
-                    skeleton_img = generar_esqueleto_de_archivo(fil_path)
-                    if skeleton_img is not None:
-                        out_path = os.path.join(esqueletos_dir, nombre)
-                        is_success, im_buf_arr = cv2.imencode(".png", skeleton_img)
-                        if is_success: im_buf_arr.tofile(out_path); count += 1
+                
+                if es_cliente():
+                    from red.cliente import asegurar_archivo_local, cliente_generar_esqueleto_de_archivo
+                    asegurar_archivo_local(fil_path)
+                    out_path = os.path.join(esqueletos_dir, nombre)
+                    res_path = cliente_generar_esqueleto_de_archivo(fil_path, esqueletos_dir, nombre)
+                    if res_path and os.path.exists(res_path):
+                        count += 1
+                else:
+                    from procesamiento.esqueletizado import generar_esqueleto_de_archivo
+                    if os.path.exists(fil_path):
+                        skeleton_img = generar_esqueleto_de_archivo(fil_path)
+                        if skeleton_img is not None:
+                            out_path = os.path.join(esqueletos_dir, nombre)
+                            is_success, im_buf_arr = cv2.imencode(".png", skeleton_img)
+                            if is_success: im_buf_arr.tofile(out_path); count += 1
             dialogo.close(); QApplication.restoreOverrideCursor()
             if count > 0: pixmap_esqueleto = self.construir_imagen_global("esqueletos"); self.pixmaps_globales["Esqueleto"] = pixmap_esqueleto; self.actualizar_estado_flujo(4); self.combo_vista.setCurrentText("Esqueleto"); self.mostrar_notificacion("4. Esqueleto (Ramas)", f"Se generaron {count} esqueletos topológicos.\n\nYa puedes avanzar a obtener las métricas finales.", "info")
             else: self.mostrar_notificacion("Advertencia", "No se generaron esqueletos. Verifica la carpeta de filtrado.", "warning")
@@ -4269,12 +4241,22 @@ class VentanaBaseAnalisis(ValidacionReporteMixin, QMainWindow):
         QApplication.processEvents()
         
         metricas_imagen = []
+        from red.config import es_cliente
         for box in self.visor_imagen.boxes:
             nombre = os.path.basename(box["crop_path"])
             out_path = os.path.join(esqueletos_dir, nombre)
+            
+            if es_cliente():
+                from red.cliente import asegurar_archivo_local
+                asegurar_archivo_local(out_path)
+                
             if os.path.exists(out_path):
                 try:
-                    met = extraer_metricas_esqueleto(out_path)
+                    if es_cliente():
+                        from red.cliente import cliente_extraer_metricas_esqueleto
+                        met = cliente_extraer_metricas_esqueleto(out_path)
+                    else:
+                        met = extraer_metricas_esqueleto(out_path)
                     metricas_imagen.append(met)
                 except Exception as e:
                     logging.error(f"Error extrayendo métricas de {nombre}: {e}")

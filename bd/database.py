@@ -9,11 +9,18 @@ if not os.path.exists('bd'):
 DB_PATH = os.path.join("bd", "database.db")
 
 def conectar():
-    """Crea la conexión a la base de datos SQLite"""
+    """Crea la conexión a la base de datos SQLite (local o remota vía proxy de red)"""
+    from red.config import es_cliente
+    if es_cliente():
+        from red.cliente import conectar_cliente
+        return conectar_cliente()
     return sqlite3.connect(DB_PATH)
 
 def inicializar_bd():
     """Crea las tablas si no existen, actualiza el esquema y crea el admin"""
+    from red.config import es_cliente
+    if es_cliente():
+        return
     conexion = conectar()
     cursor = conexion.cursor()
 
