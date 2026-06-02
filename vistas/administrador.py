@@ -668,11 +668,11 @@ class VentanaAdministrador(QMainWindow):
                 conexion.commit()
                 conexion.close()
                 from vistas.utilidades import DialogoNotificacion
-                DialogoNotificacion("Sobres", "Usuario(s) eliminado(s).", "info", self).exec()
+                DialogoNotificacion("Listo", "Usuario(s) eliminado(s).", "info", self).exec()
                 self.cargar_usuarios_bd()
             except Exception as e:
                 from vistas.utilidades import DialogoNotificacion
-                DialogoNotificacion("Error", f"Tronó la BD al eliminar: {e}", "error", self).exec()
+                DialogoNotificacion("Error", f"Falló la BD al eliminar: {e}", "error", self).exec()
 
     def cargar_reportes_bd(self):
         self.tabla_reportes.setRowCount(0)
@@ -749,7 +749,7 @@ class VentanaAdministrador(QMainWindow):
             return
             
         from vistas.utilidades import DialogoConfirmacion
-        msg = f"¿Seguro que quieres borrar {len(filas_seleccionadas)} reporte(s) seleccionado(s)? Se eliminarán físicamente."
+        msg = f"¿Seguro que quieres borrar {len(filas_seleccionadas)} reporte(s) seleccionado(s)? Se eliminarán permanente."
         dialogo = DialogoConfirmacion("Confirmar", msg, self)
         
         if dialogo.exec() and dialogo.resultado:
@@ -781,7 +781,7 @@ class VentanaAdministrador(QMainWindow):
                 conexion.close()
                 
                 from vistas.utilidades import DialogoNotificacion
-                DialogoNotificacion("Listo", "Reporte(s) eliminado(s) de la BD.", "info", self).exec()
+                DialogoNotificacion("Listo", "Reporte(s) eliminado(s)", "info", self).exec()
                 self.cargar_reportes_bd()
             except Exception as e:
                 from vistas.utilidades import DialogoNotificacion

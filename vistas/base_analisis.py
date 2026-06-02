@@ -9,6 +9,12 @@ import json
 from ia.constants import MIN_MICROGLIA_SIZE
 
 from bd.database import conectar
+from procesamiento.validacion_reporte import (
+    ValidacionReporteMixin,
+    construir_boton_validar,
+    construir_boton_descargar,
+    debe_bloquear_carga,
+)
 
 from PyQt6.QtCore import pyqtSignal, QRect, Qt, QSize, QEvent, QPoint
 from PyQt6.QtGui import QColor, QImage, QPainter, QPen, QPixmap, QIcon, QIntValidator
@@ -2080,12 +2086,10 @@ class DialogoHistorial(QDialog):
             QToolTip {
                 background-color: #24292f;
                 color: #ffffff;
-                border: 1px solid #30363d;
+                border: 1px solid #24292f;
+                border-radius: 4px;
                 padding: 3px 6px;
                 font-size: 10px;
-                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
-                border-radius: 4px;
-                font-weight: normal;
             }
         """)
         
@@ -2276,14 +2280,14 @@ class DialogoHistorial(QDialog):
 
     def eventFilter(self, obj, event):
         from PyQt6.QtCore import QEvent, QPoint
-        from PyQt6.QtWidgets import QToolTip
+        from PyQt6.QtWidgets import QToolTip, QPushButton
         if event.type() == QEvent.Type.ToolTip:
-            if obj in (self.btn_compartir_icon, self.btn_borrar_icon, self.btn_cerrar_x):
+            if isinstance(obj, QPushButton) and obj.toolTip():
                 # Obtener la posición global de la esquina inferior del botón
                 global_pos = obj.mapToGlobal(obj.rect().bottomLeft())
-                # Mostrar el tooltip cercano al botón para una perfecta visualización
-                custom_x = global_pos.x() - 25
-                custom_y = global_pos.y() - 5
+                # Mostrar el tooltip desplazado a la izquierda para garantizar visualización
+                custom_x = global_pos.x() - 60
+                custom_y = global_pos.y() - 10
                 QToolTip.showText(QPoint(custom_x, custom_y), obj.toolTip(), obj)
                 return True
         return super().eventFilter(obj, event)
@@ -2304,18 +2308,11 @@ class DialogoHistorial(QDialog):
         self.cargar_datos()
 
     def validar_reporte(self, id_reporte):
-        from bd.database import conectar
-        from vistas.utilidades import DialogoNotificacion
-        conn = conectar(); cur = conn.cursor()
-        try:
-            cur.execute("UPDATE ReporteCompartido SET estado = 'Validado' WHERE id_reporte = ?", (id_reporte,))
-            conn.commit()
-            DialogoNotificacion("Éxito", "Modificaciones del reporte validadas correctamente.", "info", self).exec()
-            self.cargar_datos()
-        except Exception as e:
-            logging.error(f"Error al validar reporte: {e}")
-        finally:
-            conn.close()
+        """Inicia el flujo de revisión: cierra el historial y carga el reporte para inspección."""
+        # La validación real (DB) ocurre en VentanaBaseAnalisis.confirmar_validacion()
+        # Aquí solo cerramos el diálogo pasando el flag ir_a_metricas=True
+        self.seleccion = {"type": "reporte", "id_reporte": id_reporte, "ir_a_metricas": True}
+        self.accept()
 
     def descargar_reporte_id(self, id_reporte):
         from bd.database import conectar
@@ -2356,15 +2353,29 @@ class DialogoHistorial(QDialog):
             selected_reports = [item for item in selected_items if item.data(0, Qt.ItemDataRole.UserRole) and item.data(0, Qt.ItemDataRole.UserRole).get("type") == "reporte"]
             num_seleccionados = len(selected_reports)
             self.btn_borrar_icon.setEnabled(num_seleccionados > 0)
-            self.btn_cargar.setEnabled(num_seleccionados == 1)
             self.btn_compartir_icon.setEnabled(self.rol == "Investigador" and num_seleccionados > 0)
+            # Deshabilitar Cargar si el reporte tiene validación pendiente (botón Validar activo)
+            if num_seleccionados == 1:
+                data = selected_reports[0].data(0, Qt.ItemDataRole.UserRole)
+                self.btn_cargar.setEnabled(not debe_bloquear_carga(data, self.id_usuario))
+            else:
+                self.btn_cargar.setEnabled(False)
         else:
             selected_items = self.tree_compartidos.selectedItems()
             selected_reports = [item for item in selected_items if item.data(0, Qt.ItemDataRole.UserRole) and item.data(0, Qt.ItemDataRole.UserRole).get("type") == "reporte"]
             num_seleccionados = len(selected_reports)
             self.btn_borrar_icon.setEnabled(False) # No se pueden borrar reportes compartidos
-            self.btn_cargar.setEnabled(num_seleccionados == 1)
             self.btn_compartir_icon.setEnabled(False)
+            # Deshabilitar Cargar si el reporte seleccionado está pendiente de validación (Modificado)
+            if num_seleccionados == 1:
+                data = selected_reports[0].data(0, Qt.ItemDataRole.UserRole)
+                estado_item = data.get("estado_compartido", "")
+                id_prop = data.get("id_prop", -1)
+                # Si soy el propietario y está Modificado → debo validar antes de cargar
+                # Si soy el destinatario → puedo cargar siempre
+                self.btn_cargar.setEnabled(not debe_bloquear_carga(data, self.id_usuario))
+            else:
+                self.btn_cargar.setEnabled(False)
 
     def showEvent(self, event):
         super().showEvent(event)
@@ -2410,11 +2421,15 @@ class DialogoHistorial(QDialog):
                 
                 estado_texto = estado
                 es_modificado = False
+                es_pendiente = False
                 if share_info:
                     sh_estado, sh_user = share_info
                     if sh_estado == 'Modificado':
                         estado_texto = f"Modificado (por {sh_user})"
                         es_modificado = True
+                    elif sh_estado == 'Pendiente':
+                        estado_texto = f"Pendiente de trabajo (por {sh_user})"
+                        es_pendiente = True
                     elif sh_estado == 'Validado':
                         estado_texto = f"Validado ({sh_user})"
                 
@@ -2426,7 +2441,12 @@ class DialogoHistorial(QDialog):
                 total_det = cur.fetchone()[0] or 0
 
                 rep_item = QTreeWidgetItem(self.tree, [nombre, str(fecha), estado_texto, "", "", ""])
-                rep_item.setData(0, Qt.ItemDataRole.UserRole, {"type": "reporte", "id": id_rep})
+                sh_estado_val = share_info[0] if share_info else ""
+                rep_item.setData(0, Qt.ItemDataRole.UserRole, {
+                    "type": "reporte", "id": id_rep,
+                    "estado_compartido": sh_estado_val,
+                    "id_prop": self.id_usuario  # En Mis Reportes siempre soy el propietario
+                })
                 
                 cur.execute("""
                     SELECT A.id_analisis, I.ruta_archivo, A.fecha_analisis, A.paso_actual, A.cantidad_microglias, A.datos_persistentes
@@ -2461,29 +2481,41 @@ class DialogoHistorial(QDialog):
                 completados = cur.fetchone()[0]
                 reporte_completo = (total_analisis > 0 and completados == total_analisis)
                 
-                # Botón de Validar (si aplica)
-                # El reporte tiene una colaboración (es_modificado es True si share_info existe y está Modificado),
-                # y el usuario es el Investigador.
-                if es_modificado and self.rol == "Investigador":
-                    btn_valid = QPushButton()
-                    btn_valid.setIcon(QIcon("assets/buttons/validar.png"))
-                    btn_valid.setIconSize(QSize(18, 18))
-                    btn_valid.setFixedSize(30, 30)
-                    btn_valid.setCursor(Qt.CursorShape.PointingHandCursor)
-                    btn_valid.setStyleSheet("""
-                        QPushButton { background-color: transparent; border: 1px solid transparent; outline: none; }
-                        QPushButton:hover { background-color: #ddf4ff; border-radius: 15px; }
-                        QPushButton:disabled { opacity: 0.1; }
-                    """)
-                    btn_valid.setToolTip("Validar reporte")
-                    btn_valid.clicked.connect(lambda checked, r_id=id_rep: self.validar_reporte(r_id))
-                    
-                    container_val = QWidget()
-                    layout_v = QHBoxLayout(container_val)
-                    layout_v.addWidget(btn_valid)
-                    layout_v.setAlignment(Qt.AlignmentFlag.AlignCenter)
-                    layout_v.setContentsMargins(0, 0, 0, 0)
-                    self.tree.setItemWidget(rep_item, 4, container_val)
+                # Botón de Validar o Icono de Espera (si aplica)
+                if self.rol == "Investigador" and share_info:
+                    if es_modificado:
+                        btn_valid = QPushButton()
+                        btn_valid.setIcon(QIcon("assets/buttons/validar.png"))
+                        btn_valid.setIconSize(QSize(18, 18))
+                        btn_valid.setFixedSize(30, 30)
+                        btn_valid.setCursor(Qt.CursorShape.PointingHandCursor)
+                        btn_valid.setStyleSheet("""
+                            QPushButton { background-color: transparent; border: 1px solid transparent; outline: none; }
+                            QPushButton:hover { background-color: #ddf4ff; border-radius: 15px; }
+                            QPushButton:disabled { opacity: 0.1; }
+                        """)
+                        btn_valid.setToolTip("Validar reporte")
+                        btn_valid.installEventFilter(self)
+                        btn_valid.clicked.connect(lambda checked, r_id=id_rep: self.validar_reporte(r_id))
+                        
+                        container_val = QWidget()
+                        layout_v = QHBoxLayout(container_val)
+                        layout_v.addWidget(btn_valid)
+                        layout_v.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                        layout_v.setContentsMargins(0, 0, 0, 0)
+                        self.tree.setItemWidget(rep_item, 4, container_val)
+                    elif es_pendiente:
+                        lbl_esperar = QLabel()
+                        lbl_esperar.setPixmap(QPixmap("assets/buttons/esperar.png").scaled(18, 18, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+                        lbl_esperar.setToolTip("Esperando a que el colaborador realice cambios")
+                        lbl_esperar.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                        
+                        container_esp = QWidget()
+                        layout_esp = QHBoxLayout(container_esp)
+                        layout_esp.addWidget(lbl_esperar)
+                        layout_esp.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                        layout_esp.setContentsMargins(0, 0, 0, 0)
+                        self.tree.setItemWidget(rep_item, 4, container_esp)
                 
                 # Botón de Descargar
                 btn_dl = QPushButton()
@@ -2501,7 +2533,8 @@ class DialogoHistorial(QDialog):
                     btn_dl.setToolTip("Descargar reporte")
                 else:
                     btn_dl.setEnabled(False)
-                    btn_dl.setToolTip(f"Reporte incompleto ({completados}/{total_analisis} imágenes listas)")
+                    btn_dl.setToolTip(f"Incompleto ({completados}/{total_analisis})")
+                btn_dl.installEventFilter(self)
                 btn_dl.clicked.connect(lambda checked, r_id=id_rep: self.descargar_reporte_id(r_id))
                 
                 container_dl = QWidget()
@@ -2594,56 +2627,51 @@ class DialogoHistorial(QDialog):
                 cur.execute("SELECT COUNT(*) FROM Analisis WHERE id_reporte = ? AND paso_actual >= 5", (id_rep,))
                 completados = cur.fetchone()[0]
                 reporte_completo = (total_analisis > 0 and completados == total_analisis)
-                
-                # Botón de Validar (si aplica)
-                # El reporte tiene una colaboración (es compartido), el usuario es el Investigador (id_prop == self.id_usuario)
-                # y el tesista terminó con el análisis (estado_compartido == 'Modificado')
-                if id_prop == self.id_usuario and estado_compartido == 'Modificado':
-                    btn_valid = QPushButton()
-                    btn_valid.setIcon(QIcon("assets/buttons/validar.png"))
-                    btn_valid.setIconSize(QSize(18, 18))
-                    btn_valid.setFixedSize(30, 30)
-                    btn_valid.setCursor(Qt.CursorShape.PointingHandCursor)
-                    btn_valid.setStyleSheet("""
-                        QPushButton { background-color: transparent; border: 1px solid transparent; outline: none; }
-                        QPushButton:hover { background-color: #ddf4ff; border-radius: 15px; }
-                        QPushButton:disabled { opacity: 0.1; }
-                    """)
-                    btn_valid.setToolTip("Validar reporte")
-                    btn_valid.clicked.connect(lambda checked, r_id=id_rep: self.validar_reporte(r_id))
-                    
-                    container_val = QWidget()
-                    layout_v = QHBoxLayout(container_val)
-                    layout_v.addWidget(btn_valid)
-                    layout_v.setAlignment(Qt.AlignmentFlag.AlignCenter)
-                    layout_v.setContentsMargins(0, 0, 0, 0)
-                    self.tree_compartidos.setItemWidget(rep_item, 5, container_val)
+
+                # Guardar estado en item para uso en actualizar_estado_boton_borrar
+                rep_item.setData(0, Qt.ItemDataRole.UserRole, {
+                    "type": "reporte", "id": id_rep,
+                    "estado_compartido": estado_compartido,
+                    "id_prop": id_prop, "id_dest": id_dest
+                })
+
+                # Botón de Validar o Icono de Espera (solo para propietario)
+                if id_prop == self.id_usuario:
+                    if estado_compartido == 'Modificado':
+                        construir_boton_validar(
+                            self.tree_compartidos, rep_item, id_rep,
+                            reporte_completo, total_analisis, completados,
+                            self.validar_reporte
+                        )
+                    elif estado_compartido == 'Pendiente':
+                        lbl_esperar = QLabel()
+                        lbl_esperar.setPixmap(QPixmap("assets/buttons/esperar.png").scaled(18, 18, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+                        lbl_esperar.setToolTip("Esperando a que el colaborador realice cambios")
+                        lbl_esperar.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                        
+                        container_esp = QWidget()
+                        layout_esp = QHBoxLayout(container_esp)
+                        layout_esp.addWidget(lbl_esperar)
+                        layout_esp.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                        layout_esp.setContentsMargins(0, 0, 0, 0)
+                        self.tree_compartidos.setItemWidget(rep_item, 5, container_esp)
                 
                 # Botón de Descargar
-                btn_dl = QPushButton()
-                btn_dl.setIcon(QIcon("assets/buttons/download.png"))
-                btn_dl.setIconSize(QSize(18, 18))
-                btn_dl.setFixedSize(30, 30)
-                btn_dl.setCursor(Qt.CursorShape.PointingHandCursor)
-                btn_dl.setStyleSheet("""
-                    QPushButton { background-color: transparent; border: 1px solid transparent; outline: none; }
-                    QPushButton:hover { background-color: #ddf4ff; border-radius: 15px; }
-                    QPushButton:disabled { opacity: 0.1; }
-                """)
-                if reporte_completo:
-                    btn_dl.setEnabled(True)
-                    btn_dl.setToolTip("Descargar reporte")
+                if id_prop == self.id_usuario:
+                    if estado_compartido == 'Validado' and reporte_completo:
+                        dl_hab, dl_tip = True, "Descargar reporte"
+                    elif estado_compartido == 'Modificado':
+                        dl_hab, dl_tip = False, "Valida el reporte primero para poder descargar"
+                    else:
+                        dl_hab = reporte_completo
+                        dl_tip = "Descargar reporte" if reporte_completo else f"Reporte incompleto ({completados}/{total_analisis} imágenes listas)"
                 else:
-                    btn_dl.setEnabled(False)
-                    btn_dl.setToolTip(f"Reporte incompleto ({completados}/{total_analisis} imágenes listas)")
-                btn_dl.clicked.connect(lambda checked, r_id=id_rep: self.descargar_reporte_id(r_id))
-                
-                container_dl = QWidget()
-                layout_d = QHBoxLayout(container_dl)
-                layout_d.addWidget(btn_dl)
-                layout_d.setAlignment(Qt.AlignmentFlag.AlignCenter)
-                layout_d.setContentsMargins(0, 0, 0, 0)
-                self.tree_compartidos.setItemWidget(rep_item, 6, container_dl)
+                    dl_hab = reporte_completo
+                    dl_tip = "Descargar reporte" if reporte_completo else f"Reporte incompleto ({completados}/{total_analisis} imágenes listas)"
+                construir_boton_descargar(
+                    self.tree_compartidos, rep_item, 6, id_rep,
+                    dl_hab, dl_tip, self.descargar_reporte_id
+                )
                 
         except Exception as e: 
             logging.error(f"Error historial: {e}")
@@ -2663,6 +2691,18 @@ class DialogoHistorial(QDialog):
         
         item_seleccionado = selected_reports[0]
         data = item_seleccionado.data(0, Qt.ItemDataRole.UserRole)
+
+        # Bloquear carga si el propietario intenta cargar un reporte que aún debe validar
+        if tab_index == 1:
+            if debe_bloquear_carga(data, self.id_usuario):
+                from vistas.utilidades import DialogoNotificacion
+                DialogoNotificacion(
+                    "Validación Requerida",
+                    "El tesista ya completó el trabajo. Debes validar el reporte antes de poder cargarlo o descargarlo.",
+                    "warning", self
+                ).exec()
+                return
+
         self.seleccion = {"type": "reporte", "id_reporte": data["id"], "estado": item_seleccionado.text(2)}
         self.accept()
 
@@ -2699,7 +2739,7 @@ class DialogoHistorial(QDialog):
             self.actualizar_estado_boton_borrar()
 
 
-class VentanaBaseAnalisis(QMainWindow):
+class VentanaBaseAnalisis(ValidacionReporteMixin, QMainWindow):
     def mostrar_notificacion(self, titulo, mensaje, tipo="info"):
         from vistas.utilidades import DialogoNotificacion
         DialogoNotificacion(titulo, mensaje, tipo, self).exec()
@@ -2718,6 +2758,7 @@ class VentanaBaseAnalisis(QMainWindow):
         self.id_analisis_actual = None
         self.paso_actual = 0
         self.metricas_extraidas_ciclo_actual = False
+        self._init_validacion_estado()  # Inicializa reporte_validado_cargado = False
         self.setWindowTitle(f"Prototipo Microglías - Panel ({self.rol})")
         
         from vistas.utilidades import set_app_icon
@@ -2726,6 +2767,16 @@ class VentanaBaseAnalisis(QMainWindow):
         screen_geom = QApplication.primaryScreen().geometry()
         self.resize(int(screen_geom.width() * 0.8), int(screen_geom.height() * 0.8))
         self.setMinimumSize(1050, 700)
+        self.setStyleSheet("""
+            QToolTip {
+                background-color: #24292f;
+                color: #ffffff;
+                border: 1px solid #24292f;
+                border-radius: 4px;
+                padding: 3px 6px;
+                font-size: 10px;
+            }
+        """)
         self.inicializar_ui()
 
     def inicializar_ui(self):
@@ -2784,10 +2835,12 @@ class VentanaBaseAnalisis(QMainWindow):
         ]
         for btn in lista_botones: 
             btn.setStyleSheet(estilo_btn_menu)
-            self.menu_lateral.addWidget(btn)
             
         self.btn_corregir_filtrado.hide()
         self.btn_corregir_filtrado.setStyleSheet(estilo_btn_menu + "QPushButton { color: #0969da; font-weight: bold; }")
+
+        # Panel de validación con checkboxes (definido en ValidacionReporteMixin)
+        self._crear_panel_validacion(self.menu_lateral)
 
 
         # Conectar el botón de historial
@@ -2882,9 +2935,26 @@ class VentanaBaseAnalisis(QMainWindow):
         self.btn_sig_global.clicked.connect(self.siguiente_vista_global)
         self.btn_sig_global.setEnabled(False)
         
+        # Botón de comentarios por proceso (sólo visible/activo en modo validación)
+        self.btn_comentario_proceso = QPushButton()
+        self.btn_comentario_proceso.setIcon(QIcon("assets/buttons/crear_msg.png"))
+        self.btn_comentario_proceso.setIconSize(QSize(18, 18))
+        self.btn_comentario_proceso.setFixedSize(30, 30)
+        self.btn_comentario_proceso.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_comentario_proceso.setStyleSheet("""
+            QPushButton { background-color: transparent; border: 1px solid transparent; outline: none; }
+            QPushButton:hover { background-color: #ddf4ff; border-radius: 15px; }
+            QPushButton:disabled { opacity: 0.3; }
+        """)
+        self.btn_comentario_proceso.setToolTip("Agregar comentario sobre este proceso")
+        self.btn_comentario_proceso.setEnabled(False)
+        self.btn_comentario_proceso.hide()
+        self.btn_comentario_proceso.clicked.connect(self.agregar_comentario_proceso)
+        
         controles_superiores.addWidget(self.btn_ant_global)
         controles_superiores.addWidget(self.combo_vista)
         controles_superiores.addWidget(self.btn_sig_global)
+        controles_superiores.addWidget(self.btn_comentario_proceso)
         controles_superiores.addStretch()
         
         self.lbl_info_conteo = QLabel("Microglías detectadas: 0"); self.lbl_info_conteo.setStyleSheet("font-size: 11px; font-weight: bold; color: #3a61a0; background-color: white; border: 1px solid #d0d7de; border-radius: 6px; padding: 4px 10px;"); self.lbl_info_conteo.setAlignment(Qt.AlignmentFlag.AlignCenter); controles_superiores.addWidget(self.lbl_info_conteo); controles_superiores.addSpacing(15)
@@ -3182,6 +3252,7 @@ class VentanaBaseAnalisis(QMainWindow):
         self.btn_agregar_imagen_reporte.clicked.connect(self.agregar_imagen_reporte)
         self.btn_descargar_reporte.clicked.connect(self.descargar_reporte)
         self.btn_finalizar_reporte.clicked.connect(self.finalizar_reporte)
+        # confirmar_validacion y abrir_historial se conectan desde ValidacionReporteMixin
 
         self.actualizar_estado_flujo(0)
         
@@ -3226,16 +3297,33 @@ class VentanaBaseAnalisis(QMainWindow):
         self.btn_bloquear_zoom.setEnabled(zoom_activado)
 
         # Habilitación estricta de botones según la etapa actual de análisis (se desactiva la etapa anterior)
-        self.btn_cargar.setEnabled(paso == 0 or paso == 5)
-        self.btn_conteo.setEnabled(paso == 1)
-        self.btn_filtrar.setEnabled(paso == 2)
-        self.btn_ramas.setEnabled(paso == 3)
+        es_validacion = getattr(self, 'reporte_validado_cargado', False)
+        if es_validacion:
+            # Modo revisión: todos los botones de acción deshabilitados
+            self.btn_cargar.setEnabled(False)
+            self.btn_conteo.setEnabled(False)
+            self.btn_filtrar.setEnabled(False)
+            self.btn_ramas.setEnabled(False)
+            self.btn_obtener_metricas.setEnabled(False)
+            self.btn_agregar_imagen_reporte.setEnabled(False)
+            self.btn_descargar_reporte.setEnabled(False)
+            self.btn_finalizar_reporte.setEnabled(False)
+            # Habilitar la navegación de vistas para revisar libremente
+            self.combo_vista.setEnabled(True)
+            self.btn_herramienta_caja.hide()
+            self.btn_herramienta_eliminar.hide()
+            self.btn_corregir_filtrado.hide()
+        else:
+            self.btn_cargar.setEnabled(paso == 0 or paso == 5)
+            self.btn_conteo.setEnabled(paso == 1)
+            self.btn_filtrar.setEnabled(paso == 2)
+            self.btn_ramas.setEnabled(paso == 3)
 
         if paso == 0:
-            self.combo_vista.setEnabled(False)
+            if not es_validacion: self.combo_vista.setEnabled(False)
             self.btn_herramienta_caja.hide(); self.btn_herramienta_eliminar.hide()
         elif paso == 1:
-            self.combo_vista.setEnabled(False)
+            if not es_validacion: self.combo_vista.setEnabled(False)
             self.btn_herramienta_caja.hide(); self.btn_herramienta_eliminar.hide()
         elif paso == 2:
             self.combo_vista.setEnabled(True)
@@ -3254,10 +3342,8 @@ class VentanaBaseAnalisis(QMainWindow):
             self.btn_corregir_filtrado.hide()
             self.btn_herramienta_caja.hide(); self.btn_herramienta_eliminar.hide()
             self.btn_obtener_metricas.setEnabled(False)
-            self.btn_agregar_imagen_reporte.setEnabled(True)
-            self.btn_descargar_reporte.setEnabled(True)
-            self.btn_finalizar_reporte.setEnabled(False)
-            self.combo_vista.setEnabled(False)
+            self.aplicar_ui_paso5_validacion()  # Delegado a ValidacionReporteMixin
+            if not es_validacion: self.combo_vista.setEnabled(False)
             
         if paso not in [4]: self.btn_corregir_filtrado.hide()
         
@@ -3269,6 +3355,8 @@ class VentanaBaseAnalisis(QMainWindow):
             self.save_current_progress(mostrar_notif=False)
 
     def save_current_progress(self, mostrar_notif=True):
+        if getattr(self, "cargando_reporte", False):
+            return
         if not self.ruta_imagen_actual: return
         
         from bd.database import conectar
@@ -3319,12 +3407,12 @@ class VentanaBaseAnalisis(QMainWindow):
                     cur.execute("INSERT INTO Microglia (id_analisis, centroide_x, centroide_y, area_total_pixeles, perimetro, bbox_x, bbox_y, bbox_w, bbox_h, crop_path) VALUES (?,0,0,0,0,?,?,?,?,?)",
                                (self.id_analisis_actual, box['x'], box['y'], box['w'], box['h'], box.get('crop_path', '')))
             
-            # 5. Si es un reporte compartido y el usuario actual es el destinatario, marcarlo como Modificado
+            # 5. Si es un reporte compartido y el usuario actual es el destinatario, marcarlo como Modificado y limpiar comentarios
             cur.execute("SELECT id_usuario FROM Reporte WHERE id_reporte = ?", (self.id_reporte_actual,))
             res_owner = cur.fetchone()
             if res_owner and res_owner[0] != self.id_usuario:
-                cur.execute("UPDATE ReporteCompartido SET estado = 'Modificado' WHERE id_reporte = ? AND id_destinatario = ?",
-                            (self.id_reporte_actual, self.id_usuario))
+                cur.execute("UPDATE ReporteCompartido SET estado = 'Modificado', comentarios = NULL WHERE id_reporte = ? AND id_destinatario = ?",
+                             (self.id_reporte_actual, self.id_usuario))
             
             conn.commit()
             if mostrar_notif:
@@ -3333,12 +3421,12 @@ class VentanaBaseAnalisis(QMainWindow):
             self.mostrar_notificacion("Error", f"No se pudo guardar: {e}", "error")
         finally: conn.close()
 
-    def abrir_historial(self):
-        diag = DialogoHistorial(self.id_usuario, self.rol, self)
-        if diag.exec() and diag.seleccion:
-            self.cargar_reporte_especifico(diag.seleccion)
+        # abrir_historial y confirmar_validacion viven en ValidacionReporteMixin
+        # (procesamiento/validacion_reporte.py)
+
 
     def cargar_reporte_especifico(self, seleccion):
+        self.cargando_reporte = True
         id_reporte = seleccion["id_reporte"]
         from bd.database import conectar
         import json
@@ -3353,6 +3441,22 @@ class VentanaBaseAnalisis(QMainWindow):
             res = cur.fetchone()
             
             self.id_reporte_actual = id_reporte
+            
+            # 1.5. Obtener comentarios del reporte compartido si existen y el usuario es el destinatario (estudiante/tesista)
+            tiene_correcciones = False
+            cur.execute("SELECT comentarios, id_propietario FROM ReporteCompartido WHERE id_reporte = ?", (id_reporte,))
+            comp_res = cur.fetchone()
+            if comp_res:
+                comentarios_investigador, prop_id = comp_res
+                if prop_id != self.id_usuario and comentarios_investigador and comentarios_investigador.strip():
+                    tiene_correcciones = True
+                    from vistas.utilidades import DialogoNotificacion
+                    # Mostrar comentarios al tesista con un ligero retardo
+                    QTimer.singleShot(600, lambda c=comentarios_investigador: DialogoNotificacion(
+                        "Observaciones del Investigador",
+                        f"El investigador ha rechazado el reporte con las siguientes observaciones:\n\n{c}",
+                        "warning", self
+                    ).exec())
             
             if not res:
                 # Reporte vacío? (No debería pasar)
@@ -3426,13 +3530,17 @@ class VentanaBaseAnalisis(QMainWindow):
 
                 self.combo_vista.setCurrentText(modo_default)
                 self.combo_vista.blockSignals(False)
-                self.combo_vista.setEnabled(paso >= 2)
+                if not getattr(self, "reporte_validado_cargado", False):
+                    self.combo_vista.setEnabled(paso >= 2)
+                else:
+                    self.combo_vista.setEnabled(True)
                 
                 # Sincronizar el visor con el modo cargado
                 self.visor_imagen.set_view_mode(modo_default, self.pixmaps_globales.get(modo_default))
                 self.actualizar_estado_flujo(paso)
                 self.actualizar_botones_navegacion()
-                self.mostrar_notificacion("Éxito", f"Continuando análisis: {os.path.basename(ruta)}", "info")
+                if not tiene_correcciones:
+                    self.mostrar_notificacion("Éxito", f"Continuando análisis: {os.path.basename(ruta)}", "info")
             else:
                 # ÚLTIMA IMAGEN COMPLETADA -> CARGAR MÉTRICAS Y PEDIR NUEVA IMAGEN
                 self.ruta_imagen_actual = ruta
@@ -3485,10 +3593,54 @@ class VentanaBaseAnalisis(QMainWindow):
                 self.combo_vista.blockSignals(False)
                 # Mostrar de inmediato la pantalla de Métricas directamente
                 self.mostrar_tabla_metricas()
-                self.mostrar_notificacion("Reporte Cargado", "Última imagen completada. Por favor, añade una nueva imagen para continuar el reporte.", "info")
+                self.actualizar_botones_navegacion()
+                if not getattr(self, "reporte_validado_cargado", False):
+                    if not tiene_correcciones:
+                        self.mostrar_notificacion("Reporte Cargado", "Última imagen completada. Por favor, añade una nueva imagen para continuar el reporte.", "info")
 
         except Exception as e: self.mostrar_notificacion("Error", f"Fallo al cargar reporte: {e}", "error")
-        finally: conn.close()
+        finally:
+            self.cargando_reporte = False
+            conn.close()
+
+
+    def cerrar_reporte_actual(self):
+        """Cierra el reporte actual y restablece la interfaz al estado inicial."""
+        self.id_reporte_actual = None
+        self.id_analisis_actual = None
+        self.ruta_imagen_actual = None
+        self.pixmaps_globales = {"Original": None, "Filtrada": None, "Esqueleto": None}
+        self.crops_en_memoria = {}
+        self.crops_filtrados_temp = {}
+        self.metadatos_imagen = {"campo": "", "tiempo": ""}
+        self.metricas_reporte = []
+        self.reporte_finalizado_actual = False
+        self.paso_actual = 0
+        self.metricas_extraidas_ciclo_actual = False
+        self.reporte_validado_cargado = False
+        
+        # Restablecer combo de vistas
+        self.combo_vista.blockSignals(True)
+        while self.combo_vista.count() > 1:
+            self.combo_vista.removeItem(1)
+        self.combo_vista.setCurrentIndex(0)
+        self.combo_vista.setEnabled(False)
+        self.combo_vista.blockSignals(False)
+        
+        # Ocultar botones de corregir y herramientas
+        self.btn_corregir_filtrado.hide()
+        self.btn_herramienta_caja.hide()
+        self.btn_herramienta_eliminar.hide()
+        
+        # Limpiar visor de imágenes
+        self.visor_imagen.original_pixmap = None
+        self.visor_imagen.boxes = []
+        self.visor_imagen.setText("Sube una imagen .tiff para empezar el análisis...")
+        self.visor_imagen.setStyleSheet("border: 2px dashed #aaa; background-color: #f0f0f0; font-size: 18px; color: #666;")
+        self.actualizar_etiqueta_conteo(0)
+        
+        # Restablecer estado de los botones laterales del flujo
+        self.actualizar_estado_flujo(0)
 
 
     def actualizar_etiqueta_conteo(self, conteo): self.lbl_info_conteo.setText(f"Microglías detectadas: {conteo}")
@@ -3714,17 +3866,28 @@ class VentanaBaseAnalisis(QMainWindow):
 
     def siguiente_vista_global(self):
         # Si estamos en la vista de esqueleto en el paso 4, avanzar ">" ejecuta la extracción de métricas
-        if self.paso_actual == 4 and self.combo_vista.currentText() == "Esqueleto":
-            self.obtener_metricas()
-            return
+        if not getattr(self, "reporte_validado_cargado", False):
+            if self.paso_actual == 4 and self.combo_vista.currentText() == "Esqueleto":
+                self.obtener_metricas()
+                return
             
         idx = self.combo_vista.currentIndex()
         if idx < self.combo_vista.count() - 1:
             self.combo_vista.setCurrentIndex(idx + 1)
 
     def actualizar_botones_navegacion(self):
-        # Si ya se sacaron las métricas (Paso 5), desactivar por completo los botones para moverse
+        # Actualizar comentarios de proceso
+        if hasattr(self, "_actualizar_tooltip_comentarios"):
+            self._actualizar_tooltip_comentarios()
+
+        # Si es modo revisión/validación, habilitar navegación libre entre los pasos cargados
+        if getattr(self, "reporte_validado_cargado", False):
+            if hasattr(self, "actualizar_nav_en_validacion") and self.actualizar_nav_en_validacion():
+                return
+
+        # Si ya se sacaron las métricas (Paso 5)...
         if self.paso_actual >= 5:
+            # Caso normal: bloquear navegación
             self.btn_sig_global.show()
             self.btn_sig_global.setEnabled(False)
             self.btn_ant_global.show()
