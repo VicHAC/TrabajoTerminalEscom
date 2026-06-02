@@ -436,7 +436,7 @@ class VentanaAdministrador(QMainWindow):
         self.btn_eliminar_reporte_fisico.installEventFilter(self)
         
         self.tabla_reportes = QTableWidget()
-        self.tabla_reportes.setColumnCount(8)
+        self.tabla_reportes.setColumnCount(9)
         self.tabla_reportes.setHorizontalHeaderLabels([
             "ID Reporte", 
             "ID Análisis", 
@@ -444,6 +444,7 @@ class VentanaAdministrador(QMainWindow):
             "Autor", 
             "Colaborador",
             "Estatus del analisis", 
+            "Detecciones",
             "Fecha de\nGeneración", 
             "Ruta Archivo"
         ])
@@ -692,6 +693,8 @@ class VentanaAdministrador(QMainWindow):
                         'Sin colaborador'
                     ),
                     CASE WHEN A.paso_actual >= 5 THEN 'Completado' ELSE 'Incompleto' END,
+                    A.cantidad_microglias,
+                    A.datos_persistentes,
                     COALESCE(A.fecha_analisis, R.fecha_creacion),
                     COALESCE(I.ruta_archivo, 'Sin archivo')
                 FROM Reporte R
@@ -700,13 +703,34 @@ class VentanaAdministrador(QMainWindow):
                 LEFT JOIN Usuario U ON R.id_usuario = U.id_usuario
             """)
             reportes = cursor.fetchall()
-            conexion.close()
 
             self.tabla_reportes.setRowCount(len(reportes))
             for fila_idx, fila_datos in enumerate(reportes):
-                for col_idx, dato in enumerate(fila_datos):
-                    self.tabla_reportes.setItem(fila_idx, col_idx, QTableWidgetItem(str(dato)))
+                id_rep, id_an, nom_rep, autor, colab, estatus, cant, dp, fecha, ruta = fila_datos
+                
+                if id_an != 'Sin análisis':
+                    if not cant or cant == 0:
+                        cursor.execute("SELECT COUNT(*) FROM Microglia WHERE id_analisis = ?", (id_an,))
+                        cant = cursor.fetchone()[0] or 0
+                        if cant == 0 and dp:
+                            try:
+                                import json
+                                datos = json.loads(dp)
+                                cant = len(datos.get("boxes", []))
+                            except:
+                                pass
+                else:
+                    cant = "N/A"
+                
+                valores = [
+                    str(id_rep), str(id_an), str(nom_rep), str(autor), str(colab),
+                    str(estatus), str(cant), str(fecha), str(ruta)
+                ]
+                
+                for col_idx, dato in enumerate(valores):
+                    self.tabla_reportes.setItem(fila_idx, col_idx, QTableWidgetItem(dato))
             self.tabla_reportes.resizeColumnsToContents()
+            conexion.close()
         except Exception as e:
             print(f"Error al cargar reportes: {e}")
         finally:

@@ -37,6 +37,7 @@ from PyQt6.QtWidgets import (
     QTreeWidget,
     QTreeWidgetItem,
     QScrollArea,
+    QStackedWidget,
 )
 from PyQt6.QtCore import QTimer
 
@@ -2384,6 +2385,20 @@ class DialogoHistorial(QDialog):
             for rep in reportes:
                 id_rep, nombre, fecha, estado = rep
                 
+                # Sincronizar estado general si todos los análisis internos están completados
+                cur.execute("SELECT paso_actual FROM Analisis WHERE id_reporte = ?", (id_rep,))
+                analisis_pasos = cur.fetchall()
+                if analisis_pasos:
+                    todos_completados = all(an[0] >= 5 for an in analisis_pasos)
+                    if todos_completados and estado == 'En progreso':
+                        cur.execute("UPDATE Reporte SET estado = 'Completado' WHERE id_reporte = ?", (id_rep,))
+                        conn.commit()
+                        estado = 'Completado'
+                    elif not todos_completados and estado == 'Completado':
+                        cur.execute("UPDATE Reporte SET estado = 'En progreso' WHERE id_reporte = ?", (id_rep,))
+                        conn.commit()
+                        estado = 'En progreso'
+                
                 # Verificar si está compartido y si fue modificado
                 cur.execute("""
                     SELECT RC.estado, U.nombre_usuario 
@@ -2410,26 +2425,41 @@ class DialogoHistorial(QDialog):
                 """, (id_rep,))
                 total_det = cur.fetchone()[0] or 0
 
-                rep_item = QTreeWidgetItem(self.tree, [nombre, str(fecha), estado_texto, str(total_det), "", ""])
+                rep_item = QTreeWidgetItem(self.tree, [nombre, str(fecha), estado_texto, "", "", ""])
                 rep_item.setData(0, Qt.ItemDataRole.UserRole, {"type": "reporte", "id": id_rep})
                 
                 cur.execute("""
-                    SELECT A.id_analisis, I.ruta_archivo, A.fecha_analisis, A.paso_actual, A.cantidad_microglias
+                    SELECT A.id_analisis, I.ruta_archivo, A.fecha_analisis, A.paso_actual, A.cantidad_microglias, A.datos_persistentes
                     FROM Analisis A JOIN Imagen I ON A.id_imagen = I.id_imagen
                     WHERE A.id_reporte = ? ORDER BY A.fecha_analisis ASC
                 """, (id_rep,))
                 análisis = cur.fetchall()
                 for an in análisis:
-                    id_an, ruta, f_an, paso, cant = an
-                    st = f"Completado ({cant})" if paso >= 5 else f"Paso {paso}"
-                    an_item = QTreeWidgetItem(rep_item, [os.path.basename(ruta), str(f_an), st, "", "", ""])
+                    id_an, ruta, f_an, paso, cant, dp = an
+                    if not cant or cant == 0:
+                        # Fallback 1: Contar registros en Microglia
+                        cur.execute("SELECT COUNT(*) FROM Microglia WHERE id_analisis = ?", (id_an,))
+                        cant = cur.fetchone()[0] or 0
+                        if cant == 0 and dp:
+                            # Fallback 2: Contar boxes en datos_persistentes JSON
+                            try:
+                                import json
+                                datos = json.loads(dp)
+                                cant = len(datos.get("boxes", []))
+                            except:
+                                pass
+                    st = "Completado" if paso >= 5 else f"En proceso ({paso}/4)"
+                    an_item = QTreeWidgetItem(rep_item, [os.path.basename(ruta), str(f_an), st, str(cant), "", ""])
                     an_item.setData(0, Qt.ItemDataRole.UserRole, {"type": "analisis", "id": id_an, "id_reporte": id_rep})
                     an_item.setDisabled(True)
                 rep_item.setExpanded(True)
                 
-                # Obtener análisis completados
+                # Verificar si TODAS las imágenes del reporte están completadas
+                cur.execute("SELECT COUNT(*) FROM Analisis WHERE id_reporte = ?", (id_rep,))
+                total_analisis = cur.fetchone()[0]
                 cur.execute("SELECT COUNT(*) FROM Analisis WHERE id_reporte = ? AND paso_actual >= 5", (id_rep,))
                 completados = cur.fetchone()[0]
+                reporte_completo = (total_analisis > 0 and completados == total_analisis)
                 
                 # Botón de Validar (si aplica)
                 # El reporte tiene una colaboración (es_modificado es True si share_info existe y está Modificado),
@@ -2466,8 +2496,12 @@ class DialogoHistorial(QDialog):
                     QPushButton:hover { background-color: #ddf4ff; border-radius: 15px; }
                     QPushButton:disabled { opacity: 0.1; }
                 """)
-                btn_dl.setEnabled(completados > 0)
-                btn_dl.setToolTip("Descargar")
+                if reporte_completo:
+                    btn_dl.setEnabled(True)
+                    btn_dl.setToolTip("Descargar reporte")
+                else:
+                    btn_dl.setEnabled(False)
+                    btn_dl.setToolTip(f"Reporte incompleto ({completados}/{total_analisis} imágenes listas)")
                 btn_dl.clicked.connect(lambda checked, r_id=id_rep: self.descargar_reporte_id(r_id))
                 
                 container_dl = QWidget()
@@ -2525,26 +2559,41 @@ class DialogoHistorial(QDialog):
                 """, (id_rep,))
                 total_det = cur.fetchone()[0] or 0
 
-                rep_item = QTreeWidgetItem(self.tree_compartidos, [nombre, rol_text, str(fecha), estado_texto, str(total_det), "", ""])
+                rep_item = QTreeWidgetItem(self.tree_compartidos, [nombre, rol_text, str(fecha), estado_texto, "", "", ""])
                 rep_item.setData(0, Qt.ItemDataRole.UserRole, {"type": "reporte", "id": id_rep})
                 
                 cur.execute("""
-                    SELECT A.id_analisis, I.ruta_archivo, A.fecha_analisis, A.paso_actual, A.cantidad_microglias
+                    SELECT A.id_analisis, I.ruta_archivo, A.fecha_analisis, A.paso_actual, A.cantidad_microglias, A.datos_persistentes
                     FROM Analisis A JOIN Imagen I ON A.id_imagen = I.id_imagen
                     WHERE A.id_reporte = ? ORDER BY A.fecha_analisis ASC
                 """, (id_rep,))
                 análisis = cur.fetchall()
                 for an in análisis:
-                    id_an, ruta, f_an, paso, cant = an
-                    st = f"Completado ({cant})" if paso >= 5 else f"Paso {paso}"
-                    an_item = QTreeWidgetItem(rep_item, [os.path.basename(ruta), "", str(f_an), st, "", "", ""])
+                    id_an, ruta, f_an, paso, cant, dp = an
+                    if not cant or cant == 0:
+                        # Fallback 1: Contar registros en Microglia
+                        cur.execute("SELECT COUNT(*) FROM Microglia WHERE id_analisis = ?", (id_an,))
+                        cant = cur.fetchone()[0] or 0
+                        if cant == 0 and dp:
+                            # Fallback 2: Contar boxes en datos_persistentes JSON
+                            try:
+                                import json
+                                datos = json.loads(dp)
+                                cant = len(datos.get("boxes", []))
+                            except:
+                                pass
+                    st = "Completado" if paso >= 5 else f"En proceso ({paso}/4)"
+                    an_item = QTreeWidgetItem(rep_item, [os.path.basename(ruta), "", str(f_an), st, str(cant), "", ""])
                     an_item.setData(0, Qt.ItemDataRole.UserRole, {"type": "analisis", "id": id_an, "id_reporte": id_rep})
                     an_item.setDisabled(True)
                 rep_item.setExpanded(True)
                 
-                # Descargar reporte compartido
+                # Verificar si TODAS las imágenes del reporte compartido están completadas
+                cur.execute("SELECT COUNT(*) FROM Analisis WHERE id_reporte = ?", (id_rep,))
+                total_analisis = cur.fetchone()[0]
                 cur.execute("SELECT COUNT(*) FROM Analisis WHERE id_reporte = ? AND paso_actual >= 5", (id_rep,))
                 completados = cur.fetchone()[0]
+                reporte_completo = (total_analisis > 0 and completados == total_analisis)
                 
                 # Botón de Validar (si aplica)
                 # El reporte tiene una colaboración (es compartido), el usuario es el Investigador (id_prop == self.id_usuario)
@@ -2581,8 +2630,12 @@ class DialogoHistorial(QDialog):
                     QPushButton:hover { background-color: #ddf4ff; border-radius: 15px; }
                     QPushButton:disabled { opacity: 0.1; }
                 """)
-                btn_dl.setEnabled(completados > 0)
-                btn_dl.setToolTip("Descargar")
+                if reporte_completo:
+                    btn_dl.setEnabled(True)
+                    btn_dl.setToolTip("Descargar reporte")
+                else:
+                    btn_dl.setEnabled(False)
+                    btn_dl.setToolTip(f"Reporte incompleto ({completados}/{total_analisis} imágenes listas)")
                 btn_dl.clicked.connect(lambda checked, r_id=id_rep: self.descargar_reporte_id(r_id))
                 
                 container_dl = QWidget()
@@ -2660,6 +2713,7 @@ class VentanaBaseAnalisis(QMainWindow):
         self.crops_filtrados_temp = {}
         self.metadatos_imagen = {"campo": "", "tiempo": ""}
         self.metricas_reporte = []
+        self.reporte_finalizado_actual = False
         self.id_reporte_actual = None
         self.id_analisis_actual = None
         self.paso_actual = 0
@@ -2725,7 +2779,7 @@ class VentanaBaseAnalisis(QMainWindow):
         estilo_btn_menu = "QPushButton { background-color: transparent; text-align: left; padding: 8px 10px; font-weight: normal; color: #333333; border: 1px solid transparent; outline: none; font-size: 11px;} QPushButton:hover { background-color: #F0F0F0; border-radius: 5px; } QPushButton:disabled { color: #aaaaaa; }"
         lista_botones = [
             self.btn_cargar, self.btn_conteo, self.btn_filtrar, self.btn_ramas, 
-            self.btn_obtener_metricas, self.btn_agregar_imagen_reporte, 
+            self.btn_obtener_metricas, 
             self.btn_descargar_reporte, self.btn_finalizar_reporte, self.btn_corregir_filtrado
         ]
         for btn in lista_botones: 
@@ -2894,11 +2948,232 @@ class VentanaBaseAnalisis(QMainWindow):
         
         controles_superiores.addWidget(lbl_minus); controles_superiores.addWidget(self.sld_nivel_zoom); controles_superiores.addWidget(lbl_plus); controles_superiores.addSpacing(5); controles_superiores.addWidget(self.btn_zoom_reset); controles_superiores.addWidget(self.btn_bloquear_zoom)
         
+        self.stacked_visor = QStackedWidget()
         self.visor_imagen = InteractiveImageViewer(); self.visor_imagen.setText("Sube una imagen .tiff para empezar el análisis..."); self.visor_imagen.setStyleSheet("border: 2px dashed #aaa; background-color: #f0f0f0; font-size: 18px; color: #666;")
         self.visor_imagen.conteo_actualizado.connect(self.conteo_modificado_auto_save); self.visor_imagen.nueva_caja_dibujada.connect(self.agregar_microglia_manual); self.visor_imagen.nivel_zoom_cambiado.connect(self.sld_nivel_zoom.setValue)
         self.sld_nivel_zoom.valueChanged.connect(self.visor_imagen.set_zoom); self.btn_zoom_reset.clicked.connect(self.reset_zoom)
         
-        area_imagen.addLayout(controles_superiores); area_imagen.addWidget(self.visor_imagen, stretch=1)
+        # Panel para tabla de métricas (tipo Excel con Dashboard de KPIs)
+        self.panel_metricas_tabla = QFrame()
+        self.panel_metricas_tabla.setStyleSheet("background-color: white; border: 1px solid #d0d7de; border-radius: 6px;")
+        layout_panel_met = QVBoxLayout(self.panel_metricas_tabla)
+        layout_panel_met.setContentsMargins(20, 20, 20, 20)
+        layout_panel_met.setSpacing(15)
+        
+        # Cabecera
+        self.lbl_titulo_tabla = QLabel("<b>Métricas Morfológicas de Microglías (Reporte de Sesión)</b>")
+        self.lbl_titulo_tabla.setStyleSheet("font-size: 15px; color: #3a61a0; border: none; font-weight: bold;")
+        self.lbl_titulo_tabla.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout_panel_met.addWidget(self.lbl_titulo_tabla)
+        
+        self.lbl_subtitulo_imagen = QLabel()
+        self.lbl_subtitulo_imagen.setStyleSheet("font-size: 12px; color: #57606a; border: none; font-weight: normal;")
+        self.lbl_subtitulo_imagen.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout_panel_met.addWidget(self.lbl_subtitulo_imagen)
+        
+        # Contenedor Visual de Procedimiento con Miniaturas
+        self.widget_proceso = QWidget()
+        layout_proceso = QHBoxLayout(self.widget_proceso)
+        layout_proceso.setContentsMargins(0, 5, 0, 5)
+        layout_proceso.setSpacing(15)
+        layout_proceso.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        # Estilo de etiqueta de miniatura
+        thumb_style = "border: 1px solid #d0d7de; border-radius: 4px; background-color: #f6f8fa; color: #8c95a0; font-size: 11px;"
+        
+        # Bloque 1: Original
+        w_p1 = QWidget()
+        lay_p1 = QVBoxLayout(w_p1)
+        lay_p1.setContentsMargins(0, 0, 0, 0)
+        lay_p1.setSpacing(4)
+        lay_p1.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        lbl_txt_p1 = QLabel("1. Original / Conteo")
+        lbl_txt_p1.setStyleSheet("font-size: 11px; color: #57606a; font-weight: bold; border: none;")
+        lbl_txt_p1.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.lbl_thumb_original = QLabel()
+        self.lbl_thumb_original.setFixedSize(220, 140)
+        self.lbl_thumb_original.setStyleSheet(thumb_style)
+        self.lbl_thumb_original.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        lay_p1.addWidget(lbl_txt_p1)
+        lay_p1.addWidget(self.lbl_thumb_original)
+        
+        # Flecha 1
+        lbl_flecha1 = QLabel("➔")
+        lbl_flecha1.setStyleSheet("font-size: 20px; color: #0969da; border: none; font-weight: bold;")
+        lbl_flecha1.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        # Bloque 2: Filtrado
+        w_p2 = QWidget()
+        lay_p2 = QVBoxLayout(w_p2)
+        lay_p2.setContentsMargins(0, 0, 0, 0)
+        lay_p2.setSpacing(4)
+        lay_p2.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        lbl_txt_p2 = QLabel("2. Filtrado")
+        lbl_txt_p2.setStyleSheet("font-size: 11px; color: #57606a; font-weight: bold; border: none;")
+        lbl_txt_p2.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.lbl_thumb_filtrada = QLabel()
+        self.lbl_thumb_filtrada.setFixedSize(220, 140)
+        self.lbl_thumb_filtrada.setStyleSheet(thumb_style)
+        self.lbl_thumb_filtrada.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        lay_p2.addWidget(lbl_txt_p2)
+        lay_p2.addWidget(self.lbl_thumb_filtrada)
+        
+        # Flecha 2
+        lbl_flecha2 = QLabel("➔")
+        lbl_flecha2.setStyleSheet("font-size: 20px; color: #0969da; border: none; font-weight: bold;")
+        lbl_flecha2.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        # Bloque 3: Esqueleto
+        w_p3 = QWidget()
+        lay_p3 = QVBoxLayout(w_p3)
+        lay_p3.setContentsMargins(0, 0, 0, 0)
+        lay_p3.setSpacing(4)
+        lay_p3.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        lbl_txt_p3 = QLabel("3. Esqueleto / Ramas")
+        lbl_txt_p3.setStyleSheet("font-size: 11px; color: #57606a; font-weight: bold; border: none;")
+        lbl_txt_p3.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.lbl_thumb_esqueleto = QLabel()
+        self.lbl_thumb_esqueleto.setFixedSize(220, 140)
+        self.lbl_thumb_esqueleto.setStyleSheet(thumb_style)
+        self.lbl_thumb_esqueleto.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        lay_p3.addWidget(lbl_txt_p3)
+        lay_p3.addWidget(self.lbl_thumb_esqueleto)
+        
+        layout_proceso.addWidget(w_p1)
+        layout_proceso.addWidget(lbl_flecha1)
+        layout_proceso.addWidget(w_p2)
+        layout_proceso.addWidget(lbl_flecha2)
+        layout_proceso.addWidget(w_p3)
+        layout_panel_met.addWidget(self.widget_proceso)
+        
+        # Tarjetas de resumen (KPI Cards)
+        self.kpi_layout = QHBoxLayout()
+        self.kpi_layout.setSpacing(15)
+        
+        # Tarjeta 1: Total Microglías
+        self.card_total = QFrame()
+        self.card_total.setStyleSheet("background-color: #f6f8fa; border: 1px solid #d0d7de; border-radius: 6px;")
+        self.card_total.setFixedHeight(75)
+        layout_total = QVBoxLayout(self.card_total)
+        layout_total.setSpacing(4)
+        layout_total.setContentsMargins(12, 10, 12, 10)
+        lbl_title_total = QLabel("Total Microglías")
+        lbl_title_total.setStyleSheet("font-size: 11px; color: #57606a; font-weight: bold; border: none;")
+        self.val_total = QLabel("0")
+        self.val_total.setStyleSheet("font-size: 20px; color: #3a61a0; font-weight: bold; border: none;")
+        layout_total.addWidget(lbl_title_total)
+        layout_total.addWidget(self.val_total)
+        
+        # Tarjeta 2: Promedio Puntos de Bifurcación
+        self.card_junc = QFrame()
+        self.card_junc.setStyleSheet("background-color: #f6f8fa; border: 1px solid #d0d7de; border-radius: 6px;")
+        self.card_junc.setFixedHeight(75)
+        layout_junc = QVBoxLayout(self.card_junc)
+        layout_junc.setSpacing(4)
+        layout_junc.setContentsMargins(12, 10, 12, 10)
+        lbl_title_junc = QLabel("Prom. Bifurcaciones")
+        lbl_title_junc.setStyleSheet("font-size: 11px; color: #57606a; font-weight: bold; border: none;")
+        self.val_junc = QLabel("0.0")
+        self.val_junc.setStyleSheet("font-size: 20px; color: #2da44e; font-weight: bold; border: none;")
+        layout_junc.addWidget(lbl_title_junc)
+        layout_junc.addWidget(self.val_junc)
+
+        # Tarjeta 3: Promedio Puntos Terminales
+        self.card_ends = QFrame()
+        self.card_ends.setStyleSheet("background-color: #f6f8fa; border: 1px solid #d0d7de; border-radius: 6px;")
+        self.card_ends.setFixedHeight(75)
+        layout_ends = QVBoxLayout(self.card_ends)
+        layout_ends.setSpacing(4)
+        layout_ends.setContentsMargins(12, 10, 12, 10)
+        lbl_title_ends = QLabel("Prom. Ptos Terminales")
+        lbl_title_ends.setStyleSheet("font-size: 11px; color: #57606a; font-weight: bold; border: none;")
+        self.val_ends = QLabel("0.0")
+        self.val_ends.setStyleSheet("font-size: 20px; color: #cf222e; font-weight: bold; border: none;")
+        layout_ends.addWidget(lbl_title_ends)
+        layout_ends.addWidget(self.val_ends)
+
+        # Tarjeta 4: Promedio Longitud de Ramas
+        self.card_length = QFrame()
+        self.card_length.setStyleSheet("background-color: #f6f8fa; border: 1px solid #d0d7de; border-radius: 6px;")
+        self.card_length.setFixedHeight(75)
+        layout_length = QVBoxLayout(self.card_length)
+        layout_length.setSpacing(4)
+        layout_length.setContentsMargins(12, 10, 12, 10)
+        lbl_title_len = QLabel("Prom. Longitud Rama")
+        lbl_title_len.setStyleSheet("font-size: 11px; color: #57606a; font-weight: bold; border: none;")
+        self.val_len = QLabel("0.0 px")
+        self.val_len.setStyleSheet("font-size: 20px; color: #0969da; font-weight: bold; border: none;")
+        layout_length.addWidget(lbl_title_len)
+        layout_length.addWidget(self.val_len)
+        
+        self.kpi_layout.addWidget(self.card_total)
+        self.kpi_layout.addWidget(self.card_junc)
+        self.kpi_layout.addWidget(self.card_ends)
+        self.kpi_layout.addWidget(self.card_length)
+        # Título de la Sección de Métricas (debajo de las miniaturas)
+        lbl_titulo_seccion = QLabel("<b>Métricas Morfológicas de la Sesión</b>")
+        lbl_titulo_seccion.setStyleSheet("font-size: 13px; color: #24292f; border: none; font-weight: bold; margin-top: 10px; margin-bottom: 5px;")
+        lbl_titulo_seccion.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout_panel_met.addWidget(lbl_titulo_seccion)
+        
+        layout_panel_met.addLayout(self.kpi_layout)
+        
+        # Tabla estilo Excel
+        self.tabla_metricas = QTableWidget()
+        self.tabla_metricas.setStyleSheet("""
+            QTableWidget { border: 1px solid #e1e4e8; background-color: #ffffff; gridline-color: #e1e4e8; font-size: 11px; border-radius: 4px; }
+            QTableWidget::item { padding: 8px; color: #24292f; border-bottom: 1px solid #f0f0f0; }
+            QTableWidget::item:selected { background-color: #eaf2ff; color: #0969da; }
+            QHeaderView::section { background-color: #f6f8fa; padding: 8px; font-weight: bold; border: 1px solid #e1e4e8; color: #57606a; font-size: 11px; }
+            
+            QScrollBar:vertical {
+                border: none;
+                background: #f6f8fa;
+                width: 10px;
+                margin: 0px;
+            }
+            QScrollBar::handle:vertical {
+                background: #b6d4fe;
+                min-height: 20px;
+                border-radius: 5px;
+            }
+            QScrollBar::handle:vertical:hover {
+                background: #0969da;
+            }
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+                border: none;
+                background: none;
+                height: 0px;
+            }
+            
+            QScrollBar:horizontal {
+                border: none;
+                background: #f6f8fa;
+                height: 10px;
+                margin: 0px;
+            }
+            QScrollBar::handle:horizontal {
+                background: #b6d4fe;
+                min-width: 20px;
+                border-radius: 5px;
+            }
+            QScrollBar::handle:horizontal:hover {
+                background: #0969da;
+            }
+            QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
+                border: none;
+                background: none;
+                width: 0px;
+            }
+        """)
+        self.tabla_metricas.setAlternatingRowColors(True)
+        self.tabla_metricas.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        layout_panel_met.addWidget(self.tabla_metricas)
+        
+        self.stacked_visor.addWidget(self.visor_imagen)
+        self.stacked_visor.addWidget(self.panel_metricas_tabla)
+        
+        area_imagen.addLayout(controles_superiores); area_imagen.addWidget(self.stacked_visor, stretch=1)
         layout_principal.addWidget(frame_menu); layout_principal.addLayout(area_imagen, stretch=1); widget_central.setLayout(layout_principal); self.setCentralWidget(widget_central)
         
         self.btn_cargar.clicked.connect(self.cargar_imagen); self.btn_cerrar_sesion.clicked.connect(self.cerrar_sesion); self.btn_conteo.clicked.connect(self.execute_microglia_counting); self.btn_filtrar.clicked.connect(self.ejecutar_filtrado); self.btn_ramas.clicked.connect(self.mostrar_ramas_morfologia); self.btn_corregir_filtrado.clicked.connect(self.corregir_filtrado)
@@ -2951,7 +3226,7 @@ class VentanaBaseAnalisis(QMainWindow):
         self.btn_bloquear_zoom.setEnabled(zoom_activado)
 
         # Habilitación estricta de botones según la etapa actual de análisis (se desactiva la etapa anterior)
-        self.btn_cargar.setEnabled(paso == 0)
+        self.btn_cargar.setEnabled(paso == 0 or paso == 5)
         self.btn_conteo.setEnabled(paso == 1)
         self.btn_filtrar.setEnabled(paso == 2)
         self.btn_ramas.setEnabled(paso == 3)
@@ -2976,15 +3251,17 @@ class VentanaBaseAnalisis(QMainWindow):
             self.btn_herramienta_caja.hide(); self.btn_herramienta_eliminar.hide()
             self.btn_obtener_metricas.setEnabled(True)
         elif paso == 5:
-            self.btn_corregir_filtrado.show()
+            self.btn_corregir_filtrado.hide()
             self.btn_herramienta_caja.hide(); self.btn_herramienta_eliminar.hide()
             self.btn_obtener_metricas.setEnabled(False)
             self.btn_agregar_imagen_reporte.setEnabled(True)
             self.btn_descargar_reporte.setEnabled(True)
-            self.btn_finalizar_reporte.setEnabled(True)
+            self.btn_finalizar_reporte.setEnabled(False)
+            self.combo_vista.setEnabled(False)
+            
+        if paso not in [4]: self.btn_corregir_filtrado.hide()
         
-        if paso not in [4, 5]: self.btn_corregir_filtrado.hide()
-        
+        self.actualizar_elementos_combo_vista()
         self.actualizar_botones_navegacion()
         
         # Guardado automático de progreso al cambiar de fase
@@ -3026,14 +3303,21 @@ class VentanaBaseAnalisis(QMainWindow):
                            (self.id_reporte_actual, id_img, len(self.visor_imagen.boxes), self.paso_actual, datos_json))
                 self.id_analisis_actual = cur.lastrowid
             else:
-                cur.execute("UPDATE Analisis SET cantidad_microglias = ?, paso_actual = ?, datos_persistentes = ? WHERE id_analisis = ?",
-                           (len(self.visor_imagen.boxes), self.paso_actual, datos_json, self.id_analisis_actual))
+                # Solo actualizar cantidad_microglias si hay boxes reales, para no sobreescribir un conteo previo con 0
+                if self.visor_imagen.boxes:
+                    cur.execute("UPDATE Analisis SET cantidad_microglias = ?, paso_actual = ?, datos_persistentes = ? WHERE id_analisis = ?",
+                               (len(self.visor_imagen.boxes), self.paso_actual, datos_json, self.id_analisis_actual))
+                else:
+                    # Sin boxes: preservar cantidad_microglias existente, solo actualizar paso y datos
+                    cur.execute("UPDATE Analisis SET paso_actual = ?, datos_persistentes = ? WHERE id_analisis = ?",
+                               (self.paso_actual, datos_json, self.id_analisis_actual))
 
-            # 4. Sincronizar Microglias (Detecciones individuales)
-            cur.execute("DELETE FROM Microglia WHERE id_analisis = ?", (self.id_analisis_actual,))
-            for box in self.visor_imagen.boxes:
-                cur.execute("INSERT INTO Microglia (id_analisis, centroide_x, centroide_y, area_total_pixeles, perimetro, bbox_x, bbox_y, bbox_w, bbox_h, crop_path) VALUES (?,0,0,0,0,?,?,?,?,?)",
-                           (self.id_analisis_actual, box['x'], box['y'], box['w'], box['h'], box.get('crop_path', '')))
+            # 4. Sincronizar Microglias (Detecciones individuales) — solo si hay boxes activos
+            if self.visor_imagen.boxes:
+                cur.execute("DELETE FROM Microglia WHERE id_analisis = ?", (self.id_analisis_actual,))
+                for box in self.visor_imagen.boxes:
+                    cur.execute("INSERT INTO Microglia (id_analisis, centroide_x, centroide_y, area_total_pixeles, perimetro, bbox_x, bbox_y, bbox_w, bbox_h, crop_path) VALUES (?,0,0,0,0,?,?,?,?,?)",
+                               (self.id_analisis_actual, box['x'], box['y'], box['w'], box['h'], box.get('crop_path', '')))
             
             # 5. Si es un reporte compartido y el usuario actual es el destinatario, marcarlo como Modificado
             cur.execute("SELECT id_usuario FROM Reporte WHERE id_reporte = ?", (self.id_reporte_actual,))
@@ -3151,16 +3435,56 @@ class VentanaBaseAnalisis(QMainWindow):
                 self.mostrar_notificacion("Éxito", f"Continuando análisis: {os.path.basename(ruta)}", "info")
             else:
                 # ÚLTIMA IMAGEN COMPLETADA -> CARGAR MÉTRICAS Y PEDIR NUEVA IMAGEN
+                self.ruta_imagen_actual = ruta
+                self.metadatos_imagen = {"campo": campo, "tiempo": tiempo}
+                self.id_analisis_actual = id_an
+                self.paso_actual = 5
+                
+                # Cargar e inicializar la imagen original
+                from PyQt6.QtGui import QImage, QPixmap
+                import cv2; import numpy as np
+                try:
+                    with open(ruta, "rb") as f:
+                        file_bytes = np.frombuffer(f.read(), dtype=np.uint8)
+                    cv_img = cv2.imdecode(file_bytes, cv2.IMREAD_UNCHANGED)
+                except Exception:
+                    cv_img = None
+                if cv_img is not None:
+                    if cv_img.dtype == np.uint16: cv_img = ((cv_img-cv_img.min())/(cv_img.max()-cv_img.min())*255).astype(np.uint8)
+                    if len(cv_img.shape) == 2: h, w = cv_img.shape; qimg = QImage(cv_img.data, w, h, w, QImage.Format.Format_Grayscale8)
+                    else: cv_img = cv2.cvtColor(cv_img, cv2.COLOR_BGR2RGB); h, w, ch = cv_img.shape; qimg = QImage(cv_img.data, w, h, ch * w, QImage.Format.Format_RGB888)
+                    pixmap = QPixmap.fromImage(qimg)
+                else: pixmap = QPixmap(ruta)
+                
+                self.pixmaps_globales = {"Original": pixmap, "Filtrada": None, "Esqueleto": None}
+                
                 if datos_json:
                     datos = json.loads(datos_json)
                     self.metricas_reporte = datos.get("metricas_acumuladas", [])
-                    # Importante: si la última imagen se terminó, sus métricas deben estar en el acumulado.
-                    # Si no están, las buscamos en el propio análisis (esto es una salvaguarda)
-                else: self.metricas_reporte = []
+                    boxes = datos.get("boxes", [])
+                    for b in boxes:
+                        if "crop_path" in b and isinstance(b["crop_path"], str):
+                            b["crop_path"] = b["crop_path"].replace("\\", "/")
+                    self.visor_imagen.set_image_and_boxes(pixmap, boxes)
+                else:
+                    self.metricas_reporte = []
+                    self.visor_imagen.set_image_and_boxes(pixmap, [])
                 
-                self.id_analisis_actual = None; self.ruta_imagen_actual = None; self.paso_actual = 0
-                self.visor_imagen.set_image_and_boxes(None, [])
-                self.actualizar_estado_flujo(0)
+                # Reconstruir las imágenes procesadas Filtrada y Esqueleto para las miniaturas
+                pix_f = self.construir_imagen_global("filtradas")
+                if pix_f:
+                    self.pixmaps_globales["Filtrada"] = pix_f
+                
+                pix_e = self.construir_imagen_global("esqueletos")
+                if pix_e:
+                    self.pixmaps_globales["Esqueleto"] = pix_e
+                
+                self.actualizar_estado_flujo(5)
+                self.combo_vista.blockSignals(True)
+                self.combo_vista.setCurrentText("Métricas")
+                self.combo_vista.blockSignals(False)
+                # Mostrar de inmediato la pantalla de Métricas directamente
+                self.mostrar_tabla_metricas()
                 self.mostrar_notificacion("Reporte Cargado", "Última imagen completada. Por favor, añade una nueva imagen para continuar el reporte.", "info")
 
         except Exception as e: self.mostrar_notificacion("Error", f"Fallo al cargar reporte: {e}", "error")
@@ -3185,6 +3509,26 @@ class VentanaBaseAnalisis(QMainWindow):
                         return # User cancelled
                     break
                     
+            # --- LIMPIEZA SEGURA Y GARANTIZADA DE ESTADO PREVIO ---
+            if self.reporte_finalizado_actual:
+                self.metricas_reporte.clear()
+                self.reporte_finalizado_actual = False
+                
+            self.stacked_visor.setCurrentIndex(0)
+            self.visor_imagen.set_image_and_boxes(None, [])
+            self.ruta_imagen_actual = None
+            self.id_analisis_actual = None  # ¡Garantiza que se creará un nuevo análisis y no se sobrescribirá el anterior!
+            self.pixmaps_globales = {"Original": None, "Filtrada": None, "Esqueleto": None}
+            self.combo_vista.blockSignals(True)
+            self.combo_vista.clear()
+            self.combo_vista.blockSignals(False)
+            self.metricas_extraidas_ciclo_actual = False
+            self.paso_actual = 0  # Pasamos temporalmente al paso 0 para la carga
+            self.id_analisis_actual = None  # CRUCIAL: Resetear el ID para que guarde un nuevo registro en BD
+            self.crops_en_memoria.clear()
+            self.crops_filtrados_temp.clear()
+            # -----------------------------------------------------
+            
             self.metadatos_imagen["campo"] = campo; self.metadatos_imagen["tiempo"] = tiempo
             if ruta_archivo:
                 self.ruta_imagen_actual = ruta_archivo; pixmap = QPixmap(ruta_archivo)
@@ -3204,10 +3548,45 @@ class VentanaBaseAnalisis(QMainWindow):
                             pixmap = QPixmap.fromImage(qimg)
                     except Exception as e: logging.error(f"Error al cargar imagen: {e}")
                 if not pixmap.isNull():
-                    self.pixmaps_globales["Original"] = pixmap; self.pixmaps_globales["Filtrada"] = None; self.pixmaps_globales["Esqueleto"] = None; self.btn_herramienta_caja.setChecked(False); self.btn_herramienta_eliminar.setChecked(False); self.visor_imagen.current_tool = "pointer"; self.btn_bloquear_zoom.setChecked(False); self.reset_zoom(); self.visor_imagen.set_image_and_boxes(pixmap, []); self.actualizar_estado_flujo(1); self.combo_vista.blockSignals(True); self.combo_vista.clear(); self.combo_vista.addItem("Original"); self.combo_vista.setCurrentText("Original"); self.combo_vista.blockSignals(False); self.actualizar_botones_navegacion(); self.visor_imagen.view_mode = "Original"; self.mostrar_notificacion("Imagen cargada", "Imagen lista para el análisis.", "info")
+                    self.pixmaps_globales["Original"] = pixmap
+                    self.pixmaps_globales["Filtrada"] = None
+                    self.pixmaps_globales["Esqueleto"] = None
+                    self.btn_herramienta_caja.setChecked(False)
+                    self.btn_herramienta_eliminar.setChecked(False)
+                    self.visor_imagen.current_tool = "pointer"
+                    self.btn_bloquear_zoom.setChecked(False)
+                    self.reset_zoom()
+                    self.visor_imagen.set_image_and_boxes(pixmap, [])
+                    self.actualizar_estado_flujo(1)
+                    self.combo_vista.blockSignals(True)
+                    self.combo_vista.clear()
+                    self.combo_vista.addItem("Original")
+                    self.combo_vista.setCurrentText("Original")
+                    self.combo_vista.blockSignals(False)
+                    self.actualizar_botones_navegacion()
+                    self.visor_imagen.view_mode = "Original"
+                    self.mostrar_notificacion("Imagen cargada", "Imagen lista para el análisis.", "info")
                 else: self.mostrar_notificacion("Error", "El archivo está corrupto o no es válido.", "error")
 
     def cambiar_vista_global(self, texto_vista):
+        if not texto_vista:
+            return
+        if texto_vista == "Métricas":
+            self.mostrar_tabla_metricas()
+            self.sld_nivel_zoom.setEnabled(False)
+            self.btn_zoom_reset.setEnabled(False)
+            self.btn_bloquear_zoom.setEnabled(False)
+            self.actualizar_botones_navegacion()
+            return
+            
+        self.stacked_visor.setCurrentIndex(0)
+        
+        # Restaurar controles de zoom para las vistas de imágenes según el paso actual
+        zoom_activado = (self.paso_actual >= 1)
+        self.sld_nivel_zoom.setEnabled(zoom_activado)
+        self.btn_zoom_reset.setEnabled(zoom_activado)
+        self.btn_bloquear_zoom.setEnabled(zoom_activado)
+        
         pixmap_guardado = self.pixmaps_globales.get(texto_vista)
         if pixmap_guardado:
             self.visor_imagen.set_view_mode(texto_vista, pixmap_guardado)
@@ -3218,20 +3597,194 @@ class VentanaBaseAnalisis(QMainWindow):
             self.combo_vista.setCurrentText(self.visor_imagen.view_mode)
             self.combo_vista.blockSignals(False)
 
+    def mostrar_tabla_metricas(self):
+        self.stacked_visor.setCurrentIndex(1)
+        
+        # 1. Actualizar títulos de forma dinámica según el estado del reporte
+        nombre_archivo = os.path.basename(self.ruta_imagen_actual) if self.ruta_imagen_actual else "Sin Imagen"
+        if self.paso_actual == 5 or getattr(self, 'reporte_finalizado_actual', False):
+            self.lbl_titulo_tabla.setText("<b>Último Procedimiento Realizado (Contexto del Análisis Anterior)</b>")
+            self.lbl_subtitulo_imagen.setText(f"Imagen analizada anteriormente: <span style='color: #0969da; font-weight: bold;'>{nombre_archivo}</span>")
+        else:
+            self.lbl_titulo_tabla.setText("<b>Métricas Morfológicas de Microglías (Reporte de Sesión)</b>")
+            self.lbl_subtitulo_imagen.setText(f"Imagen en análisis activo: <span style='color: #2da44e; font-weight: bold;'>{nombre_archivo}</span>")
+            
+        # Actualizar miniaturas de imágenes del procedimiento con suavizado avanzado
+        if self.pixmaps_globales.get("Original") is not None:
+            thumb = self.pixmaps_globales["Original"].scaled(220, 140, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+            self.lbl_thumb_original.setPixmap(thumb)
+        else:
+            self.lbl_thumb_original.setText("Sin Imagen")
+
+        if self.pixmaps_globales.get("Filtrada") is not None:
+            thumb = self.pixmaps_globales["Filtrada"].scaled(220, 140, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+            self.lbl_thumb_filtrada.setPixmap(thumb)
+        else:
+            self.lbl_thumb_filtrada.setText("Sin Imagen")
+
+        if self.pixmaps_globales.get("Esqueleto") is not None:
+            thumb = self.pixmaps_globales["Esqueleto"].scaled(220, 140, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+            self.lbl_thumb_esqueleto.setPixmap(thumb)
+        else:
+            self.lbl_thumb_esqueleto.setText("Sin Imagen")
+        
+        # 2. Limpiar y poblar la tabla
+        self.tabla_metricas.clearContents()
+        
+        # Columnas a mostrar
+        columnas = [
+            "Campo", "Tiempo", "No. Microglía", "Lines", "Junction Points", "End Points", 
+            "Junction Voxels", "Slab Voxels", "Avg. Branch Length", 
+            "Triple Points", "Quadruple Points", "Max Branch Length", "Longest Shortest Path"
+        ]
+        self.tabla_metricas.setColumnCount(len(columnas))
+        self.tabla_metricas.setHorizontalHeaderLabels(columnas)
+        
+        # Recopilar todas las filas de la sesión actual
+        filas = []
+        total_microglias = 0
+        sum_junction_points = 0
+        sum_end_points = 0
+        sum_branch_length = 0.0
+        count_microglias_with_branch_len = 0
+        
+        for img_data in self.metricas_reporte:
+            campo = str(img_data.get("campo", "Sin Campo"))
+            tiempo = str(img_data.get("tiempo", "Sin Tiempo"))
+            
+            for idx, met in enumerate(img_data.get("metricas", []), start=1):
+                # Extraer valores numéricos
+                lines = met.get("lines", 0)
+                junc_pts = met.get("junction points", 0)
+                end_pts = met.get("end points", 0)
+                junc_vx = met.get("junction voxels", 0)
+                slab_vx = met.get("slab voxels", 0)
+                avg_branch_len = met.get("average branch length", 0.0)
+                triple_pts = met.get("triple points", 0)
+                quad_pts = met.get("quadruple points", 0)
+                max_branch_len = met.get("maximum branch length", 0.0)
+                longest_path = met.get("longest shortest path", 0.0)
+                
+                # Para resúmenes
+                total_microglias += 1
+                sum_junction_points += junc_pts
+                sum_end_points += end_pts
+                if isinstance(avg_branch_len, (int, float)):
+                    sum_branch_length += avg_branch_len
+                    count_microglias_with_branch_len += 1
+                
+                # Dar formato
+                f_avg_len = f"{avg_branch_len:.2f}" if isinstance(avg_branch_len, (int, float)) else str(avg_branch_len)
+                f_max_len = f"{max_branch_len:.2f}" if isinstance(max_branch_len, (int, float)) else str(max_branch_len)
+                f_longest = f"{longest_path:.2f}" if isinstance(longest_path, (int, float)) else str(longest_path)
+                
+                filas.append([
+                    campo, tiempo, str(idx), str(lines), str(junc_pts), str(end_pts),
+                    str(junc_vx), str(slab_vx), f_avg_len, str(triple_pts), str(quad_pts),
+                    f_max_len, f_longest
+                ])
+                
+        self.tabla_metricas.setRowCount(len(filas))
+        
+        for row_idx, row_data in enumerate(filas):
+            for col_idx, val in enumerate(row_data):
+                item = QTableWidgetItem(val)
+                item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                self.tabla_metricas.setItem(row_idx, col_idx, item)
+                
+        # Auto-ajustar columnas
+        self.tabla_metricas.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
+        for c in range(len(columnas)):
+            self.tabla_metricas.horizontalHeader().setSectionResizeMode(c, QHeaderView.ResizeMode.ResizeToContents)
+            
+        # Actualizar tarjetas de resumen (KPIs)
+        avg_junc = sum_junction_points / total_microglias if total_microglias > 0 else 0.0
+        avg_end = sum_end_points / total_microglias if total_microglias > 0 else 0.0
+        avg_len = sum_branch_length / count_microglias_with_branch_len if count_microglias_with_branch_len > 0 else 0.0
+        
+        self.val_total.setText(str(total_microglias))
+        self.val_junc.setText(f"{avg_junc:.1f}")
+        self.val_ends.setText(f"{avg_end:.1f}")
+        self.val_len.setText(f"{avg_len:.2f} px")
+
     def anterior_vista_global(self):
         idx = self.combo_vista.currentIndex()
         if idx > 0:
             self.combo_vista.setCurrentIndex(idx - 1)
 
     def siguiente_vista_global(self):
+        # Si estamos en la vista de esqueleto en el paso 4, avanzar ">" ejecuta la extracción de métricas
+        if self.paso_actual == 4 and self.combo_vista.currentText() == "Esqueleto":
+            self.obtener_metricas()
+            return
+            
         idx = self.combo_vista.currentIndex()
         if idx < self.combo_vista.count() - 1:
             self.combo_vista.setCurrentIndex(idx + 1)
 
     def actualizar_botones_navegacion(self):
-        idx = self.combo_vista.currentIndex()
-        self.btn_ant_global.setEnabled(idx > 0)
-        self.btn_sig_global.setEnabled(idx < self.combo_vista.count() - 1)
+        # Si ya se sacaron las métricas (Paso 5), desactivar por completo los botones para moverse
+        if self.paso_actual >= 5:
+            self.btn_sig_global.show()
+            self.btn_sig_global.setEnabled(False)
+            self.btn_ant_global.show()
+            self.btn_ant_global.setEnabled(False)
+            return
+
+        self.btn_sig_global.show()
+        self.btn_ant_global.show()
+        
+        texto_vista = self.combo_vista.currentText()
+        
+        if texto_vista == "Original":
+            # Original va a tener activados > y eliminado <
+            self.btn_ant_global.setEnabled(False)
+            self.btn_sig_global.setEnabled(self.combo_vista.count() > 1)
+            
+        elif texto_vista == "Filtrada":
+            # Filtrado < y > siempre y cuando ya este el esqueletizado
+            self.btn_ant_global.setEnabled(True)
+            tiene_esqueleto = (self.combo_vista.findText("Esqueleto") >= 0 or self.paso_actual >= 4)
+            self.btn_sig_global.setEnabled(tiene_esqueleto)
+            
+        elif texto_vista == "Esqueleto":
+            # Esqueletizado tendra < activado y > desactivado o mejor eliminalo
+            self.btn_ant_global.setEnabled(True)
+            self.btn_sig_global.setEnabled(False)
+            
+        else:
+            idx = self.combo_vista.currentIndex()
+            self.btn_ant_global.setEnabled(idx > 0)
+            self.btn_sig_global.setEnabled(idx < self.combo_vista.count() - 1)
+
+    def actualizar_elementos_combo_vista(self):
+        self.combo_vista.blockSignals(True)
+        vista_seleccionada = self.combo_vista.currentText()
+        self.combo_vista.clear()
+        
+        # El orden estricto de opciones es: Original -> Filtrada -> Esqueleto -> Métricas
+        self.combo_vista.addItem("Original")
+        
+        if self.pixmaps_globales.get("Filtrada") is not None:
+            self.combo_vista.addItem("Filtrada")
+            
+        if self.pixmaps_globales.get("Esqueleto") is not None:
+            self.combo_vista.addItem("Esqueleto")
+            
+        if self.paso_actual >= 5:
+            self.combo_vista.addItem("Métricas")
+            
+        items = [self.combo_vista.itemText(i) for i in range(self.combo_vista.count())]
+        if vista_seleccionada in items:
+            self.combo_vista.setCurrentText(vista_seleccionada)
+        else:
+            self.combo_vista.setCurrentIndex(self.combo_vista.count() - 1)
+            
+        self.combo_vista.blockSignals(False)
+        
+        # Sincronizar explícitamente el visor de imágenes o panel con la selección actual si hay un análisis en curso
+        if self.paso_actual > 0:
+            self.cambiar_vista_global(self.combo_vista.currentText())
 
     def cerrar_sesion(self):
         from vistas.login import VentanaLogin
@@ -3296,13 +3849,37 @@ class VentanaBaseAnalisis(QMainWindow):
 
     def construir_imagen_global(self, carpeta_origen):
         import cv2; import numpy as np
-        orig_pixmap = self.pixmaps_globales["Original"]; orig_w = orig_pixmap.width(); orig_h = orig_pixmap.height(); lienzo = np.zeros((orig_h, orig_w), dtype=np.uint8); base_name = Path(self.ruta_imagen_actual).stem; base_dir = os.path.join(os.getcwd(), "analisis_resultados", base_name)
+        orig_pixmap = self.pixmaps_globales["Original"]
+        if not orig_pixmap: return None
+        orig_w = orig_pixmap.width(); orig_h = orig_pixmap.height()
+        lienzo = np.zeros((orig_h, orig_w), dtype=np.uint8)
+        base_name = Path(self.ruta_imagen_actual).stem
+        base_dir = os.path.join(os.getcwd(), "analisis_resultados", base_name)
+        
         for box in self.visor_imagen.boxes:
-            x, y, w, h = int(box["x"]), int(box["y"]), int(box["w"]), int(box["h"]); nombre_archivo = os.path.basename(box["crop_path"]); ruta_recorte = os.path.join(base_dir, carpeta_origen, nombre_archivo)
+            x, y, w, h = int(box["x"]), int(box["y"]), int(box["w"]), int(box["h"])
+            nombre_archivo = os.path.basename(box["crop_path"])
+            ruta_recorte = os.path.join(base_dir, carpeta_origen, nombre_archivo)
+            
+            # Salvaguarda: si no existe en la carpeta relativa actual, intentar por ruta absoluta del crop
+            if not os.path.exists(ruta_recorte) and "crop_path" in box:
+                ruta_recorte = box["crop_path"].replace("\\", "/").replace("/crops/", f"/{carpeta_origen}/")
+                
             if os.path.exists(ruta_recorte):
-                with open(ruta_recorte, "rb") as f: file_bytes = bytearray(f.read())
-                img_array = np.asarray(file_bytes, dtype=np.uint8); recorte = cv2.imdecode(img_array, cv2.IMREAD_GRAYSCALE)
-                if recorte is not None: rh, rw = recorte.shape; y_fin = min(y + rh, orig_h); x_fin = min(x + rw, orig_w); h_real = y_fin - y; w_real = x_fin - x; lienzo[y:y_fin, x:x_fin] = recorte[:h_real, :w_real]
+                try:
+                    with open(ruta_recorte, "rb") as f:
+                        file_bytes = bytearray(f.read())
+                    img_array = np.asarray(file_bytes, dtype=np.uint8)
+                    recorte = cv2.imdecode(img_array, cv2.IMREAD_GRAYSCALE)
+                    if recorte is not None:
+                        rh, rw = recorte.shape
+                        y_fin = min(y + rh, orig_h)
+                        x_fin = min(x + rw, orig_w)
+                        h_real = y_fin - y
+                        w_real = x_fin - x
+                        lienzo[y:y_fin, x:x_fin] = recorte[:h_real, :w_real]
+                except Exception:
+                    pass
         qimg = QImage(lienzo.data, orig_w, orig_h, orig_w, QImage.Format.Format_Grayscale8).copy()
         return QPixmap.fromImage(qimg)
 
@@ -3463,7 +4040,7 @@ class VentanaBaseAnalisis(QMainWindow):
                         is_success, im_buf_arr = cv2.imencode(".png", skeleton_img)
                         if is_success: im_buf_arr.tofile(out_path); count += 1
             dialogo.close(); QApplication.restoreOverrideCursor()
-            if count > 0: pixmap_esqueleto = self.construir_imagen_global("esqueletos"); self.pixmaps_globales["Esqueleto"] = pixmap_esqueleto; self.actualizar_estado_flujo(4); self.combo_vista.addItem("Esqueleto"); self.combo_vista.setCurrentText("Esqueleto"); self.mostrar_notificacion("4. Esqueleto (Ramas)", f"Se generaron {count} esqueletos topológicos.\n\nYa puedes avanzar a obtener las métricas finales.", "info")
+            if count > 0: pixmap_esqueleto = self.construir_imagen_global("esqueletos"); self.pixmaps_globales["Esqueleto"] = pixmap_esqueleto; self.actualizar_estado_flujo(4); self.combo_vista.setCurrentText("Esqueleto"); self.mostrar_notificacion("4. Esqueleto (Ramas)", f"Se generaron {count} esqueletos topológicos.\n\nYa puedes avanzar a obtener las métricas finales.", "info")
             else: self.mostrar_notificacion("Advertencia", "No se generaron esqueletos. Verifica la carpeta de filtrado.", "warning")
         except Exception as error: dialogo.close(); QApplication.restoreOverrideCursor(); self.mostrar_notificacion("Error de Procesamiento", f"Falló el cálculo:\n{str(error)}", "error")
 
@@ -3559,9 +4136,20 @@ class VentanaBaseAnalisis(QMainWindow):
         
         self.metricas_extraidas_ciclo_actual = True
         self.actualizar_estado_flujo(5)
+        
+        self.combo_vista.blockSignals(True)
+        self.combo_vista.setCurrentText("Métricas")
+        self.combo_vista.blockSignals(False)
+        
         self.mostrar_notificacion("5. Métricas", "Métricas extraídas y análisis completado exitosamente.", "info")
+        self.mostrar_tabla_metricas()
 
     def agregar_imagen_reporte(self):
+        if self.reporte_finalizado_actual:
+            self.metricas_reporte.clear()
+            self.reporte_finalizado_actual = False
+            
+        self.stacked_visor.setCurrentIndex(0)
         self.visor_imagen.set_image_and_boxes(None, [])
         self.ruta_imagen_actual = None
         self.id_analisis_actual = None
@@ -3596,6 +4184,8 @@ class VentanaBaseAnalisis(QMainWindow):
                 t = str(img_data.get("tiempo", "X HORA")).upper()
                 if t not in reporte_por_tiempo: reporte_por_tiempo[t] = []
                 reporte_por_tiempo[t].append(img_data)
+                
+            total_global_microglias = sum(len(img_data.get("metricas", [])) for img_data in self.metricas_reporte)
 
             columnas_labels = ["No.", "Lines", "Junction Points", "End Points", "Junction Voxels", "Slab Voxels", "Avg. Branch Length", "Triple points", "Quadruple points", "Max Branch Length", "Longest Shortest path"]
             metric_keys = ["lines", "junction points", "end points", "junction voxels", "slab voxels", "average branch length", "triple points", "quadruple points", "maximum branch length", "longest shortest path"]
@@ -3645,6 +4235,11 @@ class VentanaBaseAnalisis(QMainWindow):
                                 for c in range(1, len(columnas_labels) + 1):
                                     ws.cell(row=row_idx, column=c).fill = light_gray_fill
                             row_idx += 1
+                        
+                        # Totales individuales por cada Imagen/Campo en Excel (sin total acumulado global)
+                        row_idx += 1
+                        ws.cell(row=row_idx, column=1, value=f"Total de Microglías en {campo_val}:").font = bold_font
+                        ws.cell(row=row_idx, column=2, value=len(img_data.get("metricas", []))).font = bold_font
                         row_idx += 1
                 wb.save(xlsx_path)
 
@@ -3690,6 +4285,10 @@ class VentanaBaseAnalisis(QMainWindow):
                                 for i_v, val in enumerate(values):
                                     pdf.cell(pdf_widths[i_v+1], 7, str(val), 1, 0, "C", True)
                                 pdf.ln()
+                            # Totales individuales por cada Imagen
+                            pdf.ln(2)
+                            pdf.set_font("Arial", "B", 9)
+                            pdf.cell(0, 8, f"Total de Microglias en {img_data['campo']}: {len(img_data.get('metricas', []))}", 0, 1, "L")
                             pdf.ln(5)
                     pdf.output(pdf_path)
                 except Exception as e:
@@ -3701,11 +4300,29 @@ class VentanaBaseAnalisis(QMainWindow):
             self.mostrar_notificacion("Error", f"Falló la exportación: {str(error)}", "error")
 
     def finalizar_reporte(self):
+        # Validar que todas las imágenes del reporte estén terminadas (Paso >= 5)
+        if self.id_reporte_actual:
+            from bd.database import conectar
+            conn = conectar(); cur = conn.cursor()
+            try:
+                cur.execute("SELECT COUNT(*) FROM Analisis WHERE id_reporte = ? AND paso_actual < 5", (self.id_reporte_actual,))
+                incompletas = cur.fetchone()[0] or 0
+                if incompletas > 0:
+                    self.mostrar_notificacion("Acción Bloqueada", "No puedes finalizar el reporte porque tienes imágenes con análisis inconclusos. Por favor, completa todas las imágenes antes de finalizar.", "warning")
+                    return
+            except Exception as e:
+                print(f"Error al validar análisis incompletos: {e}")
+            finally:
+                conn.close()
+
         from vistas.utilidades import DialogoConfirmacion
-        msg = "¿Estás seguro de finalizar el reporte actual? Se limpiarán todas las métricas acumuladas."
+        msg = "¿Estás seguro de finalizar el reporte actual? Se guardará el estado finalizado y las métricas acumuladas podrán ser consultadas hasta que agregues una nueva imagen."
         if not DialogoConfirmacion("Finalizar Reporte", msg).exec(): return
-        self.metricas_reporte.clear(); self.metricas_extraidas_ciclo_actual = False
-        self.visor_imagen.set_image_and_boxes(None, []); self.ruta_imagen_actual = None; self.id_analisis_actual = None
-        self.pixmaps_globales = {"Original": None, "Filtrada": None, "Esqueleto": None}
-        self.combo_vista.blockSignals(True); self.combo_vista.clear(); self.combo_vista.blockSignals(False); self.actualizar_estado_flujo(0)
-        self.mostrar_notificacion("Reporte Finalizado", "Sistema reiniciado.", "info")
+        
+        self.reporte_finalizado_actual = True
+        self.metricas_extraidas_ciclo_actual = False
+        
+        # Mantener al usuario viendo la tabla de métricas finalizada
+        self.mostrar_tabla_metricas()
+        
+        self.mostrar_notificacion("Reporte Finalizado", "El reporte ha sido finalizado. Puedes visualizar las métricas acumuladas. Al agregar una nueva imagen, se iniciará una sesión desde cero.", "info")

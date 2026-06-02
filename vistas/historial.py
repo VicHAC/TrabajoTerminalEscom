@@ -1,6 +1,7 @@
 from PyQt6.QtWidgets import QDialog, QVBoxLayout, QTableWidget, QTableWidgetItem, QPushButton, QHBoxLayout, QHeaderView
 from PyQt6.QtCore import Qt
 from bd.database import conectar # Importamos tu conexión consolidada
+import os
 
 class VentanaHistorial(QDialog):
     def __init__(self, id_usuario, parent=None):
@@ -15,8 +16,8 @@ class VentanaHistorial(QDialog):
         layout = QVBoxLayout(self)
         
         # Tabla de reportes
-        self.tabla = QTableWidget(0, 6)
-        self.tabla.setHorizontalHeaderLabels(["ID", "Nombre Imagen", "Muestra", "Tiempo", "Fecha", "Último Paso"])
+        self.tabla = QTableWidget(0, 7)
+        self.tabla.setHorizontalHeaderLabels(["ID", "Nombre Imagen", "Muestra", "Tiempo", "Fecha", "Último Paso", "Detecciones"])
         self.tabla.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.tabla.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.tabla.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
@@ -43,7 +44,7 @@ class VentanaHistorial(QDialog):
             cur = conn.cursor()
             # Unimos Analisis con Imagen para sacar los datos completos del investigador
             query = """
-                SELECT A.id_analisis, I.ruta_archivo, I.campo, I.tiempo_muestra, A.fecha_analisis, A.paso_actual
+                SELECT A.id_analisis, I.ruta_archivo, I.campo, I.tiempo_muestra, A.fecha_analisis, A.paso_actual, A.cantidad_microglias, A.datos_persistentes
                 FROM Analisis A
                 JOIN Imagen I ON A.id_imagen = I.id_imagen
                 WHERE I.id_usuario = ?
@@ -54,11 +55,32 @@ class VentanaHistorial(QDialog):
             self.tabla.setRowCount(len(rows))
             
             for i, row in enumerate(rows):
-                for j, val in enumerate(row):
-                    text = str(val)
-                    if j == 1: # Solo mostrar el nombre del archivo, no la ruta completa
-                        text = os.path.basename(text)
-                    self.tabla.setItem(i, j, QTableWidgetItem(text))
+                id_an, ruta, campo, tiempo, fecha, paso, cant, dp = row
+                
+                # Sistema de fallback robusto de 3 niveles para detecciones
+                if not cant or cant == 0:
+                    cur.execute("SELECT COUNT(*) FROM Microglia WHERE id_analisis = ?", (id_an,))
+                    cant = cur.fetchone()[0] or 0
+                    if cant == 0 and dp:
+                        try:
+                            import json
+                            datos = json.loads(dp)
+                            cant = len(datos.get("boxes", []))
+                        except:
+                            pass
+                
+                valores = [
+                    str(id_an),
+                    os.path.basename(ruta),
+                    str(campo),
+                    str(tiempo),
+                    str(fecha),
+                    "Completado" if paso >= 5 else f"En proceso ({paso}/4)",
+                    str(cant)
+                ]
+                
+                for j, val in enumerate(valores):
+                    self.tabla.setItem(i, j, QTableWidgetItem(val))
             conn.close()
         except Exception as e:
             print(f"Error cargando historial: {e}")
