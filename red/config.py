@@ -44,17 +44,25 @@ def guardar_configuracion(config):
 # Cargar configuración global al importar el módulo
 config_global = cargar_configuracion()
 
+def obtener_modo_operacion():
+    return config_global.get("modo", "local")
+
 def es_cliente():
-    return config_global.get("modo") == "cliente"
+    return obtener_modo_operacion() == "cliente"
 
 def es_servidor():
-    return config_global.get("modo") == "servidor"
+    return obtener_modo_operacion() == "servidor"
 
 def obtener_ip_servidor():
-    return config_global.get("ip_servidor", "localhost")
+    return config_global.get("ip_servidor") or config_global.get("servidor_ip") or "localhost"
 
 def obtener_puerto_servidor():
-    return config_global.get("puerto_servidor", 5000)
+    # Convertir a entero por seguridad
+    p = config_global.get("puerto_servidor") or config_global.get("servidor_port") or 5000
+    try:
+        return int(p)
+    except ValueError:
+        return 5000
 
 def obtener_url_servidor():
     return f"http://{obtener_ip_servidor()}:{obtener_puerto_servidor()}"

@@ -107,13 +107,13 @@ class DialogoConfigRed(QDialog):
         layout_cliente.setSpacing(10)
         
         layout_cliente.addWidget(QLabel("Dirección IP del Servidor:"))
-        self.input_ip = QLineEdit(self.config.get("servidor_ip", "localhost"))
+        self.input_ip = QLineEdit(self.config.get("servidor_ip") or self.config.get("ip_servidor") or "localhost")
         self.input_ip.setPlaceholderText("Ej. 192.168.1.15")
         self.input_ip.setStyleSheet("QLineEdit { border: 1px solid #d0d7de; border-radius: 6px; padding: 6px; }")
         layout_cliente.addWidget(self.input_ip)
         
         layout_cliente.addWidget(QLabel("Puerto del Servidor:"))
-        self.input_puerto = QLineEdit(str(self.config.get("servidor_port", 5000)))
+        self.input_puerto = QLineEdit(str(self.config.get("servidor_port") or self.config.get("puerto_servidor") or 5000))
         self.input_puerto.setPlaceholderText("Ej. 5000")
         self.input_puerto.setStyleSheet("QLineEdit { border: 1px solid #d0d7de; border-radius: 6px; padding: 6px; }")
         layout_cliente.addWidget(self.input_puerto)
@@ -130,7 +130,6 @@ class DialogoConfigRed(QDialog):
         
         # Estado actual
         self.lbl_estado = QLabel()
-        self.actualizar_label_estado()
         layout_servidor.addWidget(self.lbl_estado)
         
         # Botones de control manual del servidor
@@ -155,9 +154,13 @@ class DialogoConfigRed(QDialog):
         layout_controles_srv.addWidget(self.btn_detener_srv)
         layout_servidor.addLayout(layout_controles_srv)
         
+        # Actualizar estado (ahora que los botones están inicializados)
+        self.actualizar_label_estado()
+        
         # IPs locales para compartir
         ips = obtener_ips_locales()
-        ips_text = "\n".join([f"  • {ip}:{self.config.get('servidor_port', 5000)}" for ip in ips])
+        puerto_actual = self.config.get("servidor_port") or self.config.get("puerto_servidor") or 5000
+        ips_text = "\n".join([f"  • {ip}:{puerto_actual}" for ip in ips])
         lbl_info_ips = QLabel(f"Otras computadoras en la red Wi-Fi se pueden conectar usando:\n{ips_text}")
         lbl_info_ips.setWordWrap(True)
         lbl_info_ips.setStyleSheet("color: #57606a; font-size: 11px; margin-top: 5px; line-height: 1.4;")
@@ -259,7 +262,9 @@ class DialogoConfigRed(QDialog):
         # Guardar en JSON
         self.config["modo"] = nuevo_modo
         self.config["servidor_ip"] = ip_server
+        self.config["ip_servidor"] = ip_server
         self.config["servidor_port"] = puerto_server
+        self.config["puerto_servidor"] = puerto_server
         guardar_configuracion(self.config)
         
         # Aplicar hilos según el modo guardado
