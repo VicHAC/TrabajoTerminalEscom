@@ -289,7 +289,21 @@ class DialogoCargarImagen(QDialog):
         
         btn_continuar = QPushButton("Cargar Imagen")
         btn_continuar.setCursor(Qt.CursorShape.PointingHandCursor)
-        btn_continuar.setStyleSheet("background-color: #2da44e; color: white; border: 1px solid #1a7f37;")
+        btn_continuar.setStyleSheet("""
+            QPushButton { 
+                background-color: transparent; 
+                border: 2px solid #2da44e; 
+                color: #2da44e; 
+                border-radius: 6px; 
+                padding: 8px 20px; 
+                font-weight: bold; 
+                font-size: 13px; 
+            }
+            QPushButton:hover { 
+                background-color: #2da44e; 
+                color: white; 
+            }
+        """)
         btn_continuar.clicked.connect(self.validar_y_continuar)
         
         layout_botones.addStretch()
@@ -921,13 +935,41 @@ class DialogoVistaCelular(QDialog):
         
         self.btn_aplicar_limpieza = QPushButton("Eliminar áreas")
         self.btn_aplicar_limpieza.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_aplicar_limpieza.setStyleSheet("QPushButton { padding: 5px 15px; background-color: #007bff; color: white; border-radius: 4px; font-weight: bold; font-size: 11px; }")
+        self.btn_aplicar_limpieza.setStyleSheet("""
+            QPushButton { 
+                padding: 5px 15px; 
+                background-color: transparent; 
+                border: 2px solid #0969da; 
+                color: #0969da; 
+                border-radius: 4px; 
+                font-weight: bold; 
+                font-size: 11px; 
+            }
+            QPushButton:hover { 
+                background-color: #0969da; 
+                color: white; 
+            }
+        """)
         self.btn_aplicar_limpieza.hide()
         self.btn_aplicar_limpieza.clicked.connect(self.aplicar_limpieza)
         
         self.btn_limpiar_todo = QPushButton("Deshacer limpieza")
         self.btn_limpiar_todo.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_limpiar_todo.setStyleSheet("QPushButton { padding: 5px; background-color: #6c757d; color: white; border-radius: 4px; font-size: 11px; }")
+        self.btn_limpiar_todo.setStyleSheet("""
+            QPushButton { 
+                padding: 5px 10px; 
+                background-color: transparent; 
+                border: 2px solid #57606a; 
+                color: #57606a; 
+                border-radius: 4px; 
+                font-weight: bold; 
+                font-size: 11px; 
+            }
+            QPushButton:hover { 
+                background-color: #57606a; 
+                color: white; 
+            }
+        """)
         self.btn_limpiar_todo.hide()
         self.btn_limpiar_todo.clicked.connect(self.deshacer_limpieza)
         
@@ -998,7 +1040,26 @@ class DialogoVistaCelular(QDialog):
         
         self.btn_aplicar_union = QPushButton("Guardar")
         self.btn_aplicar_union.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_aplicar_union.setStyleSheet("QPushButton { padding: 5px 15px; background-color: #007bff; color: white; border-radius: 4px; font-weight: bold; font-size: 11px; } QPushButton:disabled { background-color: #cccccc; color: #666666; }")
+        self.btn_aplicar_union.setStyleSheet("""
+            QPushButton { 
+                padding: 5px 15px; 
+                background-color: transparent; 
+                border: 2px solid #0969da; 
+                color: #0969da; 
+                border-radius: 4px; 
+                font-weight: bold; 
+                font-size: 11px; 
+            }
+            QPushButton:hover { 
+                background-color: #0969da; 
+                color: white; 
+            }
+            QPushButton:disabled { 
+                background-color: transparent; 
+                border: 2px solid #eaeff2; 
+                color: #949da3; 
+            }
+        """)
         self.btn_aplicar_union.hide()
         self.btn_aplicar_union.setEnabled(False)
         self.btn_aplicar_union.clicked.connect(self.aplicar_union_esqueleto)
@@ -1083,9 +1144,24 @@ class DialogoVistaCelular(QDialog):
         self.btn_comparativa = QPushButton("Ver Proceso Completo")
         self.btn_comparativa.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_comparativa.setStyleSheet("""
-            QPushButton { padding: 8px 15px; background-color: #28a745; border-radius: 6px; font-weight: bold; color: white; font-size: 13px;}
-            QPushButton:hover { background-color: #218838; }
-            QPushButton:disabled { background-color: #ccc; }
+            QPushButton { 
+                padding: 8px 15px; 
+                background-color: transparent; 
+                border: 2px solid #2da44e; 
+                color: #2da44e; 
+                border-radius: 6px; 
+                font-weight: bold; 
+                font-size: 13px;
+            }
+            QPushButton:hover { 
+                background-color: #2da44e; 
+                color: white; 
+            }
+            QPushButton:disabled { 
+                background-color: transparent; 
+                border: 2px solid #eaeff2; 
+                color: #949da3; 
+            }
         """)
         self.btn_comparativa.clicked.connect(self.mostrar_comparativa)
         # Solo habilitar si el proceso está terminado (las 3 fases existen)
@@ -1097,8 +1173,19 @@ class DialogoVistaCelular(QDialog):
         btn_cerrar = QPushButton("Cerrar")
         btn_cerrar.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_cerrar.setStyleSheet("""
-            QPushButton { padding: 8px 20px; background-color: #dc3545; border-radius: 6px; font-weight: bold; color: white; font-size: 14px;}
-            QPushButton:hover { background-color: #c82333; }
+            QPushButton { 
+                padding: 8px 20px; 
+                background-color: transparent; 
+                border: 2px solid #cf222e; 
+                color: #cf222e; 
+                border-radius: 6px; 
+                font-weight: bold; 
+                font-size: 14px;
+            }
+            QPushButton:hover { 
+                background-color: #cf222e; 
+                color: white; 
+            }
         """)
         btn_cerrar.clicked.connect(self.accept)
         
@@ -2748,14 +2835,12 @@ class VentanaBaseAnalisis(ValidacionReporteMixin, QMainWindow):
         self.btn_finalizar_reporte = QPushButton("Finalizar reporte")
         
         self.btn_corregir_filtrado = QPushButton("Corregir Filtrado")
-        self.btn_config_red = QPushButton("Configuración Red")
 
         estilo_btn_menu = "QPushButton { background-color: transparent; text-align: left; padding: 8px 10px; font-weight: normal; color: #333333; border: 1px solid transparent; outline: none; font-size: 11px;} QPushButton:hover { background-color: #F0F0F0; border-radius: 5px; } QPushButton:disabled { color: #aaaaaa; }"
         lista_botones = [
             self.btn_cargar, self.btn_conteo, self.btn_filtrar, self.btn_ramas, 
             self.btn_obtener_metricas, 
-            self.btn_descargar_reporte, self.btn_finalizar_reporte, self.btn_corregir_filtrado,
-            self.btn_config_red
+            self.btn_descargar_reporte, self.btn_finalizar_reporte, self.btn_corregir_filtrado
         ]
         for btn in lista_botones: 
             btn.setStyleSheet(estilo_btn_menu)
@@ -2793,9 +2878,39 @@ class VentanaBaseAnalisis(ValidacionReporteMixin, QMainWindow):
 
         btn_f_layout = QHBoxLayout()
         btn_aceptar_filtro = QPushButton("Aceptar")
-        btn_aceptar_filtro.setStyleSheet("background-color: #2da44e; color: white; font-weight: bold; padding: 6px; font-size: 10px; border-radius: 4px;")
+        btn_aceptar_filtro.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_aceptar_filtro.setStyleSheet("""
+            QPushButton { 
+                background-color: transparent; 
+                border: 1.5px solid #2da44e; 
+                color: #2da44e; 
+                font-weight: bold; 
+                padding: 6px; 
+                font-size: 11px; 
+                border-radius: 5px; 
+            }
+            QPushButton:hover { 
+                background-color: #2da44e; 
+                color: white; 
+            }
+        """)
         btn_cancelar_filtro = QPushButton("Cancelar")
-        btn_cancelar_filtro.setStyleSheet("background-color: #cf222e; color: white; font-weight: bold; padding: 6px; font-size: 10px; border-radius: 4px;")
+        btn_cancelar_filtro.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_cancelar_filtro.setStyleSheet("""
+            QPushButton { 
+                background-color: transparent; 
+                border: 1.5px solid #cf222e; 
+                color: #cf222e; 
+                font-weight: bold; 
+                padding: 6px; 
+                font-size: 11px; 
+                border-radius: 5px; 
+            }
+            QPushButton:hover { 
+                background-color: #cf222e; 
+                color: white; 
+            }
+        """)
         btn_f_layout.addWidget(btn_cancelar_filtro)
         btn_f_layout.addWidget(btn_aceptar_filtro)
         layout_filtros.addLayout(btn_f_layout)
@@ -2807,7 +2922,7 @@ class VentanaBaseAnalisis(ValidacionReporteMixin, QMainWindow):
         btn_aceptar_filtro.clicked.connect(self.confirmar_filtrado)
         btn_cancelar_filtro.clicked.connect(self.cancelar_filtrado)
 
-        self.menu_lateral.addWidget(self.btn_config_red)
+
         self.menu_lateral.addStretch()
         self.btn_cerrar_sesion = QPushButton("Cerrar Sesión"); self.btn_cerrar_sesion.setStyleSheet("QPushButton { background-color: transparent; border: 2px solid #cc0000; color: #cc0000; font-weight: bold; border-radius: 8px; padding: 10px; margin-top: 20px; } QPushButton:hover { background-color: #cc0000; color: white; }"); self.menu_lateral.addWidget(self.btn_cerrar_sesion)
         frame_menu = QFrame(); frame_menu.setObjectName("menu_lateral"); frame_menu.setFixedWidth(200); frame_menu.setLayout(self.menu_lateral)
@@ -3172,7 +3287,6 @@ class VentanaBaseAnalisis(ValidacionReporteMixin, QMainWindow):
         layout_principal.addWidget(frame_menu); layout_principal.addLayout(area_imagen, stretch=1); widget_central.setLayout(layout_principal); self.setCentralWidget(widget_central)
         
         self.btn_cargar.clicked.connect(self.cargar_imagen); self.btn_cerrar_sesion.clicked.connect(self.cerrar_sesion); self.btn_conteo.clicked.connect(self.execute_microglia_counting); self.btn_filtrar.clicked.connect(self.ejecutar_filtrado); self.btn_ramas.clicked.connect(self.mostrar_ramas_morfologia); self.btn_corregir_filtrado.clicked.connect(self.corregir_filtrado)
-        self.btn_config_red.clicked.connect(self.abrir_config_red)
         
         self.btn_obtener_metricas.clicked.connect(self.obtener_metricas)
         self.btn_agregar_imagen_reporte.clicked.connect(self.agregar_imagen_reporte)

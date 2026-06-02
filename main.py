@@ -106,11 +106,12 @@ def main():
     app.setStyleSheet(estilo_global)
 
     # Auto-iniciar servidor en segundo plano si la configuración está en modo servidor
-    from red.config import obtener_modo_operacion
+    from red.config import obtener_modo_operacion, obtener_puerto_servidor
     if obtener_modo_operacion() == "servidor":
         try:
             from red.servidor_thread import iniciar_servidor_global
-            iniciar_servidor_global(port=5000)
+            puerto_cfg = obtener_puerto_servidor()
+            iniciar_servidor_global(port=puerto_cfg)
         except Exception as e:
             print(f"Error al iniciar servidor en segundo plano: {e}")
             

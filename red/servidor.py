@@ -239,9 +239,22 @@ class ServidorMicrogliasHandler(BaseHTTPRequestHandler):
             self.send_error_json("Ruta no encontrada", 404)
 
 def run_server(port=5000):
-    server_address = ('', port)
+    import socket
+    server_address = ('0.0.0.0', port)
     httpd = HTTPServer(server_address, ServidorMicrogliasHandler)
-    logging.info(f"=== Servidor de Microglías Iniciado en el puerto {port} ===")
+    
+    # Detectar IP LAN
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        ip_lan = s.getsockname()[0]
+        s.close()
+    except Exception:
+        ip_lan = "127.0.0.1"
+    
+    logging.info(f"=== Servidor de Microglías Iniciado ===")
+    logging.info(f"    Escuchando en: 0.0.0.0:{port}")
+    logging.info(f"    IP LAN para clientes: {ip_lan}:{port}")
     logging.info("Listo para recibir conexiones de computadoras en la misma red Wi-Fi.")
     try:
         httpd.serve_forever()

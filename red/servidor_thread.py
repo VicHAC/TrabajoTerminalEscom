@@ -5,6 +5,7 @@ Hilo de fondo (QThread) para arrancar y detener el servidor HTTP centralizado
 desde la interfaz de usuario en la computadora que actúa como servidor.
 """
 
+import socket
 import logging
 from PyQt6.QtCore import QThread
 from http.server import HTTPServer
@@ -20,9 +21,16 @@ class ServidorThread(QThread):
 
     def run(self):
         try:
-            server_address = ('', self.port)
+            server_address = ('0.0.0.0', self.port)
             self.httpd = HTTPServer(server_address, ServidorMicrogliasHandler)
-            logging.info(f"=== Servidor de Microglías Iniciado en puerto {self.port} ===")
+            
+            # Detectar y mostrar la IP LAN real
+            ip_lan = self._obtener_ip_lan()
+            logging.info(f"=== Servidor de Microglías Iniciado ===")
+            logging.info(f"    Escuchando en todas las interfaces (0.0.0.0):{self.port}")
+            logging.info(f"    IP LAN para clientes: {ip_lan}:{self.port}")
+            logging.info(f"    Los clientes deben configurar la IP: {ip_lan}")
+            
             self.httpd.serve_forever()
         except Exception as e:
             logging.error(f"[servidor_thread] Excepción en ejecución del servidor: {e}")
@@ -37,6 +45,18 @@ class ServidorThread(QThread):
             self.httpd.shutdown()
             self.wait() # Esperar a que el hilo termine limpio
             logging.info("[servidor_thread] Servidor detenido exitosamente.")
+
+    @staticmethod
+    def _obtener_ip_lan():
+        """Detecta la IP LAN real de esta máquina (no 127.0.0.1)."""
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.connect(("8.8.8.8", 80))
+            ip = s.getsockname()[0]
+            s.close()
+            return ip
+        except Exception:
+            return "127.0.0.1"
 
 # Singleton para administrar la instancia del servidor activo en la aplicación
 _servidor_activo = None

@@ -2,8 +2,8 @@ import hashlib
 import sqlite3
 import os
 import sys
-from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QLabel, QLineEdit, QPushButton)
-from PyQt6.QtCore import Qt
+from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton)
+from PyQt6.QtCore import Qt, QSize
 from PyQt6.QtGui import QPixmap, QIcon
 
 class VentanaLogin(QWidget):
@@ -19,9 +19,29 @@ class VentanaLogin(QWidget):
             
         self.logo_path = os.path.join(base_path, "assets", "logo.png")
         self.icon_path = os.path.join(base_path, "assets", "logoW.png")
+        self.conexion_icon_path = os.path.join(base_path, "assets", "buttons", "conexion.png")
         
         self.setWindowIcon(QIcon(self.icon_path))
         self.resize(400, 550)
+        
+        # Botón de configuración de red en la esquina superior izquierda
+        self.btn_config_red = QPushButton(self)
+        self.btn_config_red.setIcon(QIcon(self.conexion_icon_path))
+        self.btn_config_red.setIconSize(QSize(22, 22))
+        self.btn_config_red.setFixedSize(36, 36)
+        self.btn_config_red.setToolTip("Configuración de Red")
+        self.btn_config_red.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_config_red.setStyleSheet("""
+            QPushButton { background-color: transparent; border: 1px solid transparent; outline: none; }
+            QPushButton:hover { background-color: #ddf4ff; border-radius: 18px; }
+        """)
+        self.btn_config_red.clicked.connect(self.abrir_config_red)
+        
+        # Layout superior para posicionar el botón de red arriba a la izquierda
+        layout_top = QHBoxLayout()
+        layout_top.setContentsMargins(5, 5, 5, 0)
+        layout_top.addWidget(self.btn_config_red)
+        layout_top.addStretch()
         
         # Contenedor central de tamaño fijo para mantener la responsividad
         contenedor_login = QWidget()
@@ -58,7 +78,21 @@ class VentanaLogin(QWidget):
         self.input_password.returnPressed.connect(self.verificar_login)
 
         btn_ingresar = QPushButton("Iniciar Sesión")
-        btn_ingresar.setStyleSheet("background-color: #24292f; color: #FFFFFF; padding: 10px; border-radius: 6px; font-size: 14px;")
+        btn_ingresar.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                border: 2px solid #24292f;
+                color: #24292f;
+                padding: 10px;
+                border-radius: 6px;
+                font-size: 14px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #24292f;
+                color: #FFFFFF;
+            }
+        """)
         btn_ingresar.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_ingresar.clicked.connect(self.verificar_login)
 
@@ -67,10 +101,7 @@ class VentanaLogin(QWidget):
         btn_invitado.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_invitado.clicked.connect(self.login_invitado)
         
-        btn_config_red = QPushButton("Configuración de Red")
-        btn_config_red.setStyleSheet("background-color: transparent; color: #0969da; border: none; font-weight: normal; font-size: 13px;")
-        btn_config_red.setCursor(Qt.CursorShape.PointingHandCursor)
-        btn_config_red.clicked.connect(self.abrir_config_red)
+
         
         label_ayuda = QLabel("¿No tienes una cuenta? Comunícate con el administrador")
         label_ayuda.setStyleSheet("color: #888888; font-size: 11px; margin-top: 30px;")
@@ -83,13 +114,21 @@ class VentanaLogin(QWidget):
         layout_login.addWidget(self.input_password)
         layout_login.addWidget(btn_ingresar)
         layout_login.addWidget(btn_invitado)
-        layout_login.addWidget(btn_config_red)
         layout_login.addWidget(label_ayuda)
 
         layout_principal = QVBoxLayout(self)
-        layout_principal.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout_principal.addWidget(contenedor_login)
+        layout_principal.setContentsMargins(0, 0, 0, 0)
+        layout_principal.addLayout(layout_top)
+        layout_principal.addStretch()
+        layout_principal.addWidget(contenedor_login, alignment=Qt.AlignmentFlag.AlignCenter)
+        layout_principal.addStretch()
         self.setLayout(layout_principal)
+
+        # Definir orden de tabulación explícito para navegación fluida
+        self.setTabOrder(self.input_usuario, self.input_password)
+        self.setTabOrder(self.input_password, btn_ingresar)
+        self.setTabOrder(btn_ingresar, btn_invitado)
+        self.setTabOrder(btn_invitado, self.btn_config_red)
 
     def abrir_config_red(self):
         from red.config_gui import DialogoConfigRed

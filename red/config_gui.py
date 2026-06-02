@@ -135,18 +135,48 @@ class DialogoConfigRed(QDialog):
         # Botones de control manual del servidor
         layout_controles_srv = QHBoxLayout()
         self.btn_iniciar_srv = QPushButton("Iniciar Servidor")
+        self.btn_iniciar_srv.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_iniciar_srv.setStyleSheet("""
-            QPushButton { background-color: #2da44e; color: white; border: none; border-radius: 6px; padding: 8px; font-weight: bold; }
-            QPushButton:hover { background-color: #2c974b; }
-            QPushButton:disabled { background-color: #eaeff2; color: #949da3; }
+            QPushButton { 
+                background-color: transparent; 
+                border: 2px solid #2da44e; 
+                color: #2da44e; 
+                border-radius: 6px; 
+                padding: 8px; 
+                font-weight: bold; 
+            }
+            QPushButton:hover { 
+                background-color: #2da44e; 
+                color: white; 
+            }
+            QPushButton:disabled { 
+                background-color: transparent; 
+                border: 2px solid #eaeff2; 
+                color: #949da3; 
+            }
         """)
         self.btn_iniciar_srv.clicked.connect(self.iniciar_servidor_manual)
         
         self.btn_detener_srv = QPushButton("Detener Servidor")
+        self.btn_detener_srv.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_detener_srv.setStyleSheet("""
-            QPushButton { background-color: #cf222e; color: white; border: none; border-radius: 6px; padding: 8px; font-weight: bold; }
-            QPushButton:hover { background-color: #b91c28; }
-            QPushButton:disabled { background-color: #eaeff2; color: #949da3; }
+            QPushButton { 
+                background-color: transparent; 
+                border: 2px solid #cf222e; 
+                color: #cf222e; 
+                border-radius: 6px; 
+                padding: 8px; 
+                font-weight: bold; 
+            }
+            QPushButton:hover { 
+                background-color: #cf222e; 
+                color: white; 
+            }
+            QPushButton:disabled { 
+                background-color: transparent; 
+                border: 2px solid #eaeff2; 
+                color: #949da3; 
+            }
         """)
         self.btn_detener_srv.clicked.connect(self.detener_servidor_manual)
         
@@ -175,16 +205,38 @@ class DialogoConfigRed(QDialog):
         # ----------------------------------------------------
         layout_botones = QHBoxLayout()
         btn_cancelar = QPushButton("Cancelar")
+        btn_cancelar.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_cancelar.setStyleSheet("""
-            QPushButton { background-color: transparent; border: 1px solid #d0d7de; color: #24292f; border-radius: 6px; padding: 8px 16px; }
-            QPushButton:hover { background-color: #f6f8fa; }
+            QPushButton { 
+                background-color: transparent; 
+                border: 2px solid #57606a; 
+                color: #57606a; 
+                border-radius: 6px; 
+                padding: 8px 16px; 
+                font-weight: bold; 
+            }
+            QPushButton:hover { 
+                background-color: #57606a; 
+                color: white; 
+            }
         """)
         btn_cancelar.clicked.connect(self.reject)
         
         btn_guardar = QPushButton("Guardar Configuración")
+        btn_guardar.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_guardar.setStyleSheet("""
-            QPushButton { background-color: #0969da; color: white; border: none; border-radius: 6px; padding: 8px 16px; font-weight: bold; }
-            QPushButton:hover { background-color: #0c63e2; }
+            QPushButton { 
+                background-color: transparent; 
+                border: 2px solid #0969da; 
+                color: #0969da; 
+                border-radius: 6px; 
+                padding: 8px 16px; 
+                font-weight: bold; 
+            }
+            QPushButton:hover { 
+                background-color: #0969da; 
+                color: white; 
+            }
         """)
         btn_guardar.clicked.connect(self.guardar_y_aplicar)
         
