@@ -874,10 +874,10 @@ class DialogoVistaCelular(QDialog):
                 
         # Asegurar que no empiece en una fase no completada
         paso_padre = getattr(self.parent(), "paso_actual", 0)
-        if self.indice_fase == 1 and paso_padre < 2:
+        if self.indice_fase == 1 and paso_padre < 3:
             self.indice_fase = 0
-        elif self.indice_fase == 2 and paso_padre < 3:
-            self.indice_fase = 1 if paso_padre >= 2 else 0
+        elif self.indice_fase == 2 and paso_padre < 4:
+            self.indice_fase = 1 if paso_padre >= 3 else 0
         
         main_layout = QVBoxLayout(self)
         frame = QFrame(self)
@@ -1280,7 +1280,7 @@ class DialogoVistaCelular(QDialog):
         # Cargar en memoria el esqueleto si existe y el proceso lo permite
         import cv2; import numpy as np
         try:
-            if paso_padre >= 3 and os.path.exists(path_esqueleto):
+            if paso_padre >= 4 and os.path.exists(path_esqueleto):
                 with open(path_esqueleto, "rb") as f:
                     file_bytes = np.frombuffer(f.read(), dtype=np.uint8)
                 self.skeleton_backup = cv2.imdecode(file_bytes, cv2.IMREAD_GRAYSCALE)
@@ -1340,19 +1340,27 @@ class DialogoVistaCelular(QDialog):
         # Botones siempre visibles
         self.btn_ant.setVisible(True)
         self.btn_sig.setVisible(True)
-        self.btn_comparativa.setVisible(True)
+        self.btn_comparativa.setVisible(fase["nombre"] == "ESQUELETIZADO")
 
-        # Habilitar navegación solo si la fase correspondiente ha sido alcanzada/completada
-        self.btn_ant.setEnabled(self.indice_fase > 0)
-        
+        # Habilitar navegación anterior (<)
         if self.indice_fase == 0:
-            self.btn_sig.setEnabled(paso_padre >= 2)
+            self.set_button_enabled(self.btn_ant, False)
         elif self.indice_fase == 1:
-            self.btn_sig.setEnabled(paso_padre >= 3)
+            self.set_button_enabled(self.btn_ant, True)
+        elif self.indice_fase == 2:
+            self.set_button_enabled(self.btn_ant, paso_padre >= 3)
         else:
-            self.btn_sig.setEnabled(False)
+            self.set_button_enabled(self.btn_ant, False)
 
-        self.btn_comparativa.setEnabled(fase["nombre"] == "ESQUELETIZADO" and paso_padre >= 3)
+        # Habilitar navegación siguiente (>)
+        if self.indice_fase == 0:
+            self.set_button_enabled(self.btn_sig, paso_padre >= 3)
+        elif self.indice_fase == 1:
+            self.set_button_enabled(self.btn_sig, paso_padre >= 4)
+        else:
+            self.set_button_enabled(self.btn_sig, False)
+
+        self.set_button_enabled(self.btn_comparativa, fase["nombre"] == "ESQUELETIZADO" and paso_padre >= 4)
 
         # Actualizar visibilidad de herramientas según la fase
         if fase["nombre"] == "FILTRADO":
@@ -1726,6 +1734,16 @@ class DialogoVistaCelular(QDialog):
             event.accept()
 
 
+
+    def set_button_enabled(self, button, enabled):
+        button.setEnabled(enabled)
+        if enabled:
+            button.setGraphicsEffect(None)
+        else:
+            from PyQt6.QtWidgets import QGraphicsOpacityEffect
+            effect = QGraphicsOpacityEffect()
+            effect.setOpacity(0.3)
+            button.setGraphicsEffect(effect)
 
     def mostrar_anterior(self):
         if self.indice_fase > 0:
