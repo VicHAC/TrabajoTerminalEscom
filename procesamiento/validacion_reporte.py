@@ -505,7 +505,7 @@ class ValidacionReporteMixin:
         else:
             self.btn_agregar_imagen_reporte.setEnabled(True)
             self.btn_descargar_reporte.setEnabled(True)
-            self.btn_finalizar_reporte.setEnabled(False)
+            self.btn_finalizar_reporte.setEnabled(True)
             self._salir_modo_validacion()
 
     # ------------------------------------------------------------------

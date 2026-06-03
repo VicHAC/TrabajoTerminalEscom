@@ -871,6 +871,13 @@ class DialogoVistaCelular(QDialog):
             if f["nombre"] == nombre_buscado:
                 self.indice_fase = i
                 break
+                
+        # Asegurar que no empiece en una fase no completada
+        paso_padre = getattr(self.parent(), "paso_actual", 0)
+        if self.indice_fase == 1 and paso_padre < 2:
+            self.indice_fase = 0
+        elif self.indice_fase == 2 and paso_padre < 3:
+            self.indice_fase = 1 if paso_padre >= 2 else 0
         
         main_layout = QVBoxLayout(self)
         frame = QFrame(self)
@@ -1248,6 +1255,9 @@ class DialogoVistaCelular(QDialog):
         # Fase 0: Original
         self.fases_disponibles.append({"nombre": "ORIGINAL", "path": self.crop_path, "pixmap": None})
         
+        # Obtener paso actual de la ventana principal
+        paso_padre = getattr(self.parent(), "paso_actual", 0)
+        
         # Fase 1: Filtrado
         path_filtrado = self.crop_path.replace("\\", "/").replace("/crops/", "/filtradas/")
         
@@ -1257,7 +1267,7 @@ class DialogoVistaCelular(QDialog):
 
         if self.pixmap_mem_filtrado:
             self.fases_disponibles.append({"nombre": "FILTRADO", "path": path_filtrado, "pixmap": self.pixmap_mem_filtrado})
-        elif os.path.exists(path_filtrado):
+        else:
             self.fases_disponibles.append({"nombre": "FILTRADO", "path": path_filtrado, "pixmap": None})
             
         # Fase 2: Esqueletizado
@@ -1267,18 +1277,21 @@ class DialogoVistaCelular(QDialog):
             from red.cliente import asegurar_archivo_local
             asegurar_archivo_local(path_esqueleto)
 
-        if os.path.exists(path_esqueleto):
-            import cv2; import numpy as np
-            # Cargar en memoria: backup (intocable) + working (editable)
-            try:
+        # Cargar en memoria el esqueleto si existe y el proceso lo permite
+        import cv2; import numpy as np
+        try:
+            if paso_padre >= 3 and os.path.exists(path_esqueleto):
                 with open(path_esqueleto, "rb") as f:
                     file_bytes = np.frombuffer(f.read(), dtype=np.uint8)
                 self.skeleton_backup = cv2.imdecode(file_bytes, cv2.IMREAD_GRAYSCALE)
-            except Exception:
+            else:
                 self.skeleton_backup = None
-            self.skeleton_working = self.skeleton_backup.copy() if self.skeleton_backup is not None else None
-            self.skeleton_has_changes = False
-            self.fases_disponibles.append({"nombre": "ESQUELETIZADO", "path": path_esqueleto, "pixmap": None})
+        except Exception:
+            self.skeleton_backup = None
+            
+        self.skeleton_working = self.skeleton_backup.copy() if self.skeleton_backup is not None else None
+        self.skeleton_has_changes = False
+        self.fases_disponibles.append({"nombre": "ESQUELETIZADO", "path": path_esqueleto, "pixmap": None})
 
     def actualizar_vista(self):
         from PyQt6.QtCore import Qt
@@ -1321,9 +1334,25 @@ class DialogoVistaCelular(QDialog):
         else:
             self.label_imagen.setText(f"No se pudo cargar la imagen de {fase['nombre']}.")
 
-        self.btn_ant.setVisible(self.indice_fase > 0)
-        self.btn_sig.setVisible(self.indice_fase < len(self.fases_disponibles) - 1)
-        self.btn_comparativa.setVisible(len(self.fases_disponibles) == 3)
+        # Obtener paso actual de la ventana principal
+        paso_padre = getattr(self.parent(), "paso_actual", 0)
+
+        # Botones siempre visibles
+        self.btn_ant.setVisible(True)
+        self.btn_sig.setVisible(True)
+        self.btn_comparativa.setVisible(True)
+
+        # Habilitar navegación solo si la fase correspondiente ha sido alcanzada/completada
+        self.btn_ant.setEnabled(self.indice_fase > 0)
+        
+        if self.indice_fase == 0:
+            self.btn_sig.setEnabled(paso_padre >= 2)
+        elif self.indice_fase == 1:
+            self.btn_sig.setEnabled(paso_padre >= 3)
+        else:
+            self.btn_sig.setEnabled(False)
+
+        self.btn_comparativa.setEnabled(fase["nombre"] == "ESQUELETIZADO" and paso_padre >= 3)
 
         # Actualizar visibilidad de herramientas según la fase
         if fase["nombre"] == "FILTRADO":
@@ -4928,6 +4957,7 @@ class VentanaBaseAnalisis(ValidacionReporteMixin, QMainWindow):
                     logging.error(f"Error generando PDF: {e}")
 
             self.mostrar_notificacion("Éxito", f"Reporte guardado en: {os.path.basename(filepath)}", "info")
+            self.btn_finalizar_reporte.setEnabled(True)
         except Exception as error:
             self.mostrar_notificacion("Error", f"Falló la exportación: {str(error)}", "error")
 
@@ -4948,13 +4978,18 @@ class VentanaBaseAnalisis(ValidacionReporteMixin, QMainWindow):
                 conn.close()
 
         from vistas.utilidades import DialogoConfirmacion
-        msg = "¿Estás seguro de finalizar el reporte actual? Se guardará el estado finalizado y las métricas acumuladas podrán ser consultadas hasta que agregues una nueva imagen."
+        if self.rol == "Invitado":
+            msg = "¿Finalizar reporte? En modo Invitado las métricas no se guardarán."
+        else:
+            msg = "¿Finalizar reporte? Podrás consultarlo en tu historial."
+            
         if not DialogoConfirmacion("Finalizar Reporte", msg).exec(): return
         
-        self.reporte_finalizado_actual = True
-        self.metricas_extraidas_ciclo_actual = False
+        self.cerrar_reporte_actual()
         
-        # Mantener al usuario viendo la tabla de métricas finalizada
-        self.mostrar_tabla_metricas()
-        
-        self.mostrar_notificacion("Reporte Finalizado", "El reporte ha sido finalizado. Puedes visualizar las métricas acumuladas. Al agregar una nueva imagen, se iniciará una sesión desde cero.", "info")
+        if self.rol == "Invitado":
+            msg_final = "Reporte finalizado localmente. Pantalla restablecida."
+        else:
+            msg_final = "Reporte finalizado y guardado con éxito."
+            
+        self.mostrar_notificacion("Reporte Finalizado", msg_final, "info")
