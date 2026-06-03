@@ -3635,32 +3635,48 @@ class VentanaBaseAnalisis(ValidacionReporteMixin, QMainWindow):
             else: id_img = res[0]
 
             # 3. Guardar Análisis con Estado Persistente
-            datos = {
-                "boxes": self.visor_imagen.boxes,
-                "metricas_acumuladas": self.metricas_reporte
-            }
-            datos_json = json.dumps(datos)
-
             if not self.id_analisis_actual:
-                cur.execute("INSERT INTO Analisis (id_reporte, id_imagen, cantidad_microglias, paso_actual, datos_persistentes) VALUES (?,?,?,?,?)",
-                           (self.id_reporte_actual, id_img, len(self.visor_imagen.boxes), self.paso_actual, datos_json))
+                cur.execute("INSERT INTO Analisis (id_reporte, id_imagen, cantidad_microglias, paso_actual) VALUES (?,?,?,?)",
+                           (self.id_reporte_actual, id_img, len(self.visor_imagen.boxes), self.paso_actual))
                 self.id_analisis_actual = cur.lastrowid
             else:
                 # Solo actualizar cantidad_microglias si hay boxes reales, para no sobreescribir un conteo previo con 0
                 if self.visor_imagen.boxes:
-                    cur.execute("UPDATE Analisis SET cantidad_microglias = ?, paso_actual = ?, datos_persistentes = ? WHERE id_analisis = ?",
-                               (len(self.visor_imagen.boxes), self.paso_actual, datos_json, self.id_analisis_actual))
+                    cur.execute("UPDATE Analisis SET cantidad_microglias = ?, paso_actual = ? WHERE id_analisis = ?",
+                               (len(self.visor_imagen.boxes), self.paso_actual, self.id_analisis_actual))
                 else:
-                    # Sin boxes: preservar cantidad_microglias existente, solo actualizar paso y datos
-                    cur.execute("UPDATE Analisis SET paso_actual = ?, datos_persistentes = ? WHERE id_analisis = ?",
-                               (self.paso_actual, datos_json, self.id_analisis_actual))
+                    # Sin boxes: preservar cantidad_microglias existente, solo actualizar paso
+                    cur.execute("UPDATE Analisis SET paso_actual = ? WHERE id_analisis = ?",
+                               (self.paso_actual, self.id_analisis_actual))
 
             # 4. Sincronizar Microglias (Detecciones individuales) — solo si hay boxes activos
             if self.visor_imagen.boxes:
+                # Recuperar métricas si existían para no borrarlas al guardar
+                cur.execute("SELECT crop_path, puntos_finales, uniones_triples, uniones_cuadruples, longitud_promedio_ramas, longitud_maxima_rama, ruta_mas_larga, lineas, puntos_union, voxeles_union, voxeles_losa FROM Microglia WHERE id_analisis = ?", (self.id_analisis_actual,))
+                metricas_existentes = {row[0]: row[1:] for row in cur.fetchall()}
+                
                 cur.execute("DELETE FROM Microglia WHERE id_analisis = ?", (self.id_analisis_actual,))
                 for box in self.visor_imagen.boxes:
-                    cur.execute("INSERT INTO Microglia (id_analisis, centroide_x, centroide_y, area_total_pixeles, perimetro, bbox_x, bbox_y, bbox_w, bbox_h, crop_path) VALUES (?,0,0,0,0,?,?,?,?,?)",
-                               (self.id_analisis_actual, box['x'], box['y'], box['w'], box['h'], box.get('crop_path', '')))
+                    offsets = box.get('offsets', {})
+                    f_clahe = offsets.get('clahe', 0)
+                    f_gauss = offsets.get('gauss', 0)
+                    f_otsu = offsets.get('otsu', 0)
+                    areas_elim = json.dumps(box.get('removal_areas', []))
+                    c_path = box.get('crop_path', '')
+                    
+                    if c_path in metricas_existentes:
+                        m = metricas_existentes[c_path]
+                        cur.execute("""
+                            INSERT INTO Microglia (id_analisis, bbox_x, bbox_y, bbox_w, bbox_h, crop_path, 
+                                        filtro_clahe, filtro_gauss, filtro_otsu, areas_eliminadas,
+                                        puntos_finales, uniones_triples, uniones_cuadruples, longitud_promedio_ramas, longitud_maxima_rama, ruta_mas_larga, lineas, puntos_union, voxeles_union, voxeles_losa) 
+                            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                        """, (self.id_analisis_actual, box['x'], box['y'], box['w'], box['h'], c_path, 
+                              f_clahe, f_gauss, f_otsu, areas_elim,
+                              m[0], m[1], m[2], m[3], m[4], m[5], m[6], m[7], m[8], m[9]))
+                    else:
+                        cur.execute("INSERT INTO Microglia (id_analisis, bbox_x, bbox_y, bbox_w, bbox_h, crop_path, filtro_clahe, filtro_gauss, filtro_otsu, areas_eliminadas) VALUES (?,?,?,?,?,?,?,?,?,?)",
+                                   (self.id_analisis_actual, box['x'], box['y'], box['w'], box['h'], c_path, f_clahe, f_gauss, f_otsu, areas_elim))
             
             # 5. Si es un reporte compartido y el usuario actual es el destinatario, marcarlo como Modificado y limpiar comentarios
             cur.execute("SELECT id_usuario FROM Reporte WHERE id_reporte = ?", (self.id_reporte_actual,))
@@ -3689,7 +3705,7 @@ class VentanaBaseAnalisis(ValidacionReporteMixin, QMainWindow):
         try:
             # 1. Obtener el último análisis de este reporte
             cur.execute("""
-                SELECT A.id_analisis, I.ruta_archivo, I.campo, I.tiempo_muestra, A.paso_actual, A.datos_persistentes
+                SELECT A.id_analisis, I.ruta_archivo, I.campo, I.tiempo_muestra, A.paso_actual
                 FROM Analisis A JOIN Imagen I ON A.id_imagen = I.id_imagen
                 WHERE A.id_reporte = ? ORDER BY A.id_analisis DESC LIMIT 1
             """, (id_reporte,))
@@ -3726,7 +3742,7 @@ class VentanaBaseAnalisis(ValidacionReporteMixin, QMainWindow):
                 self.actualizar_estado_flujo(0)
                 return
 
-            id_an, ruta, campo, tiempo, paso, datos_json = res
+            id_an, ruta, campo, tiempo, paso = res
             
             # 2. Decidir si retomar o empezar nueva imagen
             if paso < 5:
@@ -3740,17 +3756,24 @@ class VentanaBaseAnalisis(ValidacionReporteMixin, QMainWindow):
                 self.id_analisis_actual = id_an
                 self.paso_actual = paso
 
-                if datos_json:
-                    datos = json.loads(datos_json)
-                    boxes = datos.get("boxes", [])
-                    for b in boxes:
-                        if "crop_path" in b and isinstance(b["crop_path"], str):
-                            b["crop_path"] = b["crop_path"].replace("\\", "/")
-                            if es_cliente():
-                                from red.cliente import asegurar_archivo_local
-                                asegurar_archivo_local(b["crop_path"])
-                    self.metricas_reporte = datos.get("metricas_acumuladas", [])
-                else: boxes = []; self.metricas_reporte = []
+                cur.execute("""
+                    SELECT bbox_x, bbox_y, bbox_w, bbox_h, crop_path, filtro_clahe, filtro_gauss, filtro_otsu, areas_eliminadas
+                    FROM Microglia WHERE id_analisis = ?
+                """, (id_an,))
+                boxes_db = cur.fetchall()
+                boxes = []
+                for (bx, by, bw, bh, cp, fc, fg, fo, ae) in boxes_db:
+                    b = {
+                        "x": bx, "y": by, "w": bw, "h": bh,
+                        "crop_path": cp.replace("\\", "/") if cp else "",
+                        "offsets": {"clahe": fc or 0, "gauss": fg or 0, "otsu": fo or 0},
+                        "removal_areas": json.loads(ae) if ae else []
+                    }
+                    if es_cliente() and b["crop_path"]:
+                        from red.cliente import asegurar_archivo_local
+                        asegurar_archivo_local(b["crop_path"])
+                    boxes.append(b)
+                self.metricas_reporte = []
 
                 # Cargar imagen
                 from PyQt6.QtGui import QImage, QPixmap
@@ -3835,17 +3858,25 @@ class VentanaBaseAnalisis(ValidacionReporteMixin, QMainWindow):
                 
                 self.pixmaps_globales = {"Original": pixmap, "Filtrada": None, "Esqueleto": None}
                 
-                if datos_json:
-                    datos = json.loads(datos_json)
-                    self.metricas_reporte = datos.get("metricas_acumuladas", [])
-                    boxes = datos.get("boxes", [])
-                    for b in boxes:
-                        if "crop_path" in b and isinstance(b["crop_path"], str):
-                            b["crop_path"] = b["crop_path"].replace("\\", "/")
+                cur.execute("""
+                    SELECT bbox_x, bbox_y, bbox_w, bbox_h, crop_path, filtro_clahe, filtro_gauss, filtro_otsu, areas_eliminadas
+                    FROM Microglia WHERE id_analisis = ?
+                """, (id_an,))
+                boxes_db = cur.fetchall()
+                if boxes_db:
+                    boxes = []
+                    for (bx, by, bw, bh, cp, fc, fg, fo, ae) in boxes_db:
+                        b = {
+                            "x": bx, "y": by, "w": bw, "h": bh,
+                            "crop_path": cp.replace("\\", "/") if cp else "",
+                            "offsets": {"clahe": fc or 0, "gauss": fg or 0, "otsu": fo or 0},
+                            "removal_areas": json.loads(ae) if ae else []
+                        }
+                        boxes.append(b)
                     self.visor_imagen.set_image_and_boxes(pixmap, boxes)
                 else:
-                    self.metricas_reporte = []
                     self.visor_imagen.set_image_and_boxes(pixmap, [])
+                self.metricas_reporte = []
                 
                 # Reconstruir las imágenes procesadas Filtrada y Esqueleto para las miniaturas
                 pix_f = self.construir_imagen_global("filtradas")
@@ -4030,6 +4061,58 @@ class VentanaBaseAnalisis(ValidacionReporteMixin, QMainWindow):
             self.combo_vista.setCurrentText(self.visor_imagen.view_mode)
             self.combo_vista.blockSignals(False)
 
+    def obtener_metricas_reporte_desde_bd(self):
+        from bd.database import conectar
+        import os
+        conn = conectar()
+        cur = conn.cursor()
+        
+        cur.execute("""
+            SELECT A.id_analisis, I.ruta_archivo, I.campo, I.tiempo_muestra
+            FROM Analisis A
+            JOIN Imagen I ON A.id_imagen = I.id_imagen
+            WHERE A.id_reporte = ? AND A.paso_actual >= 5
+            ORDER BY A.id_analisis ASC
+        """, (self.id_reporte_actual,))
+        analisis_list = cur.fetchall()
+        
+        resultado = []
+        for id_an, ruta, campo, tiempo in analisis_list:
+            cur.execute("""
+                SELECT lineas, puntos_union, puntos_finales, voxeles_union, voxeles_losa,
+                       longitud_promedio_ramas, uniones_triples, uniones_cuadruples,
+                       longitud_maxima_rama, ruta_mas_larga
+                FROM Microglia
+                WHERE id_analisis = ?
+                ORDER BY id_microglia ASC
+            """, (id_an,))
+            micros = cur.fetchall()
+            
+            metricas_imagen = []
+            for m in micros:
+                metricas_imagen.append({
+                    "lines": m[0] or 0,
+                    "junction points": m[1] or 0,
+                    "end points": m[2] or 0,
+                    "junction voxels": m[3] or 0,
+                    "slab voxels": m[4] or 0,
+                    "average branch length": m[5] or 0.0,
+                    "triple points": m[6] or 0,
+                    "quadruple points": m[7] or 0,
+                    "maximum branch length": m[8] or 0.0,
+                    "longest shortest path": m[9] or 0.0
+                })
+                
+            resultado.append({
+                "campo": campo or "Sin Campo",
+                "tiempo": tiempo or "Sin Tiempo",
+                "nombre_imagen": os.path.basename(ruta) if ruta else "Imagen Sin Nombre",
+                "metricas": metricas_imagen
+            })
+            
+        conn.close()
+        return resultado
+
     def mostrar_tabla_metricas(self):
         self.stacked_visor.setCurrentIndex(1)
         
@@ -4073,15 +4156,16 @@ class VentanaBaseAnalisis(ValidacionReporteMixin, QMainWindow):
         self.tabla_metricas.setColumnCount(len(columnas))
         self.tabla_metricas.setHorizontalHeaderLabels(columnas)
         
-        # Recopilar todas las filas de la sesión actual
+        # Recopilar todas las filas de la sesión actual leyendo de la BD
         filas = []
+        metricas_bd = self.obtener_metricas_reporte_desde_bd()
         total_microglias = 0
         sum_junction_points = 0
         sum_end_points = 0
         sum_branch_length = 0.0
         count_microglias_with_branch_len = 0
         
-        for img_data in self.metricas_reporte:
+        for img_data in metricas_bd:
             campo = str(img_data.get("campo", "Sin Campo"))
             tiempo = str(img_data.get("tiempo", "Sin Tiempo"))
             
@@ -4590,6 +4674,10 @@ class VentanaBaseAnalisis(ValidacionReporteMixin, QMainWindow):
         
         metricas_imagen = []
         from red.config import es_cliente
+        from bd.database import conectar
+        conn = conectar()
+        cur = conn.cursor()
+        
         for box in self.visor_imagen.boxes:
             nombre = os.path.basename(box["crop_path"])
             out_path = os.path.join(esqueletos_dir, nombre)
@@ -4606,9 +4694,48 @@ class VentanaBaseAnalisis(ValidacionReporteMixin, QMainWindow):
                     else:
                         met = extraer_metricas_esqueleto(out_path)
                     metricas_imagen.append(met)
+                    
+                    try:
+                        cur.execute("""
+                            UPDATE Microglia 
+                            SET puntos_finales = ?, 
+                                uniones_triples = ?, 
+                                uniones_cuadruples = ?, 
+                                longitud_promedio_ramas = ?, 
+                                longitud_maxima_rama = ?, 
+                                ruta_mas_larga = ?,
+                                lineas = ?,
+                                puntos_union = ?,
+                                voxeles_union = ?,
+                                voxeles_losa = ?
+                            WHERE id_analisis = ? AND crop_path = ?
+                        """, (
+                            met.get("end points", 0),
+                            met.get("triple points", 0),
+                            met.get("quadruple points", 0),
+                            met.get("average branch length", 0.0),
+                            met.get("maximum branch length", 0.0),
+                            met.get("longest shortest path", 0.0),
+                            met.get("lines", 0),
+                            met.get("junction points", 0),
+                            met.get("junction voxels", 0),
+                            met.get("slab voxels", 0),
+                            self.id_analisis_actual,
+                            box.get("crop_path", "")
+                        ))
+                    except Exception as db_err:
+                        logging.error(f"Error actualizando DB con métricas: {db_err}")
+                        
                 except Exception as e:
                     logging.error(f"Error extrayendo métricas de {nombre}: {e}")
                     
+        try:
+            conn.commit()
+        except Exception as e:
+            logging.error(f"Error en commit de BD: {e}")
+        finally:
+            conn.close()
+            
         dialogo.close()
         QApplication.restoreOverrideCursor()
         
@@ -4616,12 +4743,7 @@ class VentanaBaseAnalisis(ValidacionReporteMixin, QMainWindow):
             self.mostrar_notificacion("Error", "No se pudieron extraer métricas de ninguna microglía.", "error")
             return
             
-        self.metricas_reporte.append({
-            "campo": self.metadatos_imagen.get("campo", ""),
-            "tiempo": self.metadatos_imagen.get("tiempo", ""),
-            "nombre_imagen": os.path.basename(self.ruta_imagen_actual) if self.ruta_imagen_actual else "Imagen Sin Nombre",
-            "metricas": metricas_imagen
-        })
+        self.metricas_reporte = [] # Ya no se usa self.metricas_reporte en memoria
         
         # Limpiar marcas de esqueleto modificado para quitar el resaltado amarillo
         for box in self.visor_imagen.boxes:
@@ -4657,14 +4779,13 @@ class VentanaBaseAnalisis(ValidacionReporteMixin, QMainWindow):
         self.mostrar_notificacion("Info", "Sesión lista para cargar otra imagen y agregar al reporte.", "info")
 
     def descargar_reporte(self):
-        if not self.metricas_reporte:
+        metricas_bd = self.obtener_metricas_reporte_desde_bd()
+        if not metricas_bd:
             self.mostrar_notificacion("Advertencia", "No hay métricas acumuladas para descargar.", "warning")
             return
             
         # Depuración: imprimir estructura de datos
-        print(f"DEBUG: metricas_reporte type: {type(self.metricas_reporte)}")
-        if isinstance(self.metricas_reporte, list) and len(self.metricas_reporte) > 0:
-            print(f"DEBUG: First item type: {type(self.metricas_reporte[0])}")
+        print(f"DEBUG: metricas_bd len: {len(metricas_bd)}")
             
         from datetime import datetime; from PyQt6.QtWidgets import QFileDialog; from pathlib import Path
         fecha_str = datetime.now().strftime("%Y%m%d_%H%M"); default_name = f"Reporte_{fecha_str}.xlsx"
@@ -4674,12 +4795,12 @@ class VentanaBaseAnalisis(ValidacionReporteMixin, QMainWindow):
             
         try:
             reporte_por_tiempo = {}
-            for img_data in self.metricas_reporte:
+            for img_data in metricas_bd:
                 t = str(img_data.get("tiempo", "X HORA")).upper()
                 if t not in reporte_por_tiempo: reporte_por_tiempo[t] = []
                 reporte_por_tiempo[t].append(img_data)
                 
-            total_global_microglias = sum(len(img_data.get("metricas", [])) for img_data in self.metricas_reporte)
+            total_global_microglias = sum(len(img_data.get("metricas", [])) for img_data in metricas_bd)
 
             columnas_labels = ["No.", "Lines", "Junction Points", "End Points", "Junction Voxels", "Slab Voxels", "Avg. Branch Length", "Triple points", "Quadruple points", "Max Branch Length", "Longest Shortest path"]
             metric_keys = ["lines", "junction points", "end points", "junction voxels", "slab voxels", "average branch length", "triple points", "quadruple points", "maximum branch length", "longest shortest path"]

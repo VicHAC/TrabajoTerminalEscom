@@ -88,7 +88,7 @@ def db_resetear_progreso_analisis(id_reporte: int, paso_fallido: int) -> None:
     try:
         # 1. Obtener el último análisis de este reporte
         cur.execute("""
-            SELECT A.id_analisis, A.datos_persistentes, I.ruta_archivo 
+            SELECT A.id_analisis, I.ruta_archivo 
             FROM Analisis A 
             JOIN Imagen I ON A.id_imagen = I.id_imagen 
             WHERE A.id_reporte = ? 
@@ -98,18 +98,7 @@ def db_resetear_progreso_analisis(id_reporte: int, paso_fallido: int) -> None:
         if not res:
             return
             
-        id_an, dp, ruta_img = res
-        
-        # Cargar datos persistentes
-        boxes = []
-        metricas = []
-        if dp:
-            try:
-                datos = json.loads(dp)
-                boxes = datos.get("boxes", [])
-                metricas = datos.get("metricas_acumuladas", [])
-            except:
-                pass
+        id_an, ruta_img = res
                 
         stem = Path(ruta_img).stem
         base_dir = os.path.join(os.getcwd(), "analisis_resultados", stem)
@@ -119,8 +108,6 @@ def db_resetear_progreso_analisis(id_reporte: int, paso_fallido: int) -> None:
         if paso_fallido == 1:
             # Se equivoco en el conteo -> Borrar TODO (paso_actual = 1)
             nuevo_paso = 1
-            boxes = []
-            metricas = []
             
             # Borrar de la base de datos las microglias individuales
             cur.execute("DELETE FROM Microglia WHERE id_analisis = ?", (id_an,))
@@ -135,7 +122,6 @@ def db_resetear_progreso_analisis(id_reporte: int, paso_fallido: int) -> None:
         elif paso_fallido == 2:
             # Se equivoco en el filtrado -> Conservar conteo (paso_actual = 2), borrar filtrado/esqueletos/métricas
             nuevo_paso = 2
-            metricas = []
             
             # Borrar carpetas físicas de filtradas y esqueletos
             for folder in ["filtradas", "esqueletos"]:
@@ -146,7 +132,6 @@ def db_resetear_progreso_analisis(id_reporte: int, paso_fallido: int) -> None:
         elif paso_fallido == 3:
             # Se equivoco en el esqueletizado -> Conservar conteo y filtrado (paso_actual = 3), borrar esqueletos/métricas
             nuevo_paso = 3
-            metricas = []
             
             # Borrar carpetas físicas de esqueletos
             p = os.path.join(base_dir, "esqueletos")
@@ -156,16 +141,11 @@ def db_resetear_progreso_analisis(id_reporte: int, paso_fallido: int) -> None:
         elif paso_fallido == 4:
             # Se equivoco en obtener métricas -> Conservar todo menos métricas (paso_actual = 4)
             nuevo_paso = 4
-            metricas = []
             
         # Guardar cambios en Analisis
-        datos_nuevos = {
-            "boxes": boxes,
-            "metricas_acumuladas": metricas
-        }
         cur.execute(
-            "UPDATE Analisis SET paso_actual = ?, datos_persistentes = ? WHERE id_analisis = ?",
-            (nuevo_paso, json.dumps(datos_nuevos), id_an)
+            "UPDATE Analisis SET paso_actual = ? WHERE id_analisis = ?",
+            (nuevo_paso, id_an)
         )
         conn.commit()
     except Exception as e:

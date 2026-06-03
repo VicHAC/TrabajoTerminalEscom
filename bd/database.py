@@ -76,20 +76,20 @@ def inicializar_bd():
         CREATE TABLE IF NOT EXISTS Microglia (
             id_microglia INTEGER PRIMARY KEY AUTOINCREMENT,
             id_analisis INTEGER NOT NULL,
-            centroide_x REAL NOT NULL,
-            centroide_y REAL NOT NULL,
-            area_total_pixeles REAL NOT NULL,
-            area_soma_pixeles REAL,
-            perimetro REAL NOT NULL,
-            pixeles_rama INTEGER,
             puntos_finales INTEGER,
             uniones_triples INTEGER,
             uniones_cuadruples INTEGER,
             longitud_promedio_ramas REAL,
             longitud_maxima_rama REAL,
             ruta_mas_larga REAL,
-            tiempo_exposicion_horas REAL,
-            estado_clasificado TEXT,
+            lineas INTEGER,
+            puntos_union INTEGER,
+            voxeles_union INTEGER,
+            voxeles_losa INTEGER,
+            filtro_clahe INTEGER DEFAULT 0,
+            filtro_gauss INTEGER DEFAULT 0,
+            filtro_otsu INTEGER DEFAULT 0,
+            areas_eliminadas TEXT,
             bbox_x REAL, 
             bbox_y REAL, 
             bbox_w REAL, 
@@ -124,6 +124,22 @@ def inicializar_bd():
     try: cursor.execute("ALTER TABLE Analisis ADD COLUMN datos_persistentes TEXT")
     except: pass
     try: cursor.execute("ALTER TABLE Microglia ADD COLUMN crop_path TEXT")
+    except: pass
+    try: cursor.execute("ALTER TABLE Microglia ADD COLUMN lineas INTEGER")
+    except: pass
+    try: cursor.execute("ALTER TABLE Microglia ADD COLUMN puntos_union INTEGER")
+    except: pass
+    try: cursor.execute("ALTER TABLE Microglia ADD COLUMN voxeles_union INTEGER")
+    except: pass
+    try: cursor.execute("ALTER TABLE Microglia ADD COLUMN voxeles_losa INTEGER")
+    except: pass
+    try: cursor.execute("ALTER TABLE Microglia ADD COLUMN filtro_clahe INTEGER DEFAULT 0")
+    except: pass
+    try: cursor.execute("ALTER TABLE Microglia ADD COLUMN filtro_gauss INTEGER DEFAULT 0")
+    except: pass
+    try: cursor.execute("ALTER TABLE Microglia ADD COLUMN filtro_otsu INTEGER DEFAULT 0")
+    except: pass
+    try: cursor.execute("ALTER TABLE Microglia ADD COLUMN areas_eliminadas TEXT")
     except: pass
     try: cursor.execute("ALTER TABLE Reporte ADD COLUMN id_usuario INTEGER")
     except: pass

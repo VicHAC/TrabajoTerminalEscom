@@ -774,7 +774,6 @@ class VentanaAdministrador(QMainWindow):
                     ),
                     CASE WHEN A.paso_actual >= 5 THEN 'Completado' ELSE 'Incompleto' END,
                     A.cantidad_microglias,
-                    A.datos_persistentes,
                     COALESCE(A.fecha_analisis, R.fecha_creacion),
                     COALESCE(I.ruta_archivo, 'Sin archivo')
                 FROM Reporte R
@@ -786,19 +785,12 @@ class VentanaAdministrador(QMainWindow):
 
             self.tabla_reportes.setRowCount(len(reportes))
             for fila_idx, fila_datos in enumerate(reportes):
-                id_rep, id_an, nom_rep, autor, colab, estatus, cant, dp, fecha, ruta = fila_datos
+                id_rep, id_an, nom_rep, autor, colab, estatus, cant, fecha, ruta = fila_datos
                 
                 if id_an != 'Sin análisis':
                     if not cant or cant == 0:
                         cursor.execute("SELECT COUNT(*) FROM Microglia WHERE id_analisis = ?", (id_an,))
                         cant = cursor.fetchone()[0] or 0
-                        if cant == 0 and dp:
-                            try:
-                                import json
-                                datos = json.loads(dp)
-                                cant = len(datos.get("boxes", []))
-                            except:
-                                pass
                 else:
                     cant = "N/A"
                 

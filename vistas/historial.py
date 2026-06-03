@@ -44,7 +44,7 @@ class VentanaHistorial(QDialog):
             cur = conn.cursor()
             # Unimos Analisis con Imagen para sacar los datos completos del investigador
             query = """
-                SELECT A.id_analisis, I.ruta_archivo, I.campo, I.tiempo_muestra, A.fecha_analisis, A.paso_actual, A.cantidad_microglias, A.datos_persistentes
+                SELECT A.id_analisis, I.ruta_archivo, I.campo, I.tiempo_muestra, A.fecha_analisis, A.paso_actual, A.cantidad_microglias
                 FROM Analisis A
                 JOIN Imagen I ON A.id_imagen = I.id_imagen
                 WHERE I.id_usuario = ?
@@ -55,19 +55,12 @@ class VentanaHistorial(QDialog):
             self.tabla.setRowCount(len(rows))
             
             for i, row in enumerate(rows):
-                id_an, ruta, campo, tiempo, fecha, paso, cant, dp = row
+                id_an, ruta, campo, tiempo, fecha, paso, cant = row
                 
-                # Sistema de fallback robusto de 3 niveles para detecciones
+                # Sistema de fallback para detecciones
                 if not cant or cant == 0:
                     cur.execute("SELECT COUNT(*) FROM Microglia WHERE id_analisis = ?", (id_an,))
                     cant = cur.fetchone()[0] or 0
-                    if cant == 0 and dp:
-                        try:
-                            import json
-                            datos = json.loads(dp)
-                            cant = len(datos.get("boxes", []))
-                        except:
-                            pass
                 
                 valores = [
                     str(id_an),
