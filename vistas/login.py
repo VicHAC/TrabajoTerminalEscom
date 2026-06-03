@@ -2,7 +2,7 @@ import hashlib
 import sqlite3
 import os
 import sys
-from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton)
+from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QDialog)
 from PyQt6.QtCore import Qt, QSize
 from PyQt6.QtGui import QPixmap, QIcon
 
@@ -33,7 +33,7 @@ class VentanaLogin(QWidget):
         self.btn_config_red.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_config_red.setStyleSheet("""
             QPushButton { background-color: transparent; border: 1px solid transparent; outline: none; }
-            QPushButton:hover { background-color: #ddf4ff; border-radius: 18px; }
+            QPushButton:hover { background-color: #eaf2ff; border-radius: 18px; }
         """)
         self.btn_config_red.clicked.connect(self.abrir_config_red)
         
@@ -97,15 +97,28 @@ class VentanaLogin(QWidget):
         btn_ingresar.clicked.connect(self.verificar_login)
 
         btn_invitado = QPushButton("Continuar como invitado")
-        btn_invitado.setStyleSheet("background-color: transparent; color: #0969da; border: none; font-weight: normal; font-size: 13px;")
+        btn_invitado.setStyleSheet("""
+            QPushButton {
+                background-color: transparent; 
+                color: #0969da; 
+                border: none; 
+                font-weight: normal; 
+                font-size: 13px;
+            }
+            QPushButton:hover {
+                font-weight: bold;
+            }
+        """)
         btn_invitado.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_invitado.clicked.connect(self.login_invitado)
         
 
         
-        label_ayuda = QLabel("¿No tienes una cuenta? Comunícate con el administrador")
+        label_ayuda = QLabel('¿No tienes una cuenta? <a href="#copy" style="color: #888888; text-decoration: underline;">Comunícate con el administrador</a>')
         label_ayuda.setStyleSheet("color: #888888; font-size: 11px; margin-top: 30px;")
         label_ayuda.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        label_ayuda.setOpenExternalLinks(False)
+        label_ayuda.linkActivated.connect(self.copiar_correos_administrador)
 
         layout_login.addWidget(self.logo, alignment=Qt.AlignmentFlag.AlignCenter)
         layout_login.addWidget(titulo, alignment=Qt.AlignmentFlag.AlignCenter)
@@ -191,3 +204,132 @@ class VentanaLogin(QWidget):
         self.dashboard = VentanaInvitado(id_usuario=0, rol="Invitado", nombre_usuario="Invitado")
         self.dashboard.show()
         self.close()
+
+    def copiar_correos_administrador(self, link):
+        if link == "#copy":
+            from PyQt6.QtWidgets import QApplication
+            
+            correos_lista = [
+                "snavarreteb1900@alumno.ipn.mx",
+                "amartineza1706@alumno.ipn.mx",
+                "valcarazc1500@alumno.ipn.mx"
+            ]
+            correos = "; ".join(correos_lista)
+            
+            portapapeles = QApplication.clipboard()
+            portapapeles.setText(correos)
+            
+            DialogoCorreosAdministrador(self).exec()
+
+
+class DialogoCorreosAdministrador(QDialog):
+    def __init__(self, parent=None):
+        from PyQt6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QFrame, QLabel, QPushButton
+        from PyQt6.QtCore import Qt
+        super().__init__(parent)
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog | Qt.WindowType.WindowStaysOnTopHint)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.setModal(True)
+        
+        from vistas.utilidades import set_app_icon
+        set_app_icon(self)
+        
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(10, 10, 10, 10)
+        
+        frame = QFrame(self)
+        frame.setStyleSheet("""
+            QFrame {
+                background-color: #f6f8fa; 
+                border-radius: 10px; 
+                border: 1px solid #d0d7de; 
+            }
+            QLabel { 
+                color: #24292f; 
+                border: none; 
+                background: transparent;
+            }
+            QPushButton { 
+                background-color: transparent; 
+                color: #24292f; 
+                border: 2px solid #24292f; 
+                border-radius: 6px; 
+                padding: 6px 16px; 
+                font-weight: bold; 
+                font-size: 11px; 
+            }
+            QPushButton:hover { 
+                background-color: #24292f; 
+                color: white; 
+            }
+        """)
+        
+        flayout = QVBoxLayout(frame)
+        flayout.setContentsMargins(15, 15, 15, 15)
+        flayout.setSpacing(10)
+        
+        lbl_titulo = QLabel("<b>Correos de Administradores</b>")
+        lbl_titulo.setStyleSheet("font-size: 13px; font-weight: bold; color: #24292f;")
+        lbl_titulo.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        linea = QFrame()
+        linea.setFrameShape(QFrame.Shape.HLine)
+        linea.setStyleSheet("background-color: #d0d7de; border: none; max-height: 1px;")
+        
+        lbl_info = QLabel("Copiado al portapapeles:")
+        lbl_info.setStyleSheet("font-size: 11px; color: #57606a;")
+        lbl_info.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        correos_layout = QVBoxLayout()
+        correos_layout.setSpacing(4)
+        correos_lista = [
+            "snavarreteb1900@alumno.ipn.mx",
+            "amartineza1706@alumno.ipn.mx",
+            "valcarazc1500@alumno.ipn.mx"
+        ]
+        for correo in correos_lista:
+            lbl_correo = QLabel(f"• {correo}")
+            lbl_correo.setStyleSheet("font-size: 11px; font-family: monospace; font-weight: bold; color: #24292f;")
+            lbl_correo.setAlignment(Qt.AlignmentFlag.AlignLeft)
+            correos_layout.addWidget(lbl_correo)
+            
+        btn_layout = QHBoxLayout()
+        btn_aceptar = QPushButton("Aceptar")
+        btn_aceptar.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_aceptar.clicked.connect(self.accept)
+        btn_layout.addStretch()
+        btn_layout.addWidget(btn_aceptar)
+        btn_layout.addStretch()
+        
+        flayout.addWidget(lbl_titulo)
+        flayout.addWidget(linea)
+        flayout.addWidget(lbl_info)
+        flayout.addLayout(correos_layout)
+        flayout.addSpacing(5)
+        flayout.addLayout(btn_layout)
+        
+        layout.addWidget(frame)
+        self.setLayout(layout)
+        self.setFixedSize(360, 230)
+        
+    def showEvent(self, event):
+        super().showEvent(event)
+        if self.parent():
+            p_geom = self.parent().geometry()
+            self.move(p_geom.x() + (p_geom.width() - self.width()) // 2, p_geom.y() + (p_geom.height() - self.height()) // 2)
+
+    def mousePressEvent(self, event):
+        from PyQt6.QtCore import Qt
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._drag_pos = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
+            event.accept()
+        else:
+            super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        from PyQt6.QtCore import Qt
+        if hasattr(self, "_drag_pos") and event.buttons() == Qt.MouseButton.LeftButton:
+            self.move(event.globalPosition().toPoint() - self._drag_pos)
+            event.accept()
+        else:
+            super().mouseMoveEvent(event)

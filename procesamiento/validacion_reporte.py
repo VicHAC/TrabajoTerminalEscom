@@ -201,7 +201,7 @@ def construir_boton_validar(tree_widget, rep_item, id_rep, reporte_completo,
     btn.setCursor(Qt.CursorShape.PointingHandCursor)
     btn.setStyleSheet("""
         QPushButton { background-color: transparent; border: 1px solid transparent; outline: none; }
-        QPushButton:hover { background-color: #ddf4ff; border-radius: 15px; }
+        QPushButton:hover { background-color: #eaf2ff; border-radius: 15px; }
         QPushButton:disabled { opacity: 0.3; }
     """)
     btn.setEnabled(True)
@@ -226,7 +226,7 @@ def construir_boton_descargar(tree_widget, rep_item, col, id_rep,
     btn.setCursor(Qt.CursorShape.PointingHandCursor)
     btn.setStyleSheet("""
         QPushButton { background-color: transparent; border: 1px solid transparent; outline: none; }
-        QPushButton:hover { background-color: #ddf4ff; border-radius: 15px; }
+        QPushButton:hover { background-color: #eaf2ff; border-radius: 15px; }
         QPushButton:disabled { opacity: 0.1; }
     """)
     btn.setEnabled(habilitado)

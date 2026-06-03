@@ -17,7 +17,7 @@ from procesamiento.validacion_reporte import (
 )
 
 from PyQt6.QtCore import pyqtSignal, QRect, Qt, QSize, QEvent, QPoint
-from PyQt6.QtGui import QColor, QImage, QPainter, QPen, QPixmap, QIcon, QIntValidator
+from PyQt6.QtGui import QColor, QImage, QPainter, QPen, QPixmap, QIcon, QIntValidator, QFont
 from PyQt6.QtWidgets import (
     QApplication,
     QComboBox,
@@ -195,7 +195,8 @@ class DropZone(QFrame):
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
             ruta_archivo, _ = QFileDialog.getOpenFileName(
-                self, "Seleccionar imagen", "", "Imágenes TIFF (*.tiff *.tif);;Todas las imágenes (*.png *.jpg *.jpeg)"
+                self, "Seleccionar imagen", "", "Imágenes TIFF (*.tiff *.tif);;Todas las imágenes (*.png *.jpg *.jpeg)",
+                options=QFileDialog.Option.DontUseNativeDialog
             )
             if ruta_archivo:
                 self.file_selected.emit(ruta_archivo)
@@ -321,6 +322,25 @@ class DialogoCargarImagen(QDialog):
         else:
             screen = QApplication.primaryScreen().geometry()
             self.move((screen.width() - self.width()) // 2, (screen.height() - self.height()) // 2)
+
+    def mousePressEvent(self, event):
+        from PyQt6.QtCore import Qt
+        if event.button() == Qt.MouseButton.LeftButton:
+            if self.windowHandle():
+                self.windowHandle().startSystemMove()
+            else:
+                self._drag_pos = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
+            event.accept()
+        else:
+            super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        from PyQt6.QtCore import Qt
+        if not self.windowHandle() and hasattr(self, "_drag_pos") and event.buttons() == Qt.MouseButton.LeftButton:
+            self.move(event.globalPosition().toPoint() - self._drag_pos)
+            event.accept()
+        else:
+            super().mouseMoveEvent(event)
 
     def procesar_archivo(self, ruta):
         self.ruta_seleccionada = ruta
@@ -486,6 +506,25 @@ class DialogoComparativo(QDialog):
     def showEvent(self, event):
         super().showEvent(event)
         self.ajustar_posicion()
+
+    def mousePressEvent(self, event):
+        from PyQt6.QtCore import Qt
+        if event.button() == Qt.MouseButton.LeftButton:
+            if self.windowHandle():
+                self.windowHandle().startSystemMove()
+            else:
+                self._drag_pos = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
+            event.accept()
+        else:
+            super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        from PyQt6.QtCore import Qt
+        if not self.windowHandle() and hasattr(self, "_drag_pos") and event.buttons() == Qt.MouseButton.LeftButton:
+            self.move(event.globalPosition().toPoint() - self._drag_pos)
+            event.accept()
+        else:
+            super().mouseMoveEvent(event)
 
 
 class InteractiveLabelDetail(QLabel):
@@ -999,7 +1038,7 @@ class DialogoVistaCelular(QDialog):
         self.btn_sub_goma.setIconSize(QSize(20, 20))
         self.btn_sub_goma.setToolTip("Goma")
         
-        estilo_sub = "QPushButton { background-color: transparent; border: none; padding: 2px; } QPushButton:hover { background-color: #ddf4ff; border-radius: 17px; } QPushButton:checked { background-color: #cce5ff; border: 1px solid #007bff; border-radius: 17px; }"
+        estilo_sub = "QPushButton { background-color: transparent; border: none; padding: 2px; } QPushButton:hover { background-color: #eaf2ff; border-radius: 17px; } QPushButton:checked { background-color: #cce5ff; border: 1px solid #007bff; border-radius: 17px; }"
         for btn in [self.btn_sub_pincel, self.btn_sub_linea, self.btn_sub_goma]:
             btn.setCheckable(True)
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -1014,7 +1053,7 @@ class DialogoVistaCelular(QDialog):
         self.btn_deshacer_paso.setIconSize(QSize(20, 20))
         self.btn_deshacer_paso.setToolTip("Deshacer último paso")
         self.btn_deshacer_paso.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_deshacer_paso.setStyleSheet("QPushButton { background-color: transparent; border: none; padding: 2px; } QPushButton:hover { background-color: #ddf4ff; border-radius: 17px; } QPushButton:disabled { opacity: 0.4; }")
+        self.btn_deshacer_paso.setStyleSheet("QPushButton { background-color: transparent; border: none; padding: 2px; } QPushButton:hover { background-color: #eaf2ff; border-radius: 17px; } QPushButton:disabled { opacity: 0.4; }")
         self.btn_deshacer_paso.setFixedSize(34, 34)
         self.btn_deshacer_paso.clicked.connect(self.deshacer_paso)
         self.btn_deshacer_paso.setEnabled(False)
@@ -1779,6 +1818,25 @@ class DialogoConfirmacion(QDialog):
             screen = QApplication.primaryScreen().geometry()
             self.move((screen.width() - self.width()) // 2, (screen.height() - self.height()) // 2)
 
+    def mousePressEvent(self, event):
+        from PyQt6.QtCore import Qt
+        if event.button() == Qt.MouseButton.LeftButton:
+            if self.windowHandle():
+                self.windowHandle().startSystemMove()
+            else:
+                self._drag_pos = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
+            event.accept()
+        else:
+            super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        from PyQt6.QtCore import Qt
+        if not self.windowHandle() and hasattr(self, "_drag_pos") and event.buttons() == Qt.MouseButton.LeftButton:
+            self.move(event.globalPosition().toPoint() - self._drag_pos)
+            event.accept()
+        else:
+            super().mouseMoveEvent(event)
+
     def aceptar(self): self.resultado = True; self.accept()
     def cancelar(self): self.resultado = False; self.reject()
 
@@ -2120,7 +2178,7 @@ class DialogoHistorial(QDialog):
         self.btn_compartir_icon.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_compartir_icon.setStyleSheet("""
             QPushButton { background-color: transparent; border: 1px solid transparent; outline: none; }
-            QPushButton:hover { background-color: #ddf4ff; border-radius: 17px; }
+            QPushButton:hover { background-color: #eaf2ff; border-radius: 17px; }
             QPushButton:disabled { opacity: 0.3; }
         """)
         self.btn_compartir_icon.setEnabled(False)
@@ -2135,7 +2193,7 @@ class DialogoHistorial(QDialog):
         self.btn_borrar_icon.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_borrar_icon.setStyleSheet("""
             QPushButton { background-color: transparent; border: 1px solid transparent; outline: none; }
-            QPushButton:hover { background-color: #ddf4ff; border-radius: 17px; }
+            QPushButton:hover { background-color: #eaf2ff; border-radius: 17px; }
             QPushButton:disabled { opacity: 0.3; }
         """)
         self.btn_borrar_icon.setEnabled(False)
@@ -2151,7 +2209,7 @@ class DialogoHistorial(QDialog):
         self.btn_cerrar_x.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_cerrar_x.setStyleSheet("""
             QPushButton { background-color: transparent; border: 1px solid transparent; outline: none; }
-            QPushButton:hover { background-color: #ddf4ff; border-radius: 17px; }
+            QPushButton:hover { background-color: #eaf2ff; border-radius: 17px; }
         """)
         self.btn_cerrar_x.enterEvent = lambda e: self.btn_cerrar_x.setIcon(QIcon("assets/buttons/xroja.png"))
         self.btn_cerrar_x.leaveEvent = lambda e: self.btn_cerrar_x.setIcon(QIcon("assets/buttons/xneg.png"))
@@ -2207,11 +2265,12 @@ class DialogoHistorial(QDialog):
             QTreeWidget { border: none; background-color: #ffffff; alternate-background-color: #f6f8fa; font-size: 11px; outline: none; }
             QTreeWidget:focus { border: none; outline: none; }
             QTreeWidget::item { height: 32px; border-bottom: 1px solid #f0f0f0; color: #24292f; }
-            QTreeWidget::item:selected { background-color: #0969da; color: #ffffff; }
+            QTreeWidget::item:selected { background-color: #eaf2ff; color: #24292f; }
             QHeaderView::section { background-color: #f6f8fa; padding: 6px; font-weight: bold; border: none; border-bottom: 2px solid #d0d7de; color: #57606a; font-size: 11px; }
         """)
         layout_p.addWidget(self.tree)
-        self.tabs.addTab(self.tab_propios, "Mis Reportes")
+        if self.rol != "Tesista":
+            self.tabs.addTab(self.tab_propios, "Mis Reportes")
 
         # TAB 2: COMPARTIDOS CONMIGO
         self.tab_compartidos = QWidget()
@@ -2239,7 +2298,7 @@ class DialogoHistorial(QDialog):
             QTreeWidget { border: none; background-color: #ffffff; alternate-background-color: #f6f8fa; font-size: 11px; outline: none; }
             QTreeWidget:focus { border: none; outline: none; }
             QTreeWidget::item { height: 32px; border-bottom: 1px solid #f0f0f0; color: #24292f; }
-            QTreeWidget::item:selected { background-color: #0969da; color: #ffffff; }
+            QTreeWidget::item:selected { background-color: #eaf2ff; color: #24292f; }
             QHeaderView::section { background-color: #f6f8fa; padding: 6px; font-weight: bold; border: none; border-bottom: 2px solid #d0d7de; color: #57606a; font-size: 11px; }
         """)
         layout_c.addWidget(self.tree_compartidos)
@@ -2285,7 +2344,7 @@ class DialogoHistorial(QDialog):
         flayout.addLayout(btn_layout);        main_layout.addWidget(self.frame)
         self.actualizar_estado_boton_borrar() # Asegurar estado inicial
         if self.rol == "Tesista":
-            self.tabs.setCurrentIndex(1)
+            self.tabs.setCurrentIndex(0)
         self.resize(950, 650)
 
     def eventFilter(self, obj, event):
@@ -2324,20 +2383,40 @@ class DialogoHistorial(QDialog):
         self.seleccion = {"type": "reporte", "id_reporte": id_reporte, "ir_a_metricas": True}
         self.accept()
 
+    def cargar_para_corregir(self, id_reporte):
+        """Permite al tesista cargar su trabajo que requiere corrección directamente."""
+        self.seleccion = {"type": "reporte", "id_reporte": id_reporte}
+        self.accept()
+
     def descargar_reporte_id(self, id_reporte):
         from bd.database import conectar
         import json
+        import os
         conn = conectar(); cur = conn.cursor()
         try:
-            cur.execute("SELECT datos_persistentes FROM Analisis WHERE id_reporte = ?", (id_reporte,))
+            cur.execute("""
+                SELECT A.datos_persistentes, I.ruta_archivo 
+                FROM Analisis A 
+                JOIN Imagen I ON A.id_imagen = I.id_imagen 
+                WHERE A.id_reporte = ?
+            """, (id_reporte,))
             rows = cur.fetchall()
             all_metrics = []
             for r in rows:
-                if r[0]:
-                    d = json.loads(r[0])
+                datos_json, ruta_img = r
+                if datos_json:
+                    d = json.loads(datos_json)
                     m = d.get("metricas_acumuladas", [])
-                    if isinstance(m, list): all_metrics.extend(m)
-                    else: all_metrics.append(m)
+                    nombre_img = os.path.basename(ruta_img) if ruta_img else "Imagen Sin Nombre"
+                    if isinstance(m, list):
+                        for item in m:
+                            if isinstance(item, dict) and "nombre_imagen" not in item:
+                                item["nombre_imagen"] = nombre_img
+                        all_metrics.extend(m)
+                    elif isinstance(m, dict):
+                        if "nombre_imagen" not in m:
+                            m["nombre_imagen"] = nombre_img
+                        all_metrics.append(m)
             
             if not all_metrics:
                 from vistas.utilidades import DialogoNotificacion
@@ -2358,6 +2437,8 @@ class DialogoHistorial(QDialog):
 
     def actualizar_estado_boton_borrar(self):
         tab_index = self.tabs.currentIndex()
+        if self.rol == "Tesista":
+            tab_index = 1
         if tab_index == 0:
             selected_items = self.tree.selectedItems()
             selected_reports = [item for item in selected_items if item.data(0, Qt.ItemDataRole.UserRole) and item.data(0, Qt.ItemDataRole.UserRole).get("type") == "reporte"]
@@ -2367,7 +2448,11 @@ class DialogoHistorial(QDialog):
             # Deshabilitar Cargar si el reporte tiene validación pendiente (botón Validar activo)
             if num_seleccionados == 1:
                 data = selected_reports[0].data(0, Qt.ItemDataRole.UserRole)
-                self.btn_cargar.setEnabled(not debe_bloquear_carga(data, self.id_usuario))
+                estado_compartido = data.get("estado_compartido", "")
+                if self.rol == "Tesista" and estado_compartido == "Pendiente":
+                    self.btn_cargar.setEnabled(False)
+                else:
+                    self.btn_cargar.setEnabled(not debe_bloquear_carga(data, self.id_usuario))
             else:
                 self.btn_cargar.setEnabled(False)
         else:
@@ -2379,11 +2464,11 @@ class DialogoHistorial(QDialog):
             # Deshabilitar Cargar si el reporte seleccionado está pendiente de validación (Modificado)
             if num_seleccionados == 1:
                 data = selected_reports[0].data(0, Qt.ItemDataRole.UserRole)
-                estado_item = data.get("estado_compartido", "")
-                id_prop = data.get("id_prop", -1)
-                # Si soy el propietario y está Modificado → debo validar antes de cargar
-                # Si soy el destinatario → puedo cargar siempre
-                self.btn_cargar.setEnabled(not debe_bloquear_carga(data, self.id_usuario))
+                estado_compartido = data.get("estado_compartido", "")
+                if self.rol == "Tesista" and estado_compartido == "Pendiente":
+                    self.btn_cargar.setEnabled(False)
+                else:
+                    self.btn_cargar.setEnabled(not debe_bloquear_carga(data, self.id_usuario))
             else:
                 self.btn_cargar.setEnabled(False)
 
@@ -2392,6 +2477,25 @@ class DialogoHistorial(QDialog):
         if self.parent():
             p_geom = self.parent().geometry()
             self.move(p_geom.x() + (p_geom.width() - self.width()) // 2, p_geom.y() + (p_geom.height() - self.height()) // 2)
+
+    def mousePressEvent(self, event):
+        from PyQt6.QtCore import Qt
+        if event.button() == Qt.MouseButton.LeftButton:
+            if self.windowHandle():
+                self.windowHandle().startSystemMove()
+            else:
+                self._drag_pos = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
+            event.accept()
+        else:
+            super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        from PyQt6.QtCore import Qt
+        if not self.windowHandle() and hasattr(self, "_drag_pos") and event.buttons() == Qt.MouseButton.LeftButton:
+            self.move(event.globalPosition().toPoint() - self._drag_pos)
+            event.accept()
+        else:
+            super().mouseMoveEvent(event)
 
     def cargar_datos(self):
         self.tree.clear()
@@ -2451,6 +2555,11 @@ class DialogoHistorial(QDialog):
                 total_det = cur.fetchone()[0] or 0
 
                 rep_item = QTreeWidgetItem(self.tree, [nombre, str(fecha), estado_texto, "", "", ""])
+                font_bold = QFont()
+                font_bold.setBold(True)
+                rep_item.setFont(0, font_bold)
+                rep_item.setFont(1, font_bold)
+                rep_item.setFont(2, font_bold)
                 sh_estado_val = share_info[0] if share_info else ""
                 rep_item.setData(0, Qt.ItemDataRole.UserRole, {
                     "type": "reporte", "id": id_rep,
@@ -2501,7 +2610,7 @@ class DialogoHistorial(QDialog):
                         btn_valid.setCursor(Qt.CursorShape.PointingHandCursor)
                         btn_valid.setStyleSheet("""
                             QPushButton { background-color: transparent; border: 1px solid transparent; outline: none; }
-                            QPushButton:hover { background-color: #ddf4ff; border-radius: 15px; }
+                            QPushButton:hover { background-color: #eaf2ff; border-radius: 15px; }
                             QPushButton:disabled { opacity: 0.1; }
                         """)
                         btn_valid.setToolTip("Validar reporte")
@@ -2526,6 +2635,27 @@ class DialogoHistorial(QDialog):
                         layout_esp.setAlignment(Qt.AlignmentFlag.AlignCenter)
                         layout_esp.setContentsMargins(0, 0, 0, 0)
                         self.tree.setItemWidget(rep_item, 4, container_esp)
+                elif self.rol == "Tesista" and share_info and es_pendiente:
+                    btn_msg = QPushButton()
+                    btn_msg.setIcon(QIcon("assets/buttons/msg.png"))
+                    btn_msg.setIconSize(QSize(18, 18))
+                    btn_msg.setFixedSize(30, 30)
+                    btn_msg.setCursor(Qt.CursorShape.PointingHandCursor)
+                    btn_msg.setStyleSheet("""
+                        QPushButton { background-color: transparent; border: 1px solid transparent; outline: none; }
+                        QPushButton:hover { background-color: #eaf2ff; border-radius: 15px; }
+                        QPushButton:disabled { opacity: 0.1; }
+                    """)
+                    btn_msg.setToolTip("Cargar trabajo para corregir observaciones")
+                    btn_msg.installEventFilter(self)
+                    btn_msg.clicked.connect(lambda checked, r_id=id_rep: self.cargar_para_corregir(r_id))
+                    
+                    container_msg = QWidget()
+                    layout_m = QHBoxLayout(container_msg)
+                    layout_m.addWidget(btn_msg)
+                    layout_m.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                    layout_m.setContentsMargins(0, 0, 0, 0)
+                    self.tree.setItemWidget(rep_item, 4, container_msg)
                 
                 # Botón de Descargar
                 btn_dl = QPushButton()
@@ -2535,7 +2665,7 @@ class DialogoHistorial(QDialog):
                 btn_dl.setCursor(Qt.CursorShape.PointingHandCursor)
                 btn_dl.setStyleSheet("""
                     QPushButton { background-color: transparent; border: 1px solid transparent; outline: none; }
-                    QPushButton:hover { background-color: #ddf4ff; border-radius: 15px; }
+                    QPushButton:hover { background-color: #eaf2ff; border-radius: 15px; }
                     QPushButton:disabled { opacity: 0.1; }
                 """)
                 if reporte_completo:
@@ -2603,6 +2733,12 @@ class DialogoHistorial(QDialog):
                 total_det = cur.fetchone()[0] or 0
 
                 rep_item = QTreeWidgetItem(self.tree_compartidos, [nombre, rol_text, str(fecha), estado_texto, "", "", ""])
+                font_bold = QFont()
+                font_bold.setBold(True)
+                rep_item.setFont(0, font_bold)
+                rep_item.setFont(1, font_bold)
+                rep_item.setFont(2, font_bold)
+                rep_item.setFont(3, font_bold)
                 rep_item.setData(0, Qt.ItemDataRole.UserRole, {"type": "reporte", "id": id_rep})
                 
                 cur.execute("""
@@ -2665,6 +2801,28 @@ class DialogoHistorial(QDialog):
                         layout_esp.setAlignment(Qt.AlignmentFlag.AlignCenter)
                         layout_esp.setContentsMargins(0, 0, 0, 0)
                         self.tree_compartidos.setItemWidget(rep_item, 5, container_esp)
+                elif id_dest == self.id_usuario:
+                    if estado_compartido == 'Pendiente':
+                        btn_msg = QPushButton()
+                        btn_msg.setIcon(QIcon("assets/buttons/msg.png"))
+                        btn_msg.setIconSize(QSize(18, 18))
+                        btn_msg.setFixedSize(30, 30)
+                        btn_msg.setCursor(Qt.CursorShape.PointingHandCursor)
+                        btn_msg.setStyleSheet("""
+                            QPushButton { background-color: transparent; border: 1px solid transparent; outline: none; }
+                            QPushButton:hover { background-color: #eaf2ff; border-radius: 15px; }
+                            QPushButton:disabled { opacity: 0.1; }
+                        """)
+                        btn_msg.setToolTip("Cargar trabajo para corregir observaciones")
+                        btn_msg.installEventFilter(self)
+                        btn_msg.clicked.connect(lambda checked, r_id=id_rep: self.cargar_para_corregir(r_id))
+                        
+                        container_msg = QWidget()
+                        layout_m = QHBoxLayout(container_msg)
+                        layout_m.addWidget(btn_msg)
+                        layout_m.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                        layout_m.setContentsMargins(0, 0, 0, 0)
+                        self.tree_compartidos.setItemWidget(rep_item, 5, container_msg)
                 
                 # Botón de Descargar
                 if id_prop == self.id_usuario:
@@ -2690,6 +2848,8 @@ class DialogoHistorial(QDialog):
 
     def aceptar_seleccion(self):
         tab_index = self.tabs.currentIndex()
+        if self.rol == "Tesista":
+            tab_index = 1
         if tab_index == 0:
             selected_items = self.tree.selectedItems()
         else:
@@ -2791,7 +2951,7 @@ class VentanaBaseAnalisis(ValidacionReporteMixin, QMainWindow):
 
     def inicializar_ui(self):
         widget_central = QWidget(); layout_principal = QHBoxLayout()
-        self.menu_lateral = QVBoxLayout(); self.menu_lateral.setAlignment(Qt.AlignmentFlag.AlignTop)
+        self.menu_lateral = QVBoxLayout()
         
         # Layout superior del menú lateral para el botón de historial (≡) - Absolute Top
         layout_historial_top = QHBoxLayout()
@@ -2804,7 +2964,7 @@ class VentanaBaseAnalisis(ValidacionReporteMixin, QMainWindow):
         self.btn_historial.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_historial.setStyleSheet("""
             QPushButton { background-color: transparent; border: 1px solid transparent; outline: none; }
-            QPushButton:hover { background-color: #ddf4ff; border-radius: 17px; }
+            QPushButton:hover { background-color: #eaf2ff; border-radius: 17px; }
         """)
         
         # Información del usuario al lado derecho
@@ -2836,7 +2996,7 @@ class VentanaBaseAnalisis(ValidacionReporteMixin, QMainWindow):
         
         self.btn_corregir_filtrado = QPushButton("Corregir Filtrado")
 
-        estilo_btn_menu = "QPushButton { background-color: transparent; text-align: left; padding: 8px 10px; font-weight: normal; color: #333333; border: 1px solid transparent; outline: none; font-size: 11px;} QPushButton:hover { background-color: #F0F0F0; border-radius: 5px; } QPushButton:disabled { color: #aaaaaa; }"
+        estilo_btn_menu = "QPushButton { background-color: transparent; text-align: left; padding: 8px 10px; font-weight: normal; color: #333333; border: 1px solid transparent; outline: none; font-size: 11px;} QPushButton:hover { background-color: #eaf2ff; border-radius: 5px; } QPushButton:disabled { color: #aaaaaa; }"
         lista_botones = [
             self.btn_cargar, self.btn_conteo, self.btn_filtrar, self.btn_ramas, 
             self.btn_obtener_metricas, 
@@ -2923,6 +3083,7 @@ class VentanaBaseAnalisis(ValidacionReporteMixin, QMainWindow):
         btn_cancelar_filtro.clicked.connect(self.cancelar_filtrado)
 
 
+        self.menu_lateral.addStretch()
         self.btn_cerrar_sesion = QPushButton("Cerrar Sesión"); self.btn_cerrar_sesion.setStyleSheet("QPushButton { background-color: transparent; border: 2px solid #cc0000; color: #cc0000; font-weight: bold; border-radius: 8px; padding: 10px; margin-top: 20px; } QPushButton:hover { background-color: #cc0000; color: white; }"); self.menu_lateral.addWidget(self.btn_cerrar_sesion)
         frame_menu = QFrame(); frame_menu.setObjectName("menu_lateral"); frame_menu.setFixedWidth(200); frame_menu.setLayout(self.menu_lateral)
         
@@ -2955,7 +3116,7 @@ class VentanaBaseAnalisis(ValidacionReporteMixin, QMainWindow):
         self.btn_ant_global.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_ant_global.setStyleSheet("""
             QPushButton { background-color: transparent; border: 1px solid transparent; outline: none; }
-            QPushButton:hover { background-color: #ddf4ff; border-radius: 11px; }
+            QPushButton:hover { background-color: #eaf2ff; border-radius: 11px; }
             QPushButton:disabled { opacity: 0.3; }
         """)
         self.btn_ant_global.clicked.connect(self.anterior_vista_global)
@@ -2968,7 +3129,7 @@ class VentanaBaseAnalisis(ValidacionReporteMixin, QMainWindow):
         self.btn_sig_global.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_sig_global.setStyleSheet("""
             QPushButton { background-color: transparent; border: 1px solid transparent; outline: none; }
-            QPushButton:hover { background-color: #ddf4ff; border-radius: 11px; }
+            QPushButton:hover { background-color: #eaf2ff; border-radius: 11px; }
             QPushButton:disabled { opacity: 0.3; }
         """)
         self.btn_sig_global.clicked.connect(self.siguiente_vista_global)
@@ -3004,7 +3165,7 @@ class VentanaBaseAnalisis(ValidacionReporteMixin, QMainWindow):
         
         self.lbl_info_conteo = QLabel("Microglías detectadas: 0"); self.lbl_info_conteo.setStyleSheet("font-size: 11px; font-weight: bold; color: #3a61a0; background-color: white; border: 1px solid #d0d7de; border-radius: 6px; padding: 4px 10px;"); self.lbl_info_conteo.setAlignment(Qt.AlignmentFlag.AlignCenter); controles_superiores.addWidget(self.lbl_info_conteo); controles_superiores.addSpacing(15)
         
-        estilo_herramienta = "QPushButton { background-color: transparent; border: 1px solid transparent; outline: none; padding: 2px; } QPushButton:hover { background-color: #ddf4ff; border-radius: 17px; } QPushButton:checked { background-color: #cce5ff; border: 1px solid #007bff; border-radius: 17px; } QPushButton:disabled { opacity: 0.5; }"
+        estilo_herramienta = "QPushButton { background-color: transparent; border: 1px solid transparent; outline: none; padding: 2px; } QPushButton:hover { background-color: #eaf2ff; border-radius: 17px; } QPushButton:checked { background-color: #cce5ff; border: 1px solid #007bff; border-radius: 17px; } QPushButton:disabled { opacity: 0.5; }"
         
         self.btn_herramienta_caja = SafeToolTipButton()
         self.btn_herramienta_caja.setFixedSize(35, 35)
@@ -3046,7 +3207,7 @@ class VentanaBaseAnalisis(ValidacionReporteMixin, QMainWindow):
         self.btn_zoom_reset.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_zoom_reset.setStyleSheet("""
             QPushButton { background-color: transparent; border: 1px solid transparent; outline: none; font-size: 18px; font-weight: bold; color: #3a61a0; padding: 0; text-align: center; }
-            QPushButton:hover { background-color: #ddf4ff; border-radius: 17px; }
+            QPushButton:hover { background-color: #eaf2ff; border-radius: 17px; }
             QPushButton:disabled { color: #aaaaaa; }
         """)
         self.btn_zoom_reset.setEnabled(False)
@@ -3364,7 +3525,10 @@ class VentanaBaseAnalisis(ValidacionReporteMixin, QMainWindow):
             self.btn_herramienta_eliminar.hide()
             self.btn_corregir_filtrado.hide()
         else:
-            self.btn_cargar.setEnabled(paso == 0 or paso == 5)
+            if self.rol == "Tesista" and self.id_reporte_actual is None:
+                self.btn_cargar.setEnabled(False)
+            else:
+                self.btn_cargar.setEnabled(paso == 0 or paso == 5)
             self.btn_conteo.setEnabled(paso == 1)
             self.btn_filtrar.setEnabled(paso == 2)
             self.btn_ramas.setEnabled(paso == 3)
@@ -3543,7 +3707,7 @@ class VentanaBaseAnalisis(ValidacionReporteMixin, QMainWindow):
             comp_res = cur.fetchone()
             if comp_res:
                 comentarios_investigador, prop_id = comp_res
-                if prop_id == self.id_usuario and comentarios_investigador and comentarios_investigador.strip():
+                if self.rol == "Tesista" and comentarios_investigador and comentarios_investigador.strip():
                     tiene_correcciones = True
                     self.comentarios_correccion = comentarios_investigador
                     if hasattr(self, "btn_observaciones"):
@@ -4455,6 +4619,7 @@ class VentanaBaseAnalisis(ValidacionReporteMixin, QMainWindow):
         self.metricas_reporte.append({
             "campo": self.metadatos_imagen.get("campo", ""),
             "tiempo": self.metadatos_imagen.get("tiempo", ""),
+            "nombre_imagen": os.path.basename(self.ruta_imagen_actual) if self.ruta_imagen_actual else "Imagen Sin Nombre",
             "metricas": metricas_imagen
         })
         
@@ -4528,7 +4693,8 @@ class VentanaBaseAnalisis(ValidacionReporteMixin, QMainWindow):
                 wb = openpyxl.Workbook(); wb.remove(wb.active)
                 
                 yellow_fill = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid")
-                header_bg_fill = PatternFill(start_color="3A61A0", end_color="3A61A0", fill_type="solid")
+                imagen_bg_fill = PatternFill(start_color="DCE6F1", end_color="DCE6F1", fill_type="solid")
+                header_bg_fill = PatternFill(start_color="95B3D7", end_color="95B3D7", fill_type="solid")
                 light_gray_fill = PatternFill(start_color="F2F2F2", end_color="F2F2F2", fill_type="solid")
                 bold_font = Font(bold=True); header_black_font = Font(color="000000", bold=True); center_alignment = Alignment(horizontal="center", vertical="center")
                 anchos_fijos = [9.3, 18.0, 22.6, 18.6, 22.6, 16.6, 26.6, 20.0, 26.6, 26.6, 32.0]
@@ -4540,14 +4706,24 @@ class VentanaBaseAnalisis(ValidacionReporteMixin, QMainWindow):
                     
                     row_idx = 1
                     for img_data in lista_campos:
+                        # Fila 1: Campo
                         ws.merge_cells(start_row=row_idx, start_column=1, end_row=row_idx, end_column=len(columnas_labels))
                         for c in range(1, len(columnas_labels) + 1):
                             ws.cell(row=row_idx, column=c).fill = yellow_fill
                         
                         campo_val = img_data.get("campo", "")
                         if isinstance(campo_val, dict): campo_val = str(campo_val)
-                        cell_title = ws.cell(row=row_idx, column=1, value=str(campo_val))
+                        cell_title = ws.cell(row=row_idx, column=1, value=f"Campo: {str(campo_val)}")
                         cell_title.font = bold_font; cell_title.alignment = center_alignment; row_idx += 1
+                        
+                        # Fila 2: Nombre de Imagen (Nueva)
+                        ws.merge_cells(start_row=row_idx, start_column=1, end_row=row_idx, end_column=len(columnas_labels))
+                        for c in range(1, len(columnas_labels) + 1):
+                            ws.cell(row=row_idx, column=c).fill = imagen_bg_fill
+                        
+                        nombre_img = img_data.get("nombre_imagen", "Desconocido")
+                        cell_img = ws.cell(row=row_idx, column=1, value=f"Imagen: {nombre_img}")
+                        cell_img.font = bold_font; cell_img.alignment = center_alignment; row_idx += 1
                         
                         for col_idx, label in enumerate(columnas_labels, start=1):
                             cell_h = ws.cell(row=row_idx, column=col_idx, value=label)
@@ -4592,10 +4768,16 @@ class VentanaBaseAnalisis(ValidacionReporteMixin, QMainWindow):
                         pdf.cell(0, 10, f"TIEMPO: {tiempo}", 0, 1, "L")
                         
                         for img_data in lista_campos:
+                            # Fila 1: Campo
                             pdf.set_fill_color(255, 255, 0); pdf.set_font("Arial", "B", 10)
                             pdf.cell(sum(pdf_widths), 8, f"Campo: {img_data['campo']}", 1, 1, "C", True)
                             
-                            pdf.set_fill_color(58, 97, 160); pdf.set_text_color(0, 0, 0); pdf.set_font("Arial", "B", 7)
+                            # Fila 2: Nombre de Imagen (Nueva)
+                            pdf.set_fill_color(220, 230, 241); pdf.set_font("Arial", "B", 9)
+                            nombre_img = img_data.get("nombre_imagen", "Desconocido")
+                            pdf.cell(sum(pdf_widths), 8, f"Imagen: {nombre_img}", 1, 1, "C", True)
+                            
+                            pdf.set_fill_color(149, 179, 215); pdf.set_text_color(0, 0, 0); pdf.set_font("Arial", "B", 7)
                             for i, label in enumerate(columnas_labels):
                                 pdf.cell(pdf_widths[i], 8, label, 1, 0, "C", True)
                             pdf.ln()

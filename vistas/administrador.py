@@ -249,11 +249,11 @@ class VentanaAdministrador(QMainWindow):
 
         self.estilo_activo = """
             QPushButton {
-                background-color: #ddf4ff; 
+                background-color: #eaf2ff; 
                 text-align: left; 
                 padding: 10px; 
                 font-weight: bold;
-                color: #0969da;
+                color: #24292f;
                 border: none;
                 border-radius: 6px;
                 font-size: 12px;
@@ -325,7 +325,7 @@ class VentanaAdministrador(QMainWindow):
         self.btn_registrar_usuario.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_registrar_usuario.setStyleSheet("""
             QPushButton { background-color: transparent; border: none; }
-            QPushButton:hover { background-color: #ddf4ff; border-radius: 17px; }
+            QPushButton:hover { background-color: #eaf2ff; border-radius: 17px; }
             QPushButton:disabled { opacity: 0.3; }
         """)
         self.btn_registrar_usuario.setEnabled(True)
@@ -338,7 +338,7 @@ class VentanaAdministrador(QMainWindow):
         self.btn_editar_usuario.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_editar_usuario.setStyleSheet("""
             QPushButton { background-color: transparent; border: none; }
-            QPushButton:hover { background-color: #ddf4ff; border-radius: 17px; }
+            QPushButton:hover { background-color: #eaf2ff; border-radius: 17px; }
             QPushButton:disabled { opacity: 0.3; }
         """)
         self.btn_editar_usuario.setEnabled(False)
@@ -351,7 +351,7 @@ class VentanaAdministrador(QMainWindow):
         self.btn_eliminar_usuario.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_eliminar_usuario.setStyleSheet("""
             QPushButton { background-color: transparent; border: none; }
-            QPushButton:hover { background-color: #ddf4ff; border-radius: 17px; }
+            QPushButton:hover { background-color: #eaf2ff; border-radius: 17px; }
             QPushButton:disabled { opacity: 0.3; }
         """)
         self.btn_eliminar_usuario.setEnabled(False)
@@ -390,8 +390,8 @@ class VentanaAdministrador(QMainWindow):
                 border: none;
             }
             QTableWidget::item:selected {
-                background-color: #ddf4ff;
-                color: #0969da;
+                background-color: #eaf2ff;
+                color: #24292f;
             }
             QHeaderView::section {
                 background-color: #f6f8fa;
@@ -464,7 +464,7 @@ class VentanaAdministrador(QMainWindow):
         self.btn_eliminar_reporte_fisico.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_eliminar_reporte_fisico.setStyleSheet("""
             QPushButton { background-color: transparent; border: none; }
-            QPushButton:hover { background-color: #ddf4ff; border-radius: 17px; }
+            QPushButton:hover { background-color: #eaf2ff; border-radius: 17px; }
             QPushButton:disabled { opacity: 0.3; }
         """)
         self.btn_eliminar_reporte_fisico.setEnabled(False)
@@ -513,8 +513,8 @@ class VentanaAdministrador(QMainWindow):
                 border: none;
             }
             QTableWidget::item:selected {
-                background-color: #ddf4ff;
-                color: #0969da;
+                background-color: #eaf2ff;
+                color: #24292f;
             }
             QHeaderView::section {
                 background-color: #f6f8fa;
