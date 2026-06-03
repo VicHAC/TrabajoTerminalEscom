@@ -721,7 +721,6 @@ class ValidacionReporteMixin:
                 
         if paso_fallido is not None:
             self.btn_enviar_comentarios.setToolTip(f"Enviar retroalimentación (Fallo detectado en: {paso_nom})")
-            self.btn_enviar_comentarios.setEnabled(True)
         else:
-            self.btn_enviar_comentarios.setToolTip("Todos los procesos están validados como correctos.")
-            self.btn_enviar_comentarios.setEnabled(False)
+            self.btn_enviar_comentarios.setToolTip("Enviar retroalimentación sobre el progreso")
+        self.btn_enviar_comentarios.setEnabled(True)
