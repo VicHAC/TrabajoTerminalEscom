@@ -2976,15 +2976,24 @@ class VentanaBaseAnalisis(ValidacionReporteMixin, QMainWindow):
         self.btn_sig_global.setEnabled(False)
         
         # Botón de comentarios por proceso (sólo visible/activo en modo validación)
-        self.btn_comentario_proceso = QPushButton()
-        self.btn_comentario_proceso.setIcon(QIcon("assets/buttons/crear_msg.png"))
-        self.btn_comentario_proceso.setIconSize(QSize(18, 18))
-        self.btn_comentario_proceso.setFixedSize(30, 30)
+        self.btn_comentario_proceso = QPushButton("Enviar comentario(s)")
         self.btn_comentario_proceso.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_comentario_proceso.setStyleSheet("""
-            QPushButton { background-color: transparent; border: 1px solid transparent; outline: none; }
-            QPushButton:hover { background-color: #ddf4ff; border-radius: 15px; }
-            QPushButton:disabled { opacity: 0.3; }
+            QPushButton {
+                background-color: transparent;
+                border: 2px solid #cf222e;
+                color: #cf222e;
+                font-weight: bold;
+                border-radius: 8px;
+                padding: 4px 10px;
+            }
+            QPushButton:hover {
+                background-color: #cf222e;
+                color: white;
+            }
+            QPushButton:disabled {
+                opacity: 0.3;
+            }
         """)
         self.btn_comentario_proceso.setToolTip("Agregar comentario sobre este proceso")
         self.btn_comentario_proceso.setEnabled(False)

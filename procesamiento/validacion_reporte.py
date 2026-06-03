@@ -714,14 +714,33 @@ class ValidacionReporteMixin:
         if paso_fallido is not None:
             self.btn_comentario_proceso.setToolTip(f"Enviar retroalimentación (Fallo detectado en: {paso_nom})")
             self.btn_comentario_proceso.setStyleSheet("""
-                QPushButton { background-color: #ffe8e8; border: 1px solid #cf222e; border-radius: 15px; outline: none; }
-                QPushButton:hover { background-color: #ffd6d6; }
+                QPushButton {
+                    background-color: transparent;
+                    border: 2px solid #cf222e;
+                    color: #cf222e;
+                    font-weight: bold;
+                    border-radius: 8px;
+                    padding: 4px 10px;
+                }
+                QPushButton:hover {
+                    background-color: #cf222e;
+                    color: white;
+                }
             """)
             self.btn_comentario_proceso.setEnabled(True)
         else:
             self.btn_comentario_proceso.setToolTip("Todos los procesos están validados como correctos.")
             self.btn_comentario_proceso.setStyleSheet("""
-                QPushButton { background-color: transparent; border: 1px solid transparent; outline: none; }
-                QPushButton:disabled { opacity: 0.3; }
+                QPushButton {
+                    background-color: transparent;
+                    border: 2px solid #d0d7de;
+                    color: #57606a;
+                    font-weight: bold;
+                    border-radius: 8px;
+                    padding: 4px 10px;
+                }
+                QPushButton:disabled {
+                    opacity: 0.3;
+                }
             """)
             self.btn_comentario_proceso.setEnabled(False)
