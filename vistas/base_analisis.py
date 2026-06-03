@@ -3713,9 +3713,17 @@ class VentanaBaseAnalisis(ValidacionReporteMixin, QMainWindow):
         # Limpiar visor de imágenes
         self.visor_imagen.original_pixmap = None
         self.visor_imagen.boxes = []
+        self.visor_imagen._current_pixmap = None
         self.visor_imagen.setText("Sube una imagen .tiff para empezar el análisis...")
         self.visor_imagen.setStyleSheet("border: 2px dashed #aaa; background-color: #f0f0f0; font-size: 18px; color: #666;")
+        self.visor_imagen.update()
         self.actualizar_etiqueta_conteo(0)
+        
+        # Limpiar tabla de métricas y restablecer visor activo
+        if hasattr(self, "tabla_metricas"):
+            self.tabla_metricas.setRowCount(0)
+        if hasattr(self, "stacked_visor"):
+            self.stacked_visor.setCurrentIndex(0)
         
         # Restablecer estado de los botones laterales del flujo
         self.actualizar_estado_flujo(0)
