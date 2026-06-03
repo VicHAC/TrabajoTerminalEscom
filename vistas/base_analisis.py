@@ -788,6 +788,7 @@ class InteractiveLabelDetail(QLabel):
             scale_x = pix_w / orig_w; scale_y = pix_h / orig_h
             painter.setPen(QPen(QColor(220, 53, 69), 2))
             for area in self.parent_dialog.box.get("removal_areas", []):
+                if area.get("baked", False): continue
                 rx = int(area["x"] * scale_x) + dx; ry = int(area["y"] * scale_y) + dy
                 rw = int(area["w"] * scale_x); rh = int(area["h"] * scale_y)
                 painter.drawRect(rx, ry, rw, rh)
@@ -874,10 +875,25 @@ class DialogoVistaCelular(QDialog):
                 
         # Asegurar que no empiece en una fase no completada
         paso_padre = getattr(self.parent(), "paso_actual", 0)
-        if self.indice_fase == 1 and paso_padre < 3:
+        
+        # Determinar si la fase de FILTRADO está disponible
+        filtrado_disponible = False
+        if paso_padre >= 3:
+            filtrado_disponible = True
+        elif paso_padre == 2:
+            if self.parent() and hasattr(self.parent(), "combo_vista"):
+                if self.parent().combo_vista.currentText() == "Previsualización":
+                    filtrado_disponible = True
+            if self.parent() and hasattr(self.parent(), "frame_filtros"):
+                if self.parent().frame_filtros.isVisible():
+                    filtrado_disponible = True
+                    
+        esqueleto_disponible = (paso_padre >= 4)
+        
+        if self.indice_fase == 1 and not filtrado_disponible:
             self.indice_fase = 0
-        elif self.indice_fase == 2 and paso_padre < 4:
-            self.indice_fase = 1 if paso_padre >= 3 else 0
+        elif self.indice_fase == 2 and not esqueleto_disponible:
+            self.indice_fase = 1 if filtrado_disponible else 0
         
         main_layout = QVBoxLayout(self)
         frame = QFrame(self)
@@ -1334,8 +1350,22 @@ class DialogoVistaCelular(QDialog):
         else:
             self.label_imagen.setText(f"No se pudo cargar la imagen de {fase['nombre']}.")
 
-        # Obtener paso actual de la ventana principal
+        # Obtener paso actual de la ventana principal y determinar disponibilidad de fases
         paso_padre = getattr(self.parent(), "paso_actual", 0)
+        
+        # Determinar si la fase de FILTRADO está disponible
+        filtrado_disponible = False
+        if paso_padre >= 3:
+            filtrado_disponible = True
+        elif paso_padre == 2:
+            if self.parent() and hasattr(self.parent(), "combo_vista"):
+                if self.parent().combo_vista.currentText() == "Previsualización":
+                    filtrado_disponible = True
+            if self.parent() and hasattr(self.parent(), "frame_filtros"):
+                if self.parent().frame_filtros.isVisible():
+                    filtrado_disponible = True
+                    
+        esqueleto_disponible = (paso_padre >= 4)
 
         # Botones siempre visibles
         self.btn_ant.setVisible(True)
@@ -1348,19 +1378,19 @@ class DialogoVistaCelular(QDialog):
         elif self.indice_fase == 1:
             self.set_button_enabled(self.btn_ant, True)
         elif self.indice_fase == 2:
-            self.set_button_enabled(self.btn_ant, paso_padre >= 3)
+            self.set_button_enabled(self.btn_ant, filtrado_disponible)
         else:
             self.set_button_enabled(self.btn_ant, False)
 
         # Habilitar navegación siguiente (>)
         if self.indice_fase == 0:
-            self.set_button_enabled(self.btn_sig, paso_padre >= 3)
+            self.set_button_enabled(self.btn_sig, filtrado_disponible)
         elif self.indice_fase == 1:
-            self.set_button_enabled(self.btn_sig, paso_padre >= 4)
+            self.set_button_enabled(self.btn_sig, esqueleto_disponible)
         else:
             self.set_button_enabled(self.btn_sig, False)
 
-        self.set_button_enabled(self.btn_comparativa, fase["nombre"] == "ESQUELETIZADO" and paso_padre >= 4)
+        self.set_button_enabled(self.btn_comparativa, fase["nombre"] == "ESQUELETIZADO" and esqueleto_disponible)
 
         # Actualizar visibilidad de herramientas según la fase
         if fase["nombre"] == "FILTRADO":
@@ -1583,9 +1613,11 @@ class DialogoVistaCelular(QDialog):
                 parent_win.visor_imagen.set_view_mode("Esqueleto", pixmap_esqueleto)
 
     def actualizar_visibilidad_boton_limpieza(self):
-        has_areas = len(self.box.get("removal_areas", [])) > 0
-        self.btn_aplicar_limpieza.setVisible(has_areas)
-        self.btn_limpiar_todo.setVisible(has_areas)
+        areas = self.box.get("removal_areas", [])
+        has_unbaked = any(not a.get("baked", False) for a in areas)
+        has_any = len(areas) > 0
+        self.btn_aplicar_limpieza.setVisible(has_unbaked)
+        self.btn_limpiar_todo.setVisible(has_any)
         
         has_uniones = len(self.box.get("manual_connections", [])) > 0
         has_any_changes = has_uniones or getattr(self, 'skeleton_has_changes', False)
@@ -1689,13 +1721,6 @@ class DialogoVistaCelular(QDialog):
         self.actualizar_vista()
         self.label_imagen.update()
 
-    def deshacer_limpieza(self):
-        if "removal_areas" in self.box and len(self.box["removal_areas"]) > 0:
-            self.box["removal_areas"].pop()
-        self.actualizar_visibilidad_boton_limpieza()
-        self.actualizar_offsets()
-        self.label_imagen.update()
-
     def aplicar_limpieza(self):
         from vistas.utilidades import DialogoConfirmacion
         diag = DialogoConfirmacion("Eliminar Áreas", "¿Confirmas que deseas eliminar permanentemente estas áreas? Esto modificará la imagen base.")
@@ -1706,19 +1731,35 @@ class DialogoVistaCelular(QDialog):
                 img_bgr = self.parent().crops_en_memoria[nombre]
                 import cv2
                 for area in self.box.get("removal_areas", []):
-                    ax, ay, aw, ah = area["x"], area["y"], area["w"], area["h"]
-                    cv2.rectangle(img_bgr, (ax, ay), (ax + aw, ay + ah), (0, 0, 0), -1)
+                    if not area.get("baked", False):
+                        ax, ay, aw, ah = area["x"], area["y"], area["w"], area["h"]
+                        cv2.rectangle(img_bgr, (ax, ay), (ax + aw, ay + ah), (0, 0, 0), -1)
+                        area["baked"] = True
                 
-                # Limpiar áreas ya aplicadas
-                self.box["removal_areas"] = []
                 self.actualizar_visibilidad_boton_limpieza()
                 self.actualizar_offsets() # Esto reprocesará con la nueva imagen base
                 self.label_imagen.update()
                 self.mostrar_notificacion("Limpieza Aplicada", "Las áreas se han eliminado de la imagen base.", "info")
 
-
     def deshacer_limpieza(self):
-        self.box["removal_areas"] = []
+        areas = self.box.get("removal_areas", [])
+        has_unbaked = any(not a.get("baked", False) for a in areas)
+        if has_unbaked:
+            # Eliminar la última área unbaked
+            for idx in range(len(areas) - 1, -1, -1):
+                if not areas[idx].get("baked", False):
+                    areas.pop(idx)
+                    break
+        else:
+            # No hay áreas sin aplicar, restaurar todo al original
+            self.box["removal_areas"] = []
+            nombre = os.path.basename(self.crop_path)
+            if os.path.exists(self.crop_path):
+                import cv2
+                img = cv2.imread(self.crop_path)
+                if img is not None and hasattr(self.parent(), "crops_en_memoria"):
+                    self.parent().crops_en_memoria[nombre] = img
+        
         self.actualizar_visibilidad_boton_limpieza()
         self.actualizar_offsets()
         self.label_imagen.update()
@@ -2116,11 +2157,13 @@ class InteractiveImageViewer(QLabel):
         for i, box in enumerate(self.boxes):
             rect = QRect(int(box["x"] * actual_scale), int(box["y"] * actual_scale), int(box["w"] * actual_scale), int(box["h"] * actual_scale))
             
-            # Detectar si tiene offsets (solo en modo previsualización o filtrada)
+            # Detectar si tiene offsets o limpiezas (solo en modo previsualización o filtrada)
             has_offset = False
             if self.view_mode in ["Previsualización", "Filtrada"]:
                 offs = box.get("offsets", {})
                 if offs.get("clahe", 0) != 0 or offs.get("gauss", 0) != 0 or offs.get("otsu", 0) != 0:
+                    has_offset = True
+                if len(box.get("removal_areas", [])) > 0:
                     has_offset = True
 
             # Detectar si el esqueleto ha sido modificado (en modo esqueleto)
