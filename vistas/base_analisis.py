@@ -2923,7 +2923,31 @@ class VentanaBaseAnalisis(ValidacionReporteMixin, QMainWindow):
         btn_cancelar_filtro.clicked.connect(self.cancelar_filtrado)
 
 
-        self.menu_lateral.addStretch()
+        # Botón de Observaciones (sólo para tesista, se muestra si hay comentario)
+        self.btn_observaciones = QPushButton("  Observaciones")
+        self.btn_observaciones.setIcon(QIcon("assets/buttons/msg.png"))
+        self.btn_observaciones.setIconSize(QSize(18, 18))
+        self.btn_observaciones.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_observaciones.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                border: 2px solid #0969da;
+                color: #0969da;
+                font-weight: bold;
+                border-radius: 8px;
+                padding: 10px;
+                font-size: 11px;
+                text-align: left;
+                margin-top: 10px;
+            }
+            QPushButton:hover {
+                background-color: #0969da;
+                color: white;
+            }
+        """)
+        self.btn_observaciones.hide()
+        self.menu_lateral.addWidget(self.btn_observaciones)
+        
         self.btn_cerrar_sesion = QPushButton("Cerrar Sesión"); self.btn_cerrar_sesion.setStyleSheet("QPushButton { background-color: transparent; border: 2px solid #cc0000; color: #cc0000; font-weight: bold; border-radius: 8px; padding: 10px; margin-top: 20px; } QPushButton:hover { background-color: #cc0000; color: white; }"); self.menu_lateral.addWidget(self.btn_cerrar_sesion)
         frame_menu = QFrame(); frame_menu.setObjectName("menu_lateral"); frame_menu.setFixedWidth(200); frame_menu.setLayout(self.menu_lateral)
         
@@ -3270,6 +3294,7 @@ class VentanaBaseAnalisis(ValidacionReporteMixin, QMainWindow):
         layout_principal.addWidget(frame_menu); layout_principal.addLayout(area_imagen, stretch=1); widget_central.setLayout(layout_principal); self.setCentralWidget(widget_central)
         
         self.btn_cargar.clicked.connect(self.cargar_imagen); self.btn_cerrar_sesion.clicked.connect(self.cerrar_sesion); self.btn_conteo.clicked.connect(self.execute_microglia_counting); self.btn_filtrar.clicked.connect(self.ejecutar_filtrado); self.btn_ramas.clicked.connect(self.mostrar_ramas_morfologia); self.btn_corregir_filtrado.clicked.connect(self.corregir_filtrado)
+        self.btn_observaciones.clicked.connect(self.mostrar_observaciones_popup)
         
         self.btn_obtener_metricas.clicked.connect(self.obtener_metricas)
         self.btn_agregar_imagen_reporte.clicked.connect(self.agregar_imagen_reporte)
@@ -3377,6 +3402,18 @@ class VentanaBaseAnalisis(ValidacionReporteMixin, QMainWindow):
         if paso > 0:
             self.save_current_progress(mostrar_notif=False)
 
+    def mostrar_observaciones_popup(self):
+        """Muestra las observaciones del investigador en un diálogo emergente."""
+        comentarios = getattr(self, "comentarios_correccion", "")
+        if comentarios:
+            from vistas.utilidades import DialogoNotificacion
+            DialogoNotificacion(
+                "Observaciones del Investigador",
+                comentarios,
+                "warning",
+                self
+            ).exec()
+
     def save_current_progress(self, mostrar_notif=True):
         if getattr(self, "cargando_reporte", False):
             return
@@ -3465,14 +3502,21 @@ class VentanaBaseAnalisis(ValidacionReporteMixin, QMainWindow):
             
             self.id_reporte_actual = id_reporte
             
-            # 1.5. Obtener comentarios del reporte compartido si existen y el usuario es el destinatario (estudiante/tesista)
+            # 1.5. Obtener comentarios del reporte compartido si existen y el usuario es el propietario (estudiante/tesista)
             tiene_correcciones = False
+            self.comentarios_correccion = ""
+            if hasattr(self, "btn_observaciones"):
+                self.btn_observaciones.hide()
+
             cur.execute("SELECT comentarios, id_propietario FROM ReporteCompartido WHERE id_reporte = ?", (id_reporte,))
             comp_res = cur.fetchone()
             if comp_res:
                 comentarios_investigador, prop_id = comp_res
-                if prop_id != self.id_usuario and comentarios_investigador and comentarios_investigador.strip():
+                if prop_id == self.id_usuario and comentarios_investigador and comentarios_investigador.strip():
                     tiene_correcciones = True
+                    self.comentarios_correccion = comentarios_investigador
+                    if hasattr(self, "btn_observaciones"):
+                        self.btn_observaciones.show()
                     from vistas.utilidades import DialogoNotificacion
                     # Mostrar comentarios al tesista con un ligero retardo
                     QTimer.singleShot(600, lambda c=comentarios_investigador: DialogoNotificacion(
@@ -3657,6 +3701,10 @@ class VentanaBaseAnalisis(ValidacionReporteMixin, QMainWindow):
         self.combo_vista.setEnabled(False)
         self.combo_vista.blockSignals(False)
         
+        self.comentarios_correccion = ""
+        if hasattr(self, "btn_observaciones"):
+            self.btn_observaciones.hide()
+            
         # Ocultar botones de corregir y herramientas
         self.btn_corregir_filtrado.hide()
         self.btn_herramienta_caja.hide()
