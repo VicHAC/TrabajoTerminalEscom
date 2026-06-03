@@ -2975,35 +2975,9 @@ class VentanaBaseAnalisis(ValidacionReporteMixin, QMainWindow):
         self.btn_sig_global.clicked.connect(self.siguiente_vista_global)
         self.btn_sig_global.setEnabled(False)
         
-        # Botón de comentarios por proceso (sólo visible/activo en modo validación)
-        self.btn_comentario_proceso = QPushButton("Enviar comentario(s)")
-        self.btn_comentario_proceso.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_comentario_proceso.setStyleSheet("""
-            QPushButton {
-                background-color: transparent;
-                border: 2px solid #cf222e;
-                color: #cf222e;
-                font-weight: bold;
-                border-radius: 8px;
-                padding: 4px 10px;
-            }
-            QPushButton:hover {
-                background-color: #cf222e;
-                color: white;
-            }
-            QPushButton:disabled {
-                opacity: 0.3;
-            }
-        """)
-        self.btn_comentario_proceso.setToolTip("Agregar comentario sobre este proceso")
-        self.btn_comentario_proceso.setEnabled(False)
-        self.btn_comentario_proceso.hide()
-        self.btn_comentario_proceso.clicked.connect(self.agregar_comentario_proceso)
-        
         controles_superiores.addWidget(self.btn_ant_global)
         controles_superiores.addWidget(self.combo_vista)
         controles_superiores.addWidget(self.btn_sig_global)
-        controles_superiores.addWidget(self.btn_comentario_proceso)
         controles_superiores.addStretch()
         
         self.lbl_info_conteo = QLabel("Microglías detectadas: 0"); self.lbl_info_conteo.setStyleSheet("font-size: 11px; font-weight: bold; color: #3a61a0; background-color: white; border: 1px solid #d0d7de; border-radius: 6px; padding: 4px 10px;"); self.lbl_info_conteo.setAlignment(Qt.AlignmentFlag.AlignCenter); controles_superiores.addWidget(self.lbl_info_conteo); controles_superiores.addSpacing(15)

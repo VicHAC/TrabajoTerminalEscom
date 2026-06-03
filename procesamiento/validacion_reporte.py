@@ -380,6 +380,21 @@ class ValidacionReporteMixin:
         self.btn_validar_progreso.clicked.connect(self.confirmar_validacion)
         menu_lateral.addWidget(self.btn_validar_progreso)
 
+        # --- Botón "Enviar comentarios" (aparece cuando NO todos marcados) ---
+        self.btn_enviar_comentarios = QPushButton("✉  Enviar comentario(s)")
+        self.btn_enviar_comentarios.setStyleSheet("""
+            QPushButton {
+                background-color: transparent; color: #0969da; border: 2px solid #0969da;
+                border-radius: 8px; padding: 8px; font-weight: bold;
+                font-size: 11px; text-align: center; margin-top: 4px;
+            }
+            QPushButton:hover { background-color: #0969da; color: white; }
+        """)
+        self.btn_enviar_comentarios.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_enviar_comentarios.hide()
+        self.btn_enviar_comentarios.clicked.connect(self.agregar_comentario_proceso)
+        menu_lateral.addWidget(self.btn_enviar_comentarios)
+
 
 
     # ------------------------------------------------------------------
@@ -421,7 +436,7 @@ class ValidacionReporteMixin:
         self._actualizar_botones_validacion()
 
     def _actualizar_botones_validacion(self):
-        """Muestra Validar Progreso si todos marcados, y actualiza el botón de la barra superior."""
+        """Muestra Validar Progreso si todos marcados, o Enviar comentario(s) si no."""
         checks_visibles = [
             chk for chk, _, _ in self._checks_validacion if chk.isVisible()
         ]
@@ -429,7 +444,7 @@ class ValidacionReporteMixin:
             return
         todos = all(chk.isChecked() for chk in checks_visibles)
         self.btn_validar_progreso.setVisible(todos)
-        self._actualizar_tooltip_comentarios()
+        self.btn_enviar_comentarios.setVisible(not todos)
 
     # ------------------------------------------------------------------
     # Apertura del historial
@@ -472,6 +487,7 @@ class ValidacionReporteMixin:
 
         # Mostrar botón de comentarios por defecto
         self.btn_validar_progreso.hide()
+        self.btn_enviar_comentarios.show()
 
         # Forzar ejecución secuencial inicial
         self._on_checkbox_state_changed()
@@ -493,9 +509,7 @@ class ValidacionReporteMixin:
             chk.hide()
             chk.setChecked(False)
         self.btn_validar_progreso.hide()
-        if hasattr(self, "btn_comentario_proceso"):
-            self.btn_comentario_proceso.setEnabled(False)
-            self.btn_comentario_proceso.hide()
+        self.btn_enviar_comentarios.hide()
 
     # ------------------------------------------------------------------
     # UI de paso 5 con soporte de modo revisión
@@ -686,16 +700,14 @@ class ValidacionReporteMixin:
             ).exec()
 
     def _actualizar_tooltip_comentarios(self):
-        """Actualiza el tooltip y el estado del botón superior de retroalimentación según las casillas de validación."""
-        if not hasattr(self, "btn_comentario_proceso"):
+        """Actualiza el tooltip del botón lateral de comentarios según el paso actual fallido."""
+        if not hasattr(self, "btn_enviar_comentarios"):
             return
             
         if not getattr(self, "reporte_validado_cargado", False):
-            self.btn_comentario_proceso.hide()
+            self.btn_enviar_comentarios.hide()
             return
             
-        self.btn_comentario_proceso.show()
-        
         # Determinar el primer paso no validado
         mapa_checks = {
             1: (self.chk_val_conteo, "Detectar Microglías"),
@@ -712,35 +724,8 @@ class ValidacionReporteMixin:
                 break
                 
         if paso_fallido is not None:
-            self.btn_comentario_proceso.setToolTip(f"Enviar retroalimentación (Fallo detectado en: {paso_nom})")
-            self.btn_comentario_proceso.setStyleSheet("""
-                QPushButton {
-                    background-color: transparent;
-                    border: 2px solid #cf222e;
-                    color: #cf222e;
-                    font-weight: bold;
-                    border-radius: 8px;
-                    padding: 4px 10px;
-                }
-                QPushButton:hover {
-                    background-color: #cf222e;
-                    color: white;
-                }
-            """)
-            self.btn_comentario_proceso.setEnabled(True)
+            self.btn_enviar_comentarios.setToolTip(f"Enviar retroalimentación (Fallo detectado en: {paso_nom})")
+            self.btn_enviar_comentarios.setEnabled(True)
         else:
-            self.btn_comentario_proceso.setToolTip("Todos los procesos están validados como correctos.")
-            self.btn_comentario_proceso.setStyleSheet("""
-                QPushButton {
-                    background-color: transparent;
-                    border: 2px solid #d0d7de;
-                    color: #57606a;
-                    font-weight: bold;
-                    border-radius: 8px;
-                    padding: 4px 10px;
-                }
-                QPushButton:disabled {
-                    opacity: 0.3;
-                }
-            """)
-            self.btn_comentario_proceso.setEnabled(False)
+            self.btn_enviar_comentarios.setToolTip("Todos los procesos están validados como correctos.")
+            self.btn_enviar_comentarios.setEnabled(False)
