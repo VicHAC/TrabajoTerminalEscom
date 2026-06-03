@@ -373,6 +373,8 @@ class VentanaAdministrador(QMainWindow):
         self.tabla_usuarios.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.tabla_usuarios.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.tabla_usuarios.setSelectionMode(QTableWidget.SelectionMode.MultiSelection)
+        self.tabla_usuarios.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.tabla_usuarios.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self.tabla_usuarios.setStyleSheet("""
             QTableWidget {
                 background-color: #ffffff;
@@ -400,6 +402,44 @@ class VentanaAdministrador(QMainWindow):
                 border: 1px solid #d0d7de;
                 border-top: none;
                 border-left: none;
+            }
+            QScrollBar:vertical {
+                border: none;
+                background: #f6f8fa;
+                width: 10px;
+                margin: 0px;
+            }
+            QScrollBar::handle:vertical {
+                background: #d0d7de;
+                min-height: 20px;
+                border-radius: 5px;
+            }
+            QScrollBar::handle:vertical:hover {
+                background: #8c959f;
+            }
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+                border: none;
+                background: none;
+                height: 0px;
+            }
+            QScrollBar:horizontal {
+                border: none;
+                background: #f6f8fa;
+                height: 10px;
+                margin: 0px;
+            }
+            QScrollBar::handle:horizontal {
+                background: #d0d7de;
+                min-width: 20px;
+                border-radius: 5px;
+            }
+            QScrollBar::handle:horizontal:hover {
+                background: #8c959f;
+            }
+            QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
+                border: none;
+                background: none;
+                width: 0px;
             }
         """)
         
@@ -456,6 +496,8 @@ class VentanaAdministrador(QMainWindow):
         self.tabla_reportes.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.tabla_reportes.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.tabla_reportes.setSelectionMode(QTableWidget.SelectionMode.MultiSelection)
+        self.tabla_reportes.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.tabla_reportes.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self.tabla_reportes.setStyleSheet("""
             QTableWidget {
                 background-color: #ffffff;
@@ -483,6 +525,44 @@ class VentanaAdministrador(QMainWindow):
                 border: 1px solid #d0d7de;
                 border-top: none;
                 border-left: none;
+            }
+            QScrollBar:vertical {
+                border: none;
+                background: #f6f8fa;
+                width: 10px;
+                margin: 0px;
+            }
+            QScrollBar::handle:vertical {
+                background: #d0d7de;
+                min-height: 20px;
+                border-radius: 5px;
+            }
+            QScrollBar::handle:vertical:hover {
+                background: #8c959f;
+            }
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+                border: none;
+                background: none;
+                height: 0px;
+            }
+            QScrollBar:horizontal {
+                border: none;
+                background: #f6f8fa;
+                height: 10px;
+                margin: 0px;
+            }
+            QScrollBar::handle:horizontal {
+                background: #d0d7de;
+                min-width: 20px;
+                border-radius: 5px;
+            }
+            QScrollBar::handle:horizontal:hover {
+                background: #8c959f;
+            }
+            QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
+                border: none;
+                background: none;
+                width: 0px;
             }
         """)
         

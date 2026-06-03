@@ -337,14 +337,12 @@ class ValidacionReporteMixin:
         self.chk_val_conteo = QCheckBox()
         self.chk_val_filtrar = QCheckBox()
         self.chk_val_ramas = QCheckBox()
-        self.chk_val_metricas = QCheckBox()
 
         # Lista: (checkbox, botón, paso_mínimo_para_mostrar)
         self._checks_validacion = [
             (self.chk_val_conteo, self.btn_conteo, 2),
             (self.chk_val_filtrar, self.btn_filtrar, 3),
             (self.chk_val_ramas, self.btn_ramas, 4),
-            (self.chk_val_metricas, self.btn_obtener_metricas, 5),
         ]
 
         for chk, btn, _ in self._checks_validacion:
@@ -362,6 +360,7 @@ class ValidacionReporteMixin:
             menu_lateral.addLayout(row)
 
         # --- Botones de reporte (sin checkbox) ---
+        menu_lateral.addWidget(self.btn_obtener_metricas)
         menu_lateral.addWidget(self.btn_descargar_reporte)
         menu_lateral.addWidget(self.btn_finalizar_reporte)
         menu_lateral.addWidget(self.btn_corregir_filtrado)
@@ -381,21 +380,7 @@ class ValidacionReporteMixin:
         self.btn_validar_progreso.clicked.connect(self.confirmar_validacion)
         menu_lateral.addWidget(self.btn_validar_progreso)
 
-        # --- Botón "Enviar Comentarios" (aparece cuando NO todos marcados) ---
-        self.btn_enviar_comentarios = QPushButton("✉  Enviar Comentarios")
-        self.btn_enviar_comentarios.setStyleSheet("""
-            QPushButton {
-                background-color: transparent; color: #0969da;
-                border: 2px solid #0969da; border-radius: 8px;
-                padding: 8px; font-weight: bold; font-size: 11px;
-                text-align: center; margin-top: 4px;
-            }
-            QPushButton:hover { background-color: #0969da; color: white; }
-        """)
-        self.btn_enviar_comentarios.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_enviar_comentarios.hide()
-        self.btn_enviar_comentarios.clicked.connect(self._enviar_comentarios)
-        menu_lateral.addWidget(self.btn_enviar_comentarios)
+
 
     # ------------------------------------------------------------------
     # Lógica: actualización de botones según checkboxes
@@ -420,22 +405,13 @@ class ValidacionReporteMixin:
             self.chk_val_filtrar.setEnabled(False)
             self.chk_val_ramas.setChecked(False)
             self.chk_val_ramas.setEnabled(False)
-            self.chk_val_metricas.setChecked(False)
-            self.chk_val_metricas.setEnabled(False)
         else:
             self.chk_val_filtrar.setEnabled(True)
             if not self.chk_val_filtrar.isChecked():
                 self.chk_val_ramas.setChecked(False)
                 self.chk_val_ramas.setEnabled(False)
-                self.chk_val_metricas.setChecked(False)
-                self.chk_val_metricas.setEnabled(False)
             else:
                 self.chk_val_ramas.setEnabled(True)
-                if not self.chk_val_ramas.isChecked():
-                    self.chk_val_metricas.setChecked(False)
-                    self.chk_val_metricas.setEnabled(False)
-                else:
-                    self.chk_val_metricas.setEnabled(True)
 
         # Reconectar señales
         for chk, _, _ in self._checks_validacion:
@@ -445,7 +421,7 @@ class ValidacionReporteMixin:
         self._actualizar_botones_validacion()
 
     def _actualizar_botones_validacion(self):
-        """Muestra Validar Progreso si todos marcados, o Enviar Comentarios si no."""
+        """Muestra Validar Progreso si todos marcados, y actualiza el botón de la barra superior."""
         checks_visibles = [
             chk for chk, _, _ in self._checks_validacion if chk.isVisible()
         ]
@@ -453,7 +429,7 @@ class ValidacionReporteMixin:
             return
         todos = all(chk.isChecked() for chk in checks_visibles)
         self.btn_validar_progreso.setVisible(todos)
-        self.btn_enviar_comentarios.setVisible(not todos)
+        self._actualizar_tooltip_comentarios()
 
     # ------------------------------------------------------------------
     # Apertura del historial
@@ -496,7 +472,6 @@ class ValidacionReporteMixin:
 
         # Mostrar botón de comentarios por defecto
         self.btn_validar_progreso.hide()
-        self.btn_enviar_comentarios.show()
 
         # Forzar ejecución secuencial inicial
         self._on_checkbox_state_changed()
@@ -518,7 +493,6 @@ class ValidacionReporteMixin:
             chk.hide()
             chk.setChecked(False)
         self.btn_validar_progreso.hide()
-        self.btn_enviar_comentarios.hide()
         if hasattr(self, "btn_comentario_proceso"):
             self.btn_comentario_proceso.setEnabled(False)
             self.btn_comentario_proceso.hide()
@@ -596,10 +570,9 @@ class ValidacionReporteMixin:
         mapa_checks = {
             1: self.chk_val_conteo,
             2: self.chk_val_filtrar,
-            3: self.chk_val_ramas,
-            4: self.chk_val_metricas
+            3: self.chk_val_ramas
         }
-        for step_id in [1, 2, 3, 4]:
+        for step_id in [1, 2, 3]:
             chk = mapa_checks[step_id]
             if chk.isVisible() and not chk.isChecked():
                 paso_fallido = step_id
@@ -647,8 +620,8 @@ class ValidacionReporteMixin:
     # ------------------------------------------------------------------
 
     def agregar_comentario_proceso(self):
-        """Muestra un diálogo para agregar/editar un comentario para el proceso actual."""
-        if not self.reporte_validado_cargado:
+        """Muestra un diálogo de retroalimentación general y devuelve el reporte al colaborador en el paso fallido."""
+        if not self.reporte_validado_cargado or not self.id_reporte_actual:
             return
         
         # Determinar el primer paso que no está marcado como correcto
@@ -661,43 +634,60 @@ class ValidacionReporteMixin:
             3: (self.chk_val_ramas, "Esqueletizado"),
             4: (self.chk_val_metricas, "Obtener Métricas")
         }
+        paso_fallido = None
         for step_id in [1, 2, 3, 4]:
             chk, name = mapa_checks[step_id]
             if chk.isVisible() and not chk.isChecked():
+                paso_fallido = step_id
                 paso_nom = name
-                paso_id = step_id
                 break
-        else:
-            if self.paso_actual < 5:
-                vista = self.combo_vista.currentText()
-                if vista == "Original":
-                    paso_nom = "Detectar Microglías"
-                    paso_id = 1
-                elif vista == "Filtrada":
-                    paso_nom = "Filtrar"
-                    paso_id = 2
-                elif vista == "Esqueleto":
-                    paso_nom = "Esqueletizado"
-                    paso_id = 3
-        
-        if not hasattr(self, "comentarios_por_proceso"):
-            self.comentarios_por_proceso = {1: "", 2: "", 3: "", 4: ""}
-            
-        com_previo = self.comentarios_por_proceso.get(paso_id, "")
-        
-        from PyQt6.QtWidgets import QInputDialog
-        txt, ok = QInputDialog.getMultiLineText(
-            self,
-            "Agregar Comentario",
-            f"Comentarios para el proceso: {paso_nom}",
-            com_previo
+                
+        if paso_fallido is None:
+            # Todos los procesos están marcados como correctos, no hay fallo
+            from vistas.utilidades import DialogoNotificacion
+            DialogoNotificacion(
+                "Atención",
+                "Todos los procesos han sido validados como correctos. Utiliza el botón 'Validar Progreso' en el menú lateral para aprobar.",
+                "warning", self
+            ).exec()
+            return
+
+        from vistas.utilidades import DialogoComentarioGeneral, DialogoNotificacion
+        # Pedir la retroalimentación explicativa del fallo
+        diag_retro = DialogoComentarioGeneral(
+            "Enviar Retroalimentación",
+            f"Por favor, ingresa las observaciones sobre la fase de '{paso_nom}' que no fue validada:",
+            "",
+            self
         )
-        if ok:
-            self.comentarios_por_proceso[paso_id] = txt.strip()
-            self._actualizar_tooltip_comentarios()
+        if not diag_retro.exec():
+            return # Cancelado
+            
+        comentario_general = diag_retro.resultado_texto.strip()
+        if not comentario_general:
+            return
+
+        try:
+            db_guardar_comentarios(self.id_reporte_actual, f"Fallo en fase '{paso_nom}': {comentario_general}")
+            db_actualizar_estado_reporte(self.id_reporte_actual, 'Pendiente')
+            db_resetear_progreso_analisis(self.id_reporte_actual, paso_fallido)
+            
+            DialogoNotificacion(
+                "Retroalimentación Enviada",
+                f"Las observaciones sobre '{paso_nom}' han sido enviadas y el reporte ha sido retornado al colaborador para su corrección.",
+                "info", self
+            ).exec()
+            
+            self.reporte_validado_cargado = False
+            self._salir_modo_validacion()
+            self.cerrar_reporte_actual()
+        except Exception as e:
+            DialogoNotificacion(
+                "Error", f"No se pudo guardar la retroalimentación: {e}", "error", self
+            ).exec()
 
     def _actualizar_tooltip_comentarios(self):
-        """Actualiza el tooltip y el estilo del botón de comentarios según el paso actual."""
+        """Actualiza el tooltip y el estado del botón superior de retroalimentación según las casillas de validación."""
         if not hasattr(self, "btn_comentario_proceso"):
             return
             
@@ -707,34 +697,32 @@ class ValidacionReporteMixin:
             
         self.btn_comentario_proceso.show()
         
-        # Determinar el paso actual
-        paso_nom = "Obtener Métricas"
-        paso_id = 4
-        if self.paso_actual < 5:
-            vista = self.combo_vista.currentText()
-            if vista == "Original":
-                paso_nom = "Detectar Microglías"
-                paso_id = 1
-            elif vista == "Filtrada":
-                paso_nom = "Filtrar"
-                paso_id = 2
-            elif vista == "Esqueleto":
-                paso_nom = "Esqueletizado"
-                paso_id = 3
+        # Determinar el primer paso no validado
+        mapa_checks = {
+            1: (self.chk_val_conteo, "Detectar Microglías"),
+            2: (self.chk_val_filtrar, "Filtrar"),
+            3: (self.chk_val_ramas, "Esqueletizado"),
+        }
+        paso_fallido = None
+        paso_nom = ""
+        for step_id in [1, 2, 3]:
+            chk, name = mapa_checks[step_id]
+            if chk.isVisible() and not chk.isChecked():
+                paso_fallido = step_id
+                paso_nom = name
+                break
                 
-        if not hasattr(self, "comentarios_por_proceso"):
-            self.comentarios_por_proceso = {1: "", 2: "", 3: "", 4: ""}
-            
-        com = self.comentarios_por_proceso.get(paso_id, "")
-        if com:
-            self.btn_comentario_proceso.setToolTip(f"Comentario para {paso_nom}: {com}\n(Haz clic para modificar)")
+        if paso_fallido is not None:
+            self.btn_comentario_proceso.setToolTip(f"Enviar retroalimentación (Fallo detectado en: {paso_nom})")
             self.btn_comentario_proceso.setStyleSheet("""
                 QPushButton { background-color: #ffe8e8; border: 1px solid #cf222e; border-radius: 15px; outline: none; }
                 QPushButton:hover { background-color: #ffd6d6; }
             """)
+            self.btn_comentario_proceso.setEnabled(True)
         else:
-            self.btn_comentario_proceso.setToolTip(f"Agregar comentario para {paso_nom}")
+            self.btn_comentario_proceso.setToolTip("Todos los procesos están validados como correctos.")
             self.btn_comentario_proceso.setStyleSheet("""
                 QPushButton { background-color: transparent; border: 1px solid transparent; outline: none; }
-                QPushButton:hover { background-color: #ddf4ff; border-radius: 15px; }
+                QPushButton:disabled { opacity: 0.3; }
             """)
+            self.btn_comentario_proceso.setEnabled(False)
