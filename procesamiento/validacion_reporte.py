@@ -392,7 +392,7 @@ class ValidacionReporteMixin:
         """)
         self.btn_enviar_comentarios.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_enviar_comentarios.hide()
-        self.btn_enviar_comentarios.clicked.connect(self.agregar_comentario_proceso)
+        self.btn_enviar_comentarios.clicked.connect(self._enviar_comentarios)
         menu_lateral.addWidget(self.btn_enviar_comentarios)
 
 
@@ -588,7 +588,7 @@ class ValidacionReporteMixin:
         }
         for step_id in [1, 2, 3]:
             chk = mapa_checks[step_id]
-            if chk.isVisible() and not chk.isChecked():
+            if not chk.isHidden() and not chk.isChecked():
                 paso_fallido = step_id
                 break
 
@@ -629,75 +629,7 @@ class ValidacionReporteMixin:
                 "Error", f"No se pudieron guardar los comentarios: {e}", "error", self
             ).exec()
 
-    # ------------------------------------------------------------------
-    # Métodos del botón de comentarios por proceso
-    # ------------------------------------------------------------------
 
-    def agregar_comentario_proceso(self):
-        """Muestra un diálogo de retroalimentación general y devuelve el reporte al colaborador en el paso fallido."""
-        if not self.id_reporte_actual:
-            return
-        
-        # Determinar el primer paso que no está marcado como correcto
-        paso_nom = "Esqueletizado"
-        paso_id = 3
-        
-        mapa_checks = {
-            1: (self.chk_val_conteo, "Detectar Microglías"),
-            2: (self.chk_val_filtrar, "Filtrar"),
-            3: (self.chk_val_ramas, "Esqueletizado"),
-        }
-        paso_fallido = None
-        for step_id in [1, 2, 3]:
-            chk, name = mapa_checks[step_id]
-            if not chk.isHidden() and not chk.isChecked():
-                paso_fallido = step_id
-                paso_nom = name
-                break
-                
-        if paso_fallido is None:
-            # Todos los procesos están marcados como correctos, no hay fallo
-            from vistas.utilidades import DialogoNotificacion
-            DialogoNotificacion(
-                "Atención",
-                "Todos los procesos han sido validados como correctos. Utiliza el botón 'Validar Progreso' en el menú lateral para aprobar.",
-                "warning", self
-            ).exec()
-            return
-
-        from vistas.utilidades import DialogoComentarioGeneral, DialogoNotificacion
-        # Pedir la retroalimentación explicativa del fallo
-        diag_retro = DialogoComentarioGeneral(
-            "Enviar Retroalimentación",
-            f"Por favor, ingresa las observaciones sobre la fase de '{paso_nom}' que no fue validada:",
-            "",
-            self
-        )
-        if not diag_retro.exec():
-            return # Cancelado
-            
-        comentario_general = diag_retro.resultado_texto.strip()
-        if not comentario_general:
-            return
-
-        try:
-            db_guardar_comentarios(self.id_reporte_actual, f"Fallo en fase '{paso_nom}': {comentario_general}")
-            db_actualizar_estado_reporte(self.id_reporte_actual, 'Pendiente')
-            db_resetear_progreso_analisis(self.id_reporte_actual, paso_fallido)
-            
-            DialogoNotificacion(
-                "Retroalimentación Enviada",
-                f"Las observaciones sobre '{paso_nom}' han sido enviadas y el reporte ha sido retornado al colaborador para su corrección.",
-                "info", self
-            ).exec()
-            
-            self.reporte_validado_cargado = False
-            self._salir_modo_validacion()
-            self.cerrar_reporte_actual()
-        except Exception as e:
-            DialogoNotificacion(
-                "Error", f"No se pudo guardar la retroalimentación: {e}", "error", self
-            ).exec()
 
     def _actualizar_tooltip_comentarios(self):
         """Actualiza el tooltip del botón lateral de comentarios según el paso actual fallido."""
