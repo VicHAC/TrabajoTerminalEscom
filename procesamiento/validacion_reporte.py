@@ -635,7 +635,7 @@ class ValidacionReporteMixin:
 
     def agregar_comentario_proceso(self):
         """Muestra un diálogo de retroalimentación general y devuelve el reporte al colaborador en el paso fallido."""
-        if not self.reporte_validado_cargado or not self.id_reporte_actual:
+        if not self.id_reporte_actual:
             return
         
         # Determinar el primer paso que no está marcado como correcto
@@ -650,7 +650,7 @@ class ValidacionReporteMixin:
         paso_fallido = None
         for step_id in [1, 2, 3]:
             chk, name = mapa_checks[step_id]
-            if chk.isVisible() and not chk.isChecked():
+            if not chk.isHidden() and not chk.isChecked():
                 paso_fallido = step_id
                 paso_nom = name
                 break
@@ -704,10 +704,6 @@ class ValidacionReporteMixin:
         if not hasattr(self, "btn_enviar_comentarios"):
             return
             
-        if not getattr(self, "reporte_validado_cargado", False):
-            self.btn_enviar_comentarios.hide()
-            return
-            
         # Determinar el primer paso no validado
         mapa_checks = {
             1: (self.chk_val_conteo, "Detectar Microglías"),
@@ -718,7 +714,7 @@ class ValidacionReporteMixin:
         paso_nom = ""
         for step_id in [1, 2, 3]:
             chk, name = mapa_checks[step_id]
-            if chk.isVisible() and not chk.isChecked():
+            if not chk.isHidden() and not chk.isChecked():
                 paso_fallido = step_id
                 paso_nom = name
                 break
