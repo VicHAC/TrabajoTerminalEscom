@@ -2923,31 +2923,6 @@ class VentanaBaseAnalisis(ValidacionReporteMixin, QMainWindow):
         btn_cancelar_filtro.clicked.connect(self.cancelar_filtrado)
 
 
-        # Botón de Observaciones (sólo para tesista, se muestra si hay comentario)
-        self.btn_observaciones = QPushButton("  Observaciones")
-        self.btn_observaciones.setIcon(QIcon("assets/buttons/msg.png"))
-        self.btn_observaciones.setIconSize(QSize(18, 18))
-        self.btn_observaciones.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_observaciones.setStyleSheet("""
-            QPushButton {
-                background-color: transparent;
-                border: 2px solid #0969da;
-                color: #0969da;
-                font-weight: bold;
-                border-radius: 8px;
-                padding: 10px;
-                font-size: 11px;
-                text-align: left;
-                margin-top: 10px;
-            }
-            QPushButton:hover {
-                background-color: #0969da;
-                color: white;
-            }
-        """)
-        self.btn_observaciones.hide()
-        self.menu_lateral.addWidget(self.btn_observaciones)
-        
         self.btn_cerrar_sesion = QPushButton("Cerrar Sesión"); self.btn_cerrar_sesion.setStyleSheet("QPushButton { background-color: transparent; border: 2px solid #cc0000; color: #cc0000; font-weight: bold; border-radius: 8px; padding: 10px; margin-top: 20px; } QPushButton:hover { background-color: #cc0000; color: white; }"); self.menu_lateral.addWidget(self.btn_cerrar_sesion)
         frame_menu = QFrame(); frame_menu.setObjectName("menu_lateral"); frame_menu.setFixedWidth(200); frame_menu.setLayout(self.menu_lateral)
         
@@ -2999,9 +2974,32 @@ class VentanaBaseAnalisis(ValidacionReporteMixin, QMainWindow):
         self.btn_sig_global.clicked.connect(self.siguiente_vista_global)
         self.btn_sig_global.setEnabled(False)
         
+        # Botón de Observaciones (sólo para tesista, se muestra si hay comentario)
+        self.btn_observaciones = QPushButton("  Observaciones")
+        self.btn_observaciones.setIcon(QIcon("assets/buttons/msg.png"))
+        self.btn_observaciones.setIconSize(QSize(14, 14))
+        self.btn_observaciones.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_observaciones.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                border: 1.5px solid #0969da;
+                color: #0969da;
+                font-weight: bold;
+                border-radius: 6px;
+                padding: 4px 10px;
+                font-size: 11px;
+            }
+            QPushButton:hover {
+                background-color: #0969da;
+                color: white;
+            }
+        """)
+        self.btn_observaciones.hide()
+
         controles_superiores.addWidget(self.btn_ant_global)
         controles_superiores.addWidget(self.combo_vista)
         controles_superiores.addWidget(self.btn_sig_global)
+        controles_superiores.addWidget(self.btn_observaciones)
         controles_superiores.addStretch()
         
         self.lbl_info_conteo = QLabel("Microglías detectadas: 0"); self.lbl_info_conteo.setStyleSheet("font-size: 11px; font-weight: bold; color: #3a61a0; background-color: white; border: 1px solid #d0d7de; border-radius: 6px; padding: 4px 10px;"); self.lbl_info_conteo.setAlignment(Qt.AlignmentFlag.AlignCenter); controles_superiores.addWidget(self.lbl_info_conteo); controles_superiores.addSpacing(15)
