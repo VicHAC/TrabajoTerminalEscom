@@ -3303,6 +3303,10 @@ class VentanaBaseAnalisis(ValidacionReporteMixin, QMainWindow):
         self.actualizar_estado_flujo(0)
         
         if self.rol in ["Invitado", "Guest"]: self.btn_historial.hide()
+        
+        # Verificar al inicio si es Tesista y tiene reportes devueltos con comentarios
+        if self.rol == "Tesista":
+            QTimer.singleShot(1000, self.verificar_reportes_devueltos_al_inicio)
 
     def toggle_herramienta_caja(self, checked):
         if checked: self.btn_herramienta_eliminar.setChecked(False); self.visor_imagen.current_tool = "draw"; self.visor_imagen.hovered_index = -1; self.visor_imagen.draw_current_state()
@@ -3399,6 +3403,35 @@ class VentanaBaseAnalisis(ValidacionReporteMixin, QMainWindow):
         # Guardado automático de progreso al cambiar de fase
         if paso > 0:
             self.save_current_progress(mostrar_notif=False)
+
+    def verificar_reportes_devueltos_al_inicio(self):
+        """Verifica al inicio si el tesista tiene reportes devueltos (Pendientes) con comentarios."""
+        from bd.database import conectar
+        conn = conectar(); cur = conn.cursor()
+        try:
+            cur.execute("""
+                SELECT R.nombre_reporte, RC.comentarios 
+                FROM ReporteCompartido RC
+                JOIN Reporte R ON RC.id_reporte = R.id_reporte
+                WHERE RC.id_propietario = ? AND RC.estado = 'Pendiente' AND RC.comentarios IS NOT NULL AND RC.comentarios != ''
+            """, (self.id_usuario,))
+            rows = cur.fetchall()
+            if rows:
+                from vistas.utilidades import DialogoNotificacion
+                msg_final = "El investigador ha devuelto los siguientes reportes para su corrección:\n\n"
+                for nombre_rep, coment in rows:
+                    msg_final += f"• Reporte: {nombre_rep}\n  Observaciones: {coment}\n\n"
+                msg_final += "Por favor, abre tu Historial para cargarlos y realizar las modificaciones correspondientes."
+                DialogoNotificacion(
+                    "Correcciones Requeridas",
+                    msg_final,
+                    "warning",
+                    self
+                ).exec()
+        except Exception as e:
+            logging.error(f"Error al verificar reportes devueltos al inicio: {e}")
+        finally:
+            conn.close()
 
     def mostrar_observaciones_popup(self):
         """Muestra las observaciones del investigador en un diálogo emergente."""
