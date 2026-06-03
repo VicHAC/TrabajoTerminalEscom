@@ -597,10 +597,17 @@ class ValidacionReporteMixin:
         if paso_fallido is not None and hasattr(self, "comentarios_por_proceso"):
             comentario_previo = self.comentarios_por_proceso.get(paso_fallido, "")
 
+        nombres_fases = {
+            1: "Detectar Microglías",
+            2: "Filtrar",
+            3: "Esqueletizado"
+        }
+        paso_nom = nombres_fases.get(paso_fallido, "Ninguno")
+
         # Pedir un comentario general explicativo
         diag_comentario = DialogoComentarioGeneral(
             "Enviar Retroalimentación",
-            "Por favor, ingresa los comentarios u observaciones para el colaborador sobre las correcciones requeridas:",
+            f"Fase detectada con error: {paso_nom}\n\nPor favor, ingresa los comentarios u observaciones para el colaborador sobre las correcciones requeridas:",
             comentario_previo,
             self
         )
@@ -612,13 +619,13 @@ class ValidacionReporteMixin:
             return
 
         try:
-            db_guardar_comentarios(self.id_reporte_actual, comentario_general)
+            db_guardar_comentarios(self.id_reporte_actual, f"Fallo en fase '{paso_nom}': {comentario_general}")
             db_actualizar_estado_reporte(self.id_reporte_actual, 'Pendiente')
             if paso_fallido is not None:
                 db_resetear_progreso_analisis(self.id_reporte_actual, paso_fallido)
             DialogoNotificacion(
                 "Comentarios Enviados",
-                "Las observaciones han sido guardadas y el reporte ha sido retornado al colaborador para su corrección.",
+                f"Las observaciones sobre '{paso_nom}' han sido guardadas y el reporte ha sido retornado al colaborador para su corrección.",
                 "info", self
             ).exec()
             self.reporte_validado_cargado = False
