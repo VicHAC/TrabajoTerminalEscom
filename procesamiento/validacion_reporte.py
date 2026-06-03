@@ -625,17 +625,16 @@ class ValidacionReporteMixin:
             return
         
         # Determinar el primer paso que no está marcado como correcto
-        paso_nom = "Obtener Métricas"
-        paso_id = 4
+        paso_nom = "Esqueletizado"
+        paso_id = 3
         
         mapa_checks = {
             1: (self.chk_val_conteo, "Detectar Microglías"),
             2: (self.chk_val_filtrar, "Filtrar"),
             3: (self.chk_val_ramas, "Esqueletizado"),
-            4: (self.chk_val_metricas, "Obtener Métricas")
         }
         paso_fallido = None
-        for step_id in [1, 2, 3, 4]:
+        for step_id in [1, 2, 3]:
             chk, name = mapa_checks[step_id]
             if chk.isVisible() and not chk.isChecked():
                 paso_fallido = step_id
