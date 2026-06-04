@@ -1,9 +1,9 @@
 import cv2
 import numpy as np
 
-def aplicar_filtros_imagen(img, clahe_clip, gauss_k, otsu_offset, removal_areas=[]):
+def aplicar_filtros_imagen(img, clahe_clip, gauss_k, otsu_offset, min_size=50, removal_areas=[]):
     """
-    Applies CLAHE, Gaussian blur, Otsu binarization, and blackouts removal areas on a BGR image.
+    Applies CLAHE, Gaussian blur, Otsu binarization, morphological filtering, and blackouts removal areas on a BGR image.
     Returns the binary image (Grayscale).
     """
     # 1. Aplicar CLAHE si clipLimit > 0
@@ -29,6 +29,10 @@ def aplicar_filtros_imagen(img, clahe_clip, gauss_k, otsu_offset, removal_areas=
     ret, _ = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
     threshold_val = max(0, min(255, ret + otsu_offset))
     _, bin_img = cv2.threshold(blur, threshold_val, 255, cv2.THRESH_BINARY)
+
+    # 4.5. Aplicar filtros morfológicos especializados
+    from .filtrado_especializado import aplicar_filtros_morfologicos
+    bin_img = aplicar_filtros_morfologicos(bin_img, min_size)
     
     # 5. Aplicar eliminación de áreas manuales
     for area in removal_areas:
@@ -37,7 +41,7 @@ def aplicar_filtros_imagen(img, clahe_clip, gauss_k, otsu_offset, removal_areas=
         
     return bin_img
 
-def procesar_crop_individual(img, g_clahe, g_gauss, g_otsu, offsets, removal_areas=[]):
+def procesar_crop_individual(img, g_clahe, g_gauss, g_otsu, g_ruido, offsets, removal_areas=[]):
     """
     Calculates final parameters combining global values and individual offsets,
     then calls aplicar_filtros_imagen.
@@ -45,5 +49,10 @@ def procesar_crop_individual(img, g_clahe, g_gauss, g_otsu, offsets, removal_are
     c_clip = max(0, min(10, g_clahe + offsets.get("clahe", 0)))
     k_val = max(1, min(15, g_gauss + offsets.get("gauss", 0)))
     o_offset = g_otsu + offsets.get("otsu", 0)
+    r_val = max(0, min(200, g_ruido + offsets.get("ruido", 0)))
     
-    return aplicar_filtros_imagen(img, c_clip, k_val, o_offset, removal_areas)
+    return aplicar_filtros_imagen(img, c_clip, k_val, o_offset, r_val, removal_areas)
+
+
+
+

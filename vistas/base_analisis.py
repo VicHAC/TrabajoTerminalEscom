@@ -1183,11 +1183,17 @@ class DialogoVistaCelular(QDialog):
         self.sld_o_otsu.setValue(self.box["offsets"]["otsu"])
         grid_offsets.addWidget(self.sld_o_otsu, 2, 1)
         
+        # Ruido Offset
+        grid_offsets.addWidget(QLabel("Ruido:"), 3, 0)
+        self.sld_o_ruido = QSlider(Qt.Orientation.Horizontal); self.sld_o_ruido.setRange(-100, 100)
+        self.sld_o_ruido.setValue(self.box["offsets"].get("ruido", 0))
+        grid_offsets.addWidget(self.sld_o_ruido, 3, 1)
+        
         layout_offsets.addLayout(grid_offsets)
         
         # Estilo para sliders de offset
         estilo_off = "QSlider::groove:horizontal { height: 4px; background: #ddd; } QSlider::handle:horizontal { background: #3a61a0; width: 12px; height: 12px; margin: -4px 0; border-radius: 6px; }"
-        for s in [self.sld_o_clahe, self.sld_o_gauss, self.sld_o_otsu]:
+        for s in [self.sld_o_clahe, self.sld_o_gauss, self.sld_o_otsu, self.sld_o_ruido]:
             s.setStyleSheet(estilo_off)
             s.valueChanged.connect(self.actualizar_offsets)
             
@@ -1425,8 +1431,7 @@ class DialogoVistaCelular(QDialog):
     def actualizar_offsets(self):
         # 1. Actualizar valores en el box
         self.box["offsets"]["clahe"] = self.sld_o_clahe.value()
-        self.box["offsets"]["gauss"] = self.sld_o_gauss.value()
-        self.box["offsets"]["otsu"] = self.sld_o_otsu.value()
+        self.box["offsets"]["ruido"] = self.sld_o_ruido.value()
         
         # 2. Notificar al padre para que reprocese globalmente
         if hasattr(self.parent(), "previsualizar_filtrado"):
@@ -3122,8 +3127,11 @@ class VentanaBaseAnalisis(ValidacionReporteMixin, QMainWindow):
         lbl_otsu = QLabel("Umbral Binarización:")
         self.sld_otsu = QSlider(Qt.Orientation.Horizontal); self.sld_otsu.setRange(-50, 50); self.sld_otsu.setValue(0)
         layout_filtros.addWidget(lbl_otsu); layout_filtros.addWidget(self.sld_otsu)
+        lbl_ruido = QLabel("Eliminar Ruido Máx (px):")
+        self.sld_ruido = QSlider(Qt.Orientation.Horizontal); self.sld_ruido.setRange(0, 200); self.sld_ruido.setValue(50)
+        layout_filtros.addWidget(lbl_ruido); layout_filtros.addWidget(self.sld_ruido)
         estilo_slider = "QSlider::groove:horizontal { border: 1px solid #d0d7de; height: 4px; background: #f6f8fa; margin: 2px 0; border-radius: 2px; } QSlider::handle:horizontal { background: #ffffff; border: 1px solid #3a61a0; width: 12px; height: 12px; margin: -5px 0; border-radius: 6px; } QSlider::handle:horizontal:hover { background: #eaf2ff; }"
-        self.sld_clahe.setStyleSheet(estilo_slider); self.sld_gauss.setStyleSheet(estilo_slider); self.sld_otsu.setStyleSheet(estilo_slider)
+        self.sld_clahe.setStyleSheet(estilo_slider); self.sld_gauss.setStyleSheet(estilo_slider); self.sld_otsu.setStyleSheet(estilo_slider); self.sld_ruido.setStyleSheet(estilo_slider)
 
 
         btn_f_layout = QHBoxLayout()
@@ -3169,6 +3177,7 @@ class VentanaBaseAnalisis(ValidacionReporteMixin, QMainWindow):
         self.sld_clahe.valueChanged.connect(self.previsualizar_filtrado)
         self.sld_gauss.valueChanged.connect(self.previsualizar_filtrado)
         self.sld_otsu.valueChanged.connect(self.previsualizar_filtrado)
+        self.sld_ruido.valueChanged.connect(self.previsualizar_filtrado)
         btn_aceptar_filtro.clicked.connect(self.confirmar_filtrado)
         btn_cancelar_filtro.clicked.connect(self.cancelar_filtrado)
 
@@ -3751,6 +3760,7 @@ class VentanaBaseAnalisis(ValidacionReporteMixin, QMainWindow):
                     f_clahe = offsets.get('clahe', 0)
                     f_gauss = offsets.get('gauss', 0)
                     f_otsu = offsets.get('otsu', 0)
+                    f_ruido = offsets.get('ruido', 0)
                     areas_elim = json.dumps(box.get('removal_areas', []))
                     c_path = box.get('crop_path', '')
                     
@@ -3758,15 +3768,15 @@ class VentanaBaseAnalisis(ValidacionReporteMixin, QMainWindow):
                         m = metricas_existentes[c_path]
                         cur.execute("""
                             INSERT INTO Microglia (id_analisis, bbox_x, bbox_y, bbox_w, bbox_h, crop_path, 
-                                        filtro_clahe, filtro_gauss, filtro_otsu, areas_eliminadas,
+                                        filtro_clahe, filtro_gauss, filtro_otsu, filtro_ruido, filtro_cierre, areas_eliminadas,
                                         puntos_finales, uniones_triples, uniones_cuadruples, longitud_promedio_ramas, longitud_maxima_rama, ruta_mas_larga, lineas, puntos_union, voxeles_union, voxeles_losa) 
-                            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                         """, (self.id_analisis_actual, box['x'], box['y'], box['w'], box['h'], c_path, 
-                              f_clahe, f_gauss, f_otsu, areas_elim,
+                               f_clahe, f_gauss, f_otsu, f_ruido, 0, areas_elim,
                               m[0], m[1], m[2], m[3], m[4], m[5], m[6], m[7], m[8], m[9]))
                     else:
-                        cur.execute("INSERT INTO Microglia (id_analisis, bbox_x, bbox_y, bbox_w, bbox_h, crop_path, filtro_clahe, filtro_gauss, filtro_otsu, areas_eliminadas) VALUES (?,?,?,?,?,?,?,?,?,?)",
-                                   (self.id_analisis_actual, box['x'], box['y'], box['w'], box['h'], c_path, f_clahe, f_gauss, f_otsu, areas_elim))
+                        cur.execute("INSERT INTO Microglia (id_analisis, bbox_x, bbox_y, bbox_w, bbox_h, crop_path, filtro_clahe, filtro_gauss, filtro_otsu, filtro_ruido, filtro_cierre, areas_eliminadas) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                                   (self.id_analisis_actual, box['x'], box['y'], box['w'], box['h'], c_path, f_clahe, f_gauss, f_otsu, f_ruido, 0, areas_elim))
             
             # 5. Si es un reporte compartido y el usuario actual es el destinatario, marcarlo como Modificado y limpiar comentarios
             cur.execute("SELECT id_usuario FROM Reporte WHERE id_reporte = ?", (self.id_reporte_actual,))
@@ -3847,16 +3857,16 @@ class VentanaBaseAnalisis(ValidacionReporteMixin, QMainWindow):
                 self.paso_actual = paso
 
                 cur.execute("""
-                    SELECT bbox_x, bbox_y, bbox_w, bbox_h, crop_path, filtro_clahe, filtro_gauss, filtro_otsu, areas_eliminadas
+                    SELECT bbox_x, bbox_y, bbox_w, bbox_h, crop_path, filtro_clahe, filtro_gauss, filtro_otsu, filtro_ruido, areas_eliminadas
                     FROM Microglia WHERE id_analisis = ?
                 """, (id_an,))
                 boxes_db = cur.fetchall()
                 boxes = []
-                for (bx, by, bw, bh, cp, fc, fg, fo, ae) in boxes_db:
+                for (bx, by, bw, bh, cp, fc, fg, fo, fr, ae) in boxes_db:
                     b = {
                         "x": bx, "y": by, "w": bw, "h": bh,
                         "crop_path": cp.replace("\\", "/") if cp else "",
-                        "offsets": {"clahe": fc or 0, "gauss": fg or 0, "otsu": fo or 0},
+                        "offsets": {"clahe": fc or 0, "gauss": fg or 0, "otsu": fo or 0, "ruido": fr or 0},
                         "removal_areas": json.loads(ae) if ae else []
                     }
                     if es_cliente() and b["crop_path"]:
@@ -3949,17 +3959,17 @@ class VentanaBaseAnalisis(ValidacionReporteMixin, QMainWindow):
                 self.pixmaps_globales = {"Original": pixmap, "Filtrada": None, "Esqueleto": None}
                 
                 cur.execute("""
-                    SELECT bbox_x, bbox_y, bbox_w, bbox_h, crop_path, filtro_clahe, filtro_gauss, filtro_otsu, areas_eliminadas
+                    SELECT bbox_x, bbox_y, bbox_w, bbox_h, crop_path, filtro_clahe, filtro_gauss, filtro_otsu, filtro_ruido, areas_eliminadas
                     FROM Microglia WHERE id_analisis = ?
                 """, (id_an,))
                 boxes_db = cur.fetchall()
                 if boxes_db:
                     boxes = []
-                    for (bx, by, bw, bh, cp, fc, fg, fo, ae) in boxes_db:
+                    for (bx, by, bw, bh, cp, fc, fg, fo, fr, ae) in boxes_db:
                         b = {
                             "x": bx, "y": by, "w": bw, "h": bh,
                             "crop_path": cp.replace("\\", "/") if cp else "",
-                            "offsets": {"clahe": fc or 0, "gauss": fg or 0, "otsu": fo or 0},
+                            "offsets": {"clahe": fc or 0, "gauss": fg or 0, "otsu": fo or 0, "ruido": fr or 0},
                             "removal_areas": json.loads(ae) if ae else []
                         }
                         boxes.append(b)
@@ -4475,7 +4485,7 @@ class VentanaBaseAnalisis(ValidacionReporteMixin, QMainWindow):
             from red.cliente import cliente_subir_archivo
             cliente_subir_archivo(ruta_guardado)
 
-        nueva_caja = {"x": x, "y": y, "w": w, "h": h, "crop_path": ruta_guardado, "offsets": {"clahe": 0, "gauss": 0, "otsu": 0}, "removal_areas": []}
+        nueva_caja = {"x": x, "y": y, "w": w, "h": h, "crop_path": ruta_guardado, "offsets": {"clahe": 0, "gauss": 0, "otsu": 0, "ruido": 0}, "removal_areas": []}
 
         self.visor_imagen.boxes.append(nueva_caja); self.visor_imagen.draw_current_state(); self.actualizar_etiqueta_conteo(len(self.visor_imagen.boxes))
         self.save_current_progress(mostrar_notif=False)
@@ -4590,21 +4600,22 @@ class VentanaBaseAnalisis(ValidacionReporteMixin, QMainWindow):
         g_clahe_clip = self.sld_clahe.value()
         g_k_val = self.sld_gauss.value()
         g_otsu_offset = self.sld_otsu.value()
+        g_ruido = self.sld_ruido.value()
         
         # Mapa de nombre a info (offsets y areas) para eficiencia
         mapa_info = {}
         for box in self.visor_imagen.boxes:
             nombre = os.path.basename(box["crop_path"])
             mapa_info[nombre] = {
-                "offsets": box.get("offsets", {"clahe":0, "gauss":0, "otsu":0}),
+                "offsets": box.get("offsets", {"clahe":0, "gauss":0, "otsu":0, "ruido":0}),
                 "removal_areas": box.get("removal_areas", [])
             }
 
         from procesamiento.filtrado import procesar_crop_individual
         for nombre, img in self.crops_en_memoria.items():
-            info = mapa_info.get(nombre, {"offsets": {"clahe":0, "gauss":0, "otsu":0}, "removal_areas": []})
+            info = mapa_info.get(nombre, {"offsets": {"clahe":0, "gauss":0, "otsu":0, "ruido":0}, "removal_areas": []})
             offsets = info["offsets"]
-            bin_img = procesar_crop_individual(img, g_clahe_clip, g_k_val, g_otsu_offset, offsets, info["removal_areas"])
+            bin_img = procesar_crop_individual(img, g_clahe_clip, g_k_val, g_otsu_offset, g_ruido, offsets, info["removal_areas"])
             self.crops_filtrados_temp[nombre] = bin_img
 
             
@@ -4731,8 +4742,9 @@ class VentanaBaseAnalisis(ValidacionReporteMixin, QMainWindow):
         self.sld_clahe.setValue(2)
         self.sld_gauss.setValue(5)
         self.sld_otsu.setValue(0)
+        self.sld_ruido.setValue(50)
         for box in self.visor_imagen.boxes:
-            box["offsets"] = {"clahe": 0, "gauss": 0, "otsu": 0}
+            box["offsets"] = {"clahe": 0, "gauss": 0, "otsu": 0, "ruido": 0}
             box["removal_areas"] = []
             box["esqueleto_modificado"] = False
             

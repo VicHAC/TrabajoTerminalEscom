@@ -14,7 +14,7 @@ def ejecutar_conteo_ia(ruta_imagen, base_output_folder, confidence_threshold=0.2
         crops_folder, count, boxes_data = resultado
         # Initialize offsets and removal areas
         for box in boxes_data:
-            box["offsets"] = {"clahe": 0, "gauss": 0, "otsu": 0}
+            box["offsets"] = {"clahe": 0, "gauss": 0, "otsu": 0, "ruido": 0}
             box["removal_areas"] = []
         return crops_folder, count, boxes_data
     else:
