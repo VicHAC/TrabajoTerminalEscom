@@ -74,8 +74,6 @@ class VentanaLogin(QWidget):
         self.input_password = QLineEdit()
         self.input_password.setPlaceholderText("Contraseña")
         self.input_password.setEchoMode(QLineEdit.EchoMode.Password)
-        self.input_usuario.returnPressed.connect(self.verificar_login)
-        self.input_password.returnPressed.connect(self.verificar_login)
 
         btn_ingresar = QPushButton("Iniciar Sesión")
         btn_ingresar.setStyleSheet("""
@@ -92,9 +90,16 @@ class VentanaLogin(QWidget):
                 background-color: #24292f;
                 color: #FFFFFF;
             }
+            QPushButton:pressed {
+                background-color: #000000;
+                color: #FFFFFF;
+            }
         """)
         btn_ingresar.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_ingresar.clicked.connect(self.verificar_login)
+        
+        self.input_usuario.returnPressed.connect(lambda: self.simular_click_largo(btn_ingresar))
+        self.input_password.returnPressed.connect(lambda: self.simular_click_largo(btn_ingresar))
 
         btn_invitado = QPushButton("Continuar como invitado")
         btn_invitado.setStyleSheet("""
@@ -142,6 +147,12 @@ class VentanaLogin(QWidget):
         self.setTabOrder(self.input_password, btn_ingresar)
         self.setTabOrder(btn_ingresar, btn_invitado)
         self.setTabOrder(btn_invitado, self.btn_config_red)
+
+    def simular_click_largo(self, btn):
+        btn.setDown(True)
+        btn.repaint()
+        from PyQt6.QtCore import QTimer
+        QTimer.singleShot(350, lambda: (btn.setDown(False), btn.click()))
 
     def abrir_config_red(self):
         from red.config_gui import DialogoConfigRed
