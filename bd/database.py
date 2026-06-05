@@ -89,6 +89,8 @@ def inicializar_bd():
             filtro_clahe INTEGER DEFAULT 0,
             filtro_gauss INTEGER DEFAULT 0,
             filtro_otsu INTEGER DEFAULT 0,
+            filtro_ruido INTEGER DEFAULT 0,
+            filtro_cierre INTEGER DEFAULT 0,
             areas_eliminadas TEXT,
             bbox_x REAL, 
             bbox_y REAL, 
@@ -138,6 +140,10 @@ def inicializar_bd():
     try: cursor.execute("ALTER TABLE Microglia ADD COLUMN filtro_gauss INTEGER DEFAULT 0")
     except: pass
     try: cursor.execute("ALTER TABLE Microglia ADD COLUMN filtro_otsu INTEGER DEFAULT 0")
+    except: pass
+    try: cursor.execute("ALTER TABLE Microglia ADD COLUMN filtro_ruido INTEGER DEFAULT 0")
+    except: pass
+    try: cursor.execute("ALTER TABLE Microglia ADD COLUMN filtro_cierre INTEGER DEFAULT 0")
     except: pass
     try: cursor.execute("ALTER TABLE Microglia ADD COLUMN areas_eliminadas TEXT")
     except: pass
