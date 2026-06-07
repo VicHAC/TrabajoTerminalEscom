@@ -121,7 +121,7 @@ def main():
 
     ventana = VentanaLogin()
     ventana.setObjectName("ventana_login")
-    ventana.show()
+    ventana.showMaximized()
 
     sys.exit(app.exec())
 

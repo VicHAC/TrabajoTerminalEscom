@@ -3,6 +3,7 @@ import os
 from ultralytics import settings
 from ultralytics.models.yolo.model import YOLO
 
+from ia.modelo_yolo import get_optimal_device
 
 class ModelTrainer:
     def __init__(self, base_model="yolov8n.pt"):
@@ -14,13 +15,14 @@ class ModelTrainer:
         if not os.path.exists(data_config_path):
             raise FileNotFoundError(f"Configuration file not found: {data_config_path}")
 
+        device = get_optimal_device()
         results = self.model.train(
             data=data_config_path,
             epochs=epochs_count,
             imgsz=image_size,
             project="ia/entrenamiento_resultados",
             name="modelo_microglias",
-            device="cpu",
+            device=device,
         )
         return results
 

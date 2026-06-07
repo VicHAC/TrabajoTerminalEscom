@@ -209,7 +209,7 @@ class VentanaLogin(QWidget):
                     self.dashboard = VentanaInvestigador(id_usuario=id_user, rol=rol, nombre_usuario=usuario)
                 
                 dialogo_carga.close()
-                self.dashboard.show()
+                self.dashboard.showMaximized()
                 self.close()
             else:
                 from vistas.utilidades import DialogoNotificacion
@@ -234,7 +234,7 @@ class VentanaLogin(QWidget):
         self.dashboard = VentanaInvitado(id_usuario=0, rol="Invitado", nombre_usuario="Invitado")
         
         dialogo_carga.close()
-        self.dashboard.show()
+        self.dashboard.showMaximized()
         self.close()
 
     def copiar_correos_administrador(self, link):

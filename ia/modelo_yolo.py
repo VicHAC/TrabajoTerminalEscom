@@ -18,12 +18,17 @@ if not hasattr(torch, "_original_load_patched"):
 
 def get_optimal_device():
     """Evaluates available hardware and returns the optimal computation device."""
-    if not torch.cuda.is_available():
-        return "cpu"
-    capability = torch.cuda.get_device_capability()
-    if capability[0] > 9:
-        return "cpu"
-    return "cuda"
+    if torch.cuda.is_available():
+        capability = torch.cuda.get_device_capability()
+        if capability[0] <= 9:
+            return "cuda"
+        else:
+            return "cpu"
+    
+    if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+        return "mps"
+        
+    return "cpu"
 
 class MicrogliaProcessor:
     def __init__(self, model_path, confidence_threshold=0.20):
