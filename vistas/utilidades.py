@@ -395,3 +395,70 @@ class DialogoComentarioGeneral(QDialog):
             event.accept()
         else:
             super().mouseMoveEvent(event)
+
+class DialogoCarga(QDialog):
+    def __init__(self, mensaje="Cargando entorno de trabajo...", parent=None):
+        super().__init__(parent)
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog | Qt.WindowType.WindowStaysOnTopHint)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.setModal(True)
+        set_app_icon(self)
+        if parent:
+            parent.installEventFilter(self)
+
+        layout = QVBoxLayout(self)
+        frame = QFrame(self)
+        frame.setStyleSheet("""
+            QFrame { background-color: #FFFFFF; border-radius: 12px; border: 1px solid #0969da; }
+            QLabel { color: #24292f; font-size: 14px; font-weight: bold; border: none; }
+        """)
+        flayout = QVBoxLayout(frame)
+        flayout.setContentsMargins(20, 20, 20, 20)
+        flayout.setSpacing(15)
+        
+        from PyQt6.QtWidgets import QProgressBar
+        
+        lbl_mensaje = QLabel(mensaje)
+        lbl_mensaje.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        self.progress = QProgressBar()
+        self.progress.setRange(0, 0) # Indeterminate
+        self.progress.setTextVisible(False)
+        self.progress.setStyleSheet("""
+            QProgressBar {
+                border: none;
+                background-color: #e1e4e8;
+                height: 8px;
+                border-radius: 4px;
+            }
+            QProgressBar::chunk {
+                background-color: #0969da;
+                border-radius: 4px;
+            }
+        """)
+        
+        flayout.addWidget(lbl_mensaje)
+        flayout.addWidget(self.progress)
+        layout.addWidget(frame)
+        self.setLayout(layout)
+        self.setMinimumWidth(300)
+
+    def eventFilter(self, obj, event):
+        from PyQt6.QtCore import QEvent
+        if obj == self.parent() and (event.type() == QEvent.Type.Resize or event.type() == QEvent.Type.Move):
+            self.centrar_en_padre()
+        return super().eventFilter(obj, event)
+
+    def centrar_en_padre(self):
+        if self.parent():
+            p_geom = self.parent().geometry()
+            self.move(p_geom.x() + (p_geom.width() - self.width()) // 2, p_geom.y() + (p_geom.height() - self.height()) // 2)
+
+    def showEvent(self, event):
+        from PyQt6.QtWidgets import QApplication
+        super().showEvent(event)
+        if self.parent():
+            self.centrar_en_padre()
+        else:
+            screen = QApplication.primaryScreen().geometry()
+            self.move((screen.width() - self.width()) // 2, (screen.height() - self.height()) // 2)

@@ -194,8 +194,12 @@ class DropZone(QFrame):
 
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
+            from PyQt6.QtCore import QStandardPaths
+            import os
+            docs_dir = QStandardPaths.writableLocation(QStandardPaths.StandardLocation.DocumentsLocation)
+            default_dir = docs_dir if docs_dir and os.path.exists(docs_dir) else os.path.expanduser("~")
             ruta_archivo, _ = QFileDialog.getOpenFileName(
-                self, "Seleccionar imagen", "", "Imágenes TIFF (*.tiff *.tif);;Todas las imágenes (*.png *.jpg *.jpeg)",
+                self, "Seleccionar imagen", default_dir, "Imágenes TIFF (*.tiff *.tif);;Todas las imágenes (*.png *.jpg *.jpeg)",
                 options=QFileDialog.Option.DontUseNativeDialog
             )
             if ruta_archivo:
@@ -2546,8 +2550,16 @@ class DialogoHistorial(QDialog):
             if num_seleccionados == 1:
                 data = selected_reports[0].data(0, Qt.ItemDataRole.UserRole)
                 estado_compartido = data.get("estado_compartido", "")
-                if self.rol == "Tesista" and estado_compartido == "Pendiente":
-                    self.btn_cargar.setEnabled(False)
+                is_completed = data.get("reporte_completo", False)
+                tiene_comentarios = data.get("tiene_comentarios", False)
+                if self.rol == "Tesista":
+                    if is_completed:
+                        if estado_compartido == "Pendiente" and not tiene_comentarios:
+                            self.btn_cargar.setEnabled(False)
+                        else:
+                            self.btn_cargar.setEnabled(True)
+                    else:
+                        self.btn_cargar.setEnabled(True)
                 else:
                     self.btn_cargar.setEnabled(not debe_bloquear_carga(data, self.id_usuario))
             else:
@@ -2562,8 +2574,16 @@ class DialogoHistorial(QDialog):
             if num_seleccionados == 1:
                 data = selected_reports[0].data(0, Qt.ItemDataRole.UserRole)
                 estado_compartido = data.get("estado_compartido", "")
-                if self.rol == "Tesista" and estado_compartido == "Pendiente":
-                    self.btn_cargar.setEnabled(False)
+                is_completed = data.get("reporte_completo", False)
+                tiene_comentarios = data.get("tiene_comentarios", False)
+                if self.rol == "Tesista":
+                    if is_completed:
+                        if estado_compartido == "Pendiente" and not tiene_comentarios:
+                            self.btn_cargar.setEnabled(False)
+                        else:
+                            self.btn_cargar.setEnabled(True)
+                    else:
+                        self.btn_cargar.setEnabled(True)
                 else:
                     self.btn_cargar.setEnabled(not debe_bloquear_carga(data, self.id_usuario))
             else:
@@ -2610,8 +2630,12 @@ class DialogoHistorial(QDialog):
                 # Sincronizar estado general si todos los análisis internos están completados
                 cur.execute("SELECT paso_actual FROM Analisis WHERE id_reporte = ?", (id_rep,))
                 analisis_pasos = cur.fetchall()
+                total_analisis = len(analisis_pasos)
+                completados = sum(1 for an in analisis_pasos if an[0] >= 5)
+                reporte_completo = (total_analisis > 0 and completados == total_analisis)
+                
                 if analisis_pasos:
-                    todos_completados = all(an[0] >= 5 for an in analisis_pasos)
+                    todos_completados = reporte_completo
                     if todos_completados and estado == 'En progreso':
                         cur.execute("UPDATE Reporte SET estado = 'Completado' WHERE id_reporte = ?", (id_rep,))
                         conn.commit()
@@ -2621,9 +2645,9 @@ class DialogoHistorial(QDialog):
                         conn.commit()
                         estado = 'En progreso'
                 
-                # Verificar si está compartido y si fue modificado
+                # Verificar si está compartido y si fue modificado (seleccionando también comentarios)
                 cur.execute("""
-                    SELECT RC.estado, U.nombre_usuario 
+                    SELECT RC.estado, U.nombre_usuario, RC.comentarios 
                     FROM ReporteCompartido RC 
                     JOIN Usuario U ON RC.id_destinatario = U.id_usuario
                     WHERE RC.id_reporte = ?
@@ -2633,8 +2657,10 @@ class DialogoHistorial(QDialog):
                 estado_texto = estado
                 es_modificado = False
                 es_pendiente = False
+                tiene_comentarios = False
                 if share_info:
-                    sh_estado, sh_user = share_info
+                    sh_estado, sh_user, sh_comentarios = share_info
+                    tiene_comentarios = bool(sh_comentarios and sh_comentarios.strip())
                     if sh_estado == 'Modificado':
                         estado_texto = f"Modificado (por {sh_user})"
                         es_modificado = True
@@ -2643,6 +2669,12 @@ class DialogoHistorial(QDialog):
                         es_pendiente = True
                     elif sh_estado == 'Validado':
                         estado_texto = f"Validado ({sh_user})"
+                
+                if self.rol == "Tesista":
+                    if share_info and tiene_comentarios:
+                        estado_texto = "Pendiente de trabajo"
+                    else:
+                        estado_texto = "Completado" if reporte_completo else "Incompleto"
                 
                 # Obtener total de detecciones para este reporte
                 cur.execute("""
@@ -2661,7 +2693,9 @@ class DialogoHistorial(QDialog):
                 rep_item.setData(0, Qt.ItemDataRole.UserRole, {
                     "type": "reporte", "id": id_rep,
                     "estado_compartido": sh_estado_val,
-                    "id_prop": self.id_usuario  # En Mis Reportes siempre soy el propietario
+                    "id_prop": self.id_usuario,  # En Mis Reportes siempre soy el propietario
+                    "reporte_completo": reporte_completo,
+                    "tiene_comentarios": tiene_comentarios
                 })
                 
                 cur.execute("""
@@ -2690,12 +2724,7 @@ class DialogoHistorial(QDialog):
                     an_item.setDisabled(True)
                 rep_item.setExpanded(True)
                 
-                # Verificar si TODAS las imágenes del reporte están completadas
-                cur.execute("SELECT COUNT(*) FROM Analisis WHERE id_reporte = ?", (id_rep,))
-                total_analisis = cur.fetchone()[0]
-                cur.execute("SELECT COUNT(*) FROM Analisis WHERE id_reporte = ? AND paso_actual >= 5", (id_rep,))
-                completados = cur.fetchone()[0]
-                reporte_completo = (total_analisis > 0 and completados == total_analisis)
+                # reporte_completo, total_analisis, completados ya calculados arriba
                 
                 # Botón de Validar o Icono de Espera (si aplica)
                 if self.rol == "Investigador" and share_info:
@@ -2722,37 +2751,70 @@ class DialogoHistorial(QDialog):
                         self.tree.setItemWidget(rep_item, 4, container_val)
                     elif es_pendiente:
                         lbl_esperar = QLabel()
-                        lbl_esperar.setPixmap(QPixmap("assets/buttons/esperar.png").scaled(18, 18, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+                        lbl_esperar.setStyleSheet("background-color: transparent; border: none;")
+                        dpr = self.devicePixelRatioF()
+                        pix_size = int(18 * dpr)
+                        pixmap = QPixmap("assets/buttons/esperar.png").scaled(
+                            pix_size, pix_size,
+                            Qt.AspectRatioMode.KeepAspectRatio,
+                            Qt.TransformationMode.SmoothTransformation
+                        )
+                        pixmap.setDevicePixelRatio(dpr)
+                        lbl_esperar.setPixmap(pixmap)
                         lbl_esperar.setToolTip("Esperando a que el colaborador realice cambios")
                         lbl_esperar.setAlignment(Qt.AlignmentFlag.AlignCenter)
                         
                         container_esp = QWidget()
+                        container_esp.setStyleSheet("background-color: transparent; border: none;")
                         layout_esp = QHBoxLayout(container_esp)
                         layout_esp.addWidget(lbl_esperar)
                         layout_esp.setAlignment(Qt.AlignmentFlag.AlignCenter)
                         layout_esp.setContentsMargins(0, 0, 0, 0)
                         self.tree.setItemWidget(rep_item, 4, container_esp)
-                elif self.rol == "Tesista" and share_info and es_pendiente:
-                    btn_msg = QPushButton()
-                    btn_msg.setIcon(QIcon("assets/buttons/msg.png"))
-                    btn_msg.setIconSize(QSize(18, 18))
-                    btn_msg.setFixedSize(30, 30)
-                    btn_msg.setCursor(Qt.CursorShape.PointingHandCursor)
-                    btn_msg.setStyleSheet("""
-                        QPushButton { background-color: transparent; border: 1px solid transparent; outline: none; }
-                        QPushButton:hover { background-color: #eaf2ff; border-radius: 15px; }
-                        QPushButton:disabled { opacity: 0.1; }
-                    """)
-                    btn_msg.setToolTip("Cargar trabajo para corregir observaciones")
-                    btn_msg.installEventFilter(self)
-                    btn_msg.clicked.connect(lambda checked, r_id=id_rep: self.cargar_para_corregir(r_id))
-                    
-                    container_msg = QWidget()
-                    layout_m = QHBoxLayout(container_msg)
-                    layout_m.addWidget(btn_msg)
-                    layout_m.setAlignment(Qt.AlignmentFlag.AlignCenter)
-                    layout_m.setContentsMargins(0, 0, 0, 0)
-                    self.tree.setItemWidget(rep_item, 4, container_msg)
+                elif self.rol == "Tesista":
+                    if share_info and tiene_comentarios:
+                        btn_msg = QPushButton()
+                        btn_msg.setIcon(QIcon("assets/buttons/msg.png"))
+                        btn_msg.setIconSize(QSize(18, 18))
+                        btn_msg.setFixedSize(30, 30)
+                        btn_msg.setCursor(Qt.CursorShape.PointingHandCursor)
+                        btn_msg.setStyleSheet("""
+                            QPushButton { background-color: transparent; border: 1px solid transparent; outline: none; }
+                            QPushButton:hover { background-color: #eaf2ff; border-radius: 15px; }
+                            QPushButton:disabled { opacity: 0.1; }
+                        """)
+                        btn_msg.setToolTip("Cargar trabajo para corregir observaciones")
+                        btn_msg.installEventFilter(self)
+                        btn_msg.clicked.connect(lambda checked, r_id=id_rep: self.cargar_para_corregir(r_id))
+                        
+                        container_msg = QWidget()
+                        container_msg.setStyleSheet("background-color: transparent; border: none;")
+                        layout_m = QHBoxLayout(container_msg)
+                        layout_m.addWidget(btn_msg)
+                        layout_m.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                        layout_m.setContentsMargins(0, 0, 0, 0)
+                        self.tree.setItemWidget(rep_item, 4, container_msg)
+                    elif not reporte_completo:
+                        btn_pend = QPushButton()
+                        btn_pend.setIcon(QIcon("assets/buttons/pendiente.png"))
+                        btn_pend.setIconSize(QSize(18, 18))
+                        btn_pend.setFixedSize(30, 30)
+                        btn_pend.setCursor(Qt.CursorShape.PointingHandCursor)
+                        btn_pend.setStyleSheet("""
+                            QPushButton { background-color: transparent; border: 1px solid transparent; outline: none; }
+                            QPushButton:hover { background-color: #eaf2ff; border-radius: 15px; }
+                        """)
+                        btn_pend.setToolTip("Análisis pendiente (imágenes incompletas)")
+                        btn_pend.installEventFilter(self)
+                        btn_pend.clicked.connect(lambda checked, r_id=id_rep: self.cargar_para_corregir(r_id))
+                        
+                        container_pend = QWidget()
+                        container_pend.setStyleSheet("background-color: transparent; border: none;")
+                        layout_p = QHBoxLayout(container_pend)
+                        layout_p.addWidget(btn_pend)
+                        layout_p.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                        layout_p.setContentsMargins(0, 0, 0, 0)
+                        self.tree.setItemWidget(rep_item, 4, container_pend)
                 
                 # Botón de Descargar
                 btn_dl = QPushButton()
@@ -2781,7 +2843,7 @@ class DialogoHistorial(QDialog):
                 layout_d.setContentsMargins(0, 0, 0, 0)
                 self.tree.setItemWidget(rep_item, 5, container_dl)
                 
-            # 2. Cargar Reportes Compartidos (Enviados y Recibidos)
+            # 2. Cargar Reportes Compartidos (Enviados y Recibidos) (seleccionando también comentarios)
             cur.execute("""
                 SELECT 
                     RC.id_reporte, 
@@ -2791,7 +2853,8 @@ class DialogoHistorial(QDialog):
                     U_prop.nombre_usuario AS propietario_name,
                     U_dest.nombre_usuario AS destinatario_name,
                     RC.id_propietario,
-                    RC.id_destinatario
+                    RC.id_destinatario,
+                    RC.comentarios
                 FROM ReporteCompartido RC
                 JOIN Reporte R ON RC.id_reporte = R.id_reporte
                 JOIN Usuario U_prop ON RC.id_propietario = U_prop.id_usuario
@@ -2801,26 +2864,42 @@ class DialogoHistorial(QDialog):
             """, (self.id_usuario, self.id_usuario))
             compartidos = cur.fetchall()
             for comp in compartidos:
-                id_rep, nombre, fecha, estado_compartido, propietario_name, destinatario_name, id_prop, id_dest = comp
+                id_rep, nombre, fecha, estado_compartido, propietario_name, destinatario_name, id_prop, id_dest, comentarios_compartido = comp
                 
+                # Verificar si TODAS las imágenes del reporte compartido están completadas
+                cur.execute("SELECT COUNT(*) FROM Analisis WHERE id_reporte = ?", (id_rep,))
+                total_analisis = cur.fetchone()[0]
+                cur.execute("SELECT COUNT(*) FROM Analisis WHERE id_reporte = ? AND paso_actual >= 5", (id_rep,))
+                completados = cur.fetchone()[0]
+                reporte_completo = (total_analisis > 0 and completados == total_analisis)
+
                 if id_prop == self.id_usuario:
-                    # Reporte que YO compartí con alguien más
                     rol_text = f"Para: {destinatario_name}"
-                    if estado_compartido == 'Pendiente':
-                        estado_texto = "Pendiente de trabajo"
-                    elif estado_compartido == 'Modificado':
-                        estado_texto = f"Modificado (por {destinatario_name})"
-                    else:
-                        estado_texto = "Validado (por ti)"
                 else:
-                    # Reporte que compartieron CONMIGO
                     rol_text = f"De: {propietario_name}"
-                    if estado_compartido == 'Pendiente':
+
+                if self.rol == "Tesista":
+                    if estado_compartido == 'Pendiente' and comentarios_compartido and comentarios_compartido.strip():
                         estado_texto = "Pendiente de trabajo"
-                    elif estado_compartido == 'Modificado':
-                        estado_texto = "Modificado por ti"
                     else:
-                        estado_texto = "Validado por Investigador"
+                        estado_texto = "Completado" if reporte_completo else "Incompleto"
+                else:
+                    if id_prop == self.id_usuario:
+                        # Reporte que YO compartí con alguien más
+                        if estado_compartido == 'Pendiente':
+                            estado_texto = "Pendiente de trabajo"
+                        elif estado_compartido == 'Modificado':
+                            estado_texto = f"Modificado (por {destinatario_name})"
+                        else:
+                            estado_texto = "Validado (por ti)"
+                    else:
+                        # Reporte que compartieron CONMIGO
+                        if estado_compartido == 'Pendiente':
+                            estado_texto = "Pendiente de trabajo"
+                        elif estado_compartido == 'Modificado':
+                            estado_texto = "Modificado por ti"
+                        else:
+                            estado_texto = "Validado por Investigador"
                 
                 # Obtener total de detecciones para este reporte
                 cur.execute("""
@@ -2864,42 +2943,19 @@ class DialogoHistorial(QDialog):
                     an_item.setDisabled(True)
                 rep_item.setExpanded(True)
                 
-                # Verificar si TODAS las imágenes del reporte compartido están completadas
-                cur.execute("SELECT COUNT(*) FROM Analisis WHERE id_reporte = ?", (id_rep,))
-                total_analisis = cur.fetchone()[0]
-                cur.execute("SELECT COUNT(*) FROM Analisis WHERE id_reporte = ? AND paso_actual >= 5", (id_rep,))
-                completados = cur.fetchone()[0]
-                reporte_completo = (total_analisis > 0 and completados == total_analisis)
-
                 # Guardar estado en item para uso en actualizar_estado_boton_borrar
+                tiene_comentarios_comp = bool(comentarios_compartido and comentarios_compartido.strip())
                 rep_item.setData(0, Qt.ItemDataRole.UserRole, {
                     "type": "reporte", "id": id_rep,
                     "estado_compartido": estado_compartido,
-                    "id_prop": id_prop, "id_dest": id_dest
+                    "id_prop": id_prop, "id_dest": id_dest,
+                    "reporte_completo": reporte_completo,
+                    "tiene_comentarios": tiene_comentarios_comp
                 })
 
-                # Botón de Validar o Icono de Espera (solo para propietario)
-                if id_prop == self.id_usuario:
-                    if estado_compartido == 'Modificado':
-                        construir_boton_validar(
-                            self.tree_compartidos, rep_item, id_rep,
-                            reporte_completo, total_analisis, completados,
-                            self.validar_reporte
-                        )
-                    elif estado_compartido == 'Pendiente':
-                        lbl_esperar = QLabel()
-                        lbl_esperar.setPixmap(QPixmap("assets/buttons/esperar.png").scaled(18, 18, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
-                        lbl_esperar.setToolTip("Esperando a que el colaborador realice cambios")
-                        lbl_esperar.setAlignment(Qt.AlignmentFlag.AlignCenter)
-                        
-                        container_esp = QWidget()
-                        layout_esp = QHBoxLayout(container_esp)
-                        layout_esp.addWidget(lbl_esperar)
-                        layout_esp.setAlignment(Qt.AlignmentFlag.AlignCenter)
-                        layout_esp.setContentsMargins(0, 0, 0, 0)
-                        self.tree_compartidos.setItemWidget(rep_item, 5, container_esp)
-                elif id_dest == self.id_usuario:
-                    if estado_compartido == 'Pendiente':
+                # Botón de Validar o Icono de Espera / Pendiente
+                if self.rol == "Tesista":
+                    if estado_compartido == 'Pendiente' and comentarios_compartido and comentarios_compartido.strip():
                         btn_msg = QPushButton()
                         btn_msg.setIcon(QIcon("assets/buttons/msg.png"))
                         btn_msg.setIconSize(QSize(18, 18))
@@ -2915,11 +2971,108 @@ class DialogoHistorial(QDialog):
                         btn_msg.clicked.connect(lambda checked, r_id=id_rep: self.cargar_para_corregir(r_id))
                         
                         container_msg = QWidget()
+                        container_msg.setStyleSheet("background-color: transparent; border: none;")
                         layout_m = QHBoxLayout(container_msg)
                         layout_m.addWidget(btn_msg)
                         layout_m.setAlignment(Qt.AlignmentFlag.AlignCenter)
                         layout_m.setContentsMargins(0, 0, 0, 0)
                         self.tree_compartidos.setItemWidget(rep_item, 5, container_msg)
+                    elif not reporte_completo:
+                        btn_pend = QPushButton()
+                        btn_pend.setIcon(QIcon("assets/buttons/pendiente.png"))
+                        btn_pend.setIconSize(QSize(18, 18))
+                        btn_pend.setFixedSize(30, 30)
+                        btn_pend.setCursor(Qt.CursorShape.PointingHandCursor)
+                        btn_pend.setStyleSheet("""
+                            QPushButton { background-color: transparent; border: 1px solid transparent; outline: none; }
+                            QPushButton:hover { background-color: #eaf2ff; border-radius: 15px; }
+                        """)
+                        btn_pend.setToolTip("Análisis pendiente")
+                        btn_pend.installEventFilter(self)
+                        btn_pend.clicked.connect(lambda checked, r_id=id_rep: self.cargar_para_corregir(r_id))
+                        
+                        container_pend = QWidget()
+                        container_pend.setStyleSheet("background-color: transparent; border: none;")
+                        layout_p = QHBoxLayout(container_pend)
+                        layout_p.addWidget(btn_pend)
+                        layout_p.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                        layout_p.setContentsMargins(0, 0, 0, 0)
+                        self.tree_compartidos.setItemWidget(rep_item, 5, container_pend)
+                    elif estado_compartido == 'Pendiente':
+                        lbl_esperar = QLabel()
+                        lbl_esperar.setStyleSheet("background-color: transparent; border: none;")
+                        dpr = self.devicePixelRatioF()
+                        pix_size = int(18 * dpr)
+                        pixmap = QPixmap("assets/buttons/esperar.png").scaled(
+                            pix_size, pix_size,
+                            Qt.AspectRatioMode.KeepAspectRatio,
+                            Qt.TransformationMode.SmoothTransformation
+                        )
+                        pixmap.setDevicePixelRatio(dpr)
+                        lbl_esperar.setPixmap(pixmap)
+                        lbl_esperar.setToolTip("Esperando validación del investigador")
+                        lbl_esperar.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                        
+                        container_esp = QWidget()
+                        container_esp.setStyleSheet("background-color: transparent; border: none;")
+                        layout_esp = QHBoxLayout(container_esp)
+                        layout_esp.addWidget(lbl_esperar)
+                        layout_esp.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                        layout_esp.setContentsMargins(0, 0, 0, 0)
+                        self.tree_compartidos.setItemWidget(rep_item, 5, container_esp)
+                else:
+                    if id_prop == self.id_usuario:
+                        if estado_compartido == 'Modificado':
+                            construir_boton_validar(
+                                self.tree_compartidos, rep_item, id_rep,
+                                reporte_completo, total_analisis, completados,
+                                self.validar_reporte
+                            )
+                        elif estado_compartido == 'Pendiente':
+                            lbl_esperar = QLabel()
+                            lbl_esperar.setStyleSheet("background-color: transparent; border: none;")
+                            dpr = self.devicePixelRatioF()
+                            pix_size = int(18 * dpr)
+                            pixmap = QPixmap("assets/buttons/esperar.png").scaled(
+                                pix_size, pix_size,
+                                Qt.AspectRatioMode.KeepAspectRatio,
+                                Qt.TransformationMode.SmoothTransformation
+                            )
+                            pixmap.setDevicePixelRatio(dpr)
+                            lbl_esperar.setPixmap(pixmap)
+                            lbl_esperar.setToolTip("Esperando a que el colaborador realice cambios")
+                            lbl_esperar.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                            
+                            container_esp = QWidget()
+                            container_esp.setStyleSheet("background-color: transparent; border: none;")
+                            layout_esp = QHBoxLayout(container_esp)
+                            layout_esp.addWidget(lbl_esperar)
+                            layout_esp.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                            layout_esp.setContentsMargins(0, 0, 0, 0)
+                            self.tree_compartidos.setItemWidget(rep_item, 5, container_esp)
+                    elif id_dest == self.id_usuario:
+                        if estado_compartido == 'Pendiente':
+                            btn_msg = QPushButton()
+                            btn_msg.setIcon(QIcon("assets/buttons/msg.png"))
+                            btn_msg.setIconSize(QSize(18, 18))
+                            btn_msg.setFixedSize(30, 30)
+                            btn_msg.setCursor(Qt.CursorShape.PointingHandCursor)
+                            btn_msg.setStyleSheet("""
+                                QPushButton { background-color: transparent; border: 1px solid transparent; outline: none; }
+                                QPushButton:hover { background-color: #eaf2ff; border-radius: 15px; }
+                                QPushButton:disabled { opacity: 0.1; }
+                            """)
+                            btn_msg.setToolTip("Cargar trabajo para corregir observaciones")
+                            btn_msg.installEventFilter(self)
+                            btn_msg.clicked.connect(lambda checked, r_id=id_rep: self.cargar_para_corregir(r_id))
+                            
+                            container_msg = QWidget()
+                            container_msg.setStyleSheet("background-color: transparent; border: none;")
+                            layout_m = QHBoxLayout(container_msg)
+                            layout_m.addWidget(btn_msg)
+                            layout_m.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                            layout_m.setContentsMargins(0, 0, 0, 0)
+                            self.tree_compartidos.setItemWidget(rep_item, 5, container_msg)
                 
                 # Botón de Descargar
                 if id_prop == self.id_usuario:
@@ -3717,8 +3870,30 @@ class VentanaBaseAnalisis(ValidacionReporteMixin, QMainWindow):
             self.btn_herramienta_eliminar.hide()
             self.btn_corregir_filtrado.hide()
         else:
-            if self.rol == "Tesista" and self.id_reporte_actual is None:
-                self.btn_cargar.setEnabled(False)
+            if self.rol == "Tesista":
+                if self.id_reporte_actual is None:
+                    self.btn_cargar.setEnabled(False)
+                else:
+                    # Si el rol es Tesista y ya hay imágenes, sólo permitir si está validado por el investigador
+                    from bd.database import conectar
+                    conn = conectar(); cur = conn.cursor()
+                    try:
+                        cur.execute("SELECT COUNT(*) FROM Analisis WHERE id_reporte = ?", (self.id_reporte_actual,))
+                        total_imagenes = cur.fetchone()[0]
+                        cur.execute("SELECT estado FROM ReporteCompartido WHERE id_reporte = ?", (self.id_reporte_actual,))
+                        comp_res = cur.fetchone()
+                        reporte_validado = (comp_res is not None and comp_res[0] == 'Validado')
+                    except Exception as e:
+                        logging.error(f"Error checking validation status for cargar button: {e}")
+                        total_imagenes = 0
+                        reporte_validado = False
+                    finally:
+                        conn.close()
+                    
+                    if total_imagenes == 0:
+                        self.btn_cargar.setEnabled(paso == 0 or paso == 5)
+                    else:
+                        self.btn_cargar.setEnabled(reporte_validado and (paso == 0 or paso == 5))
             else:
                 self.btn_cargar.setEnabled(paso == 0 or paso == 5)
             self.btn_conteo.setEnabled(paso == 1)
@@ -4543,7 +4718,7 @@ class VentanaBaseAnalisis(ValidacionReporteMixin, QMainWindow):
             elif clicked == btn_cancel or clicked is None:
                 return
                 
-        dialogo = DialogoCarga("Cargando IA y aplicando conteo...\nPor favor, espera.", self); dialogo.show()
+        dialogo = DialogoCarga("Aplicando conteo...\nPor favor, espera.", self); dialogo.show()
         from PyQt6.QtWidgets import QApplication; QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor); QApplication.processEvents()
         try:
             output_dir = os.path.join(os.getcwd(), "analisis_resultados")
@@ -5026,7 +5201,13 @@ class VentanaBaseAnalisis(ValidacionReporteMixin, QMainWindow):
         from datetime import datetime; from PyQt6.QtWidgets import QFileDialog; from pathlib import Path
         fecha_str = datetime.now().strftime("%Y%m%d_%H%M"); default_name = f"Reporte_{fecha_str}.xlsx"
         
-        filepath, filter_selected = QFileDialog.getSaveFileName(self, "Guardar Reporte", default_name, "Excel Files (*.xlsx);;PDF Files (*.pdf);;Both Formats (*.xlsx *.pdf)")
+        from PyQt6.QtCore import QStandardPaths
+        import os
+        docs_dir = QStandardPaths.writableLocation(QStandardPaths.StandardLocation.DocumentsLocation)
+        base_dir = docs_dir if docs_dir and os.path.exists(docs_dir) else os.path.expanduser("~")
+        default_path = os.path.join(base_dir, default_name)
+        
+        filepath, filter_selected = QFileDialog.getSaveFileName(self, "Guardar Reporte", default_path, "Excel Files (*.xlsx);;PDF Files (*.pdf);;Both Formats (*.xlsx *.pdf)")
         if not filepath: return
             
         try:

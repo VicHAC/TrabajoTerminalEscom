@@ -74,8 +74,6 @@ class VentanaLogin(QWidget):
         self.input_password = QLineEdit()
         self.input_password.setPlaceholderText("Contraseña")
         self.input_password.setEchoMode(QLineEdit.EchoMode.Password)
-        self.input_usuario.returnPressed.connect(self.verificar_login)
-        self.input_password.returnPressed.connect(self.verificar_login)
 
         btn_ingresar = QPushButton("Iniciar Sesión")
         btn_ingresar.setStyleSheet("""
@@ -92,9 +90,16 @@ class VentanaLogin(QWidget):
                 background-color: #24292f;
                 color: #FFFFFF;
             }
+            QPushButton:pressed {
+                background-color: #000000;
+                color: #FFFFFF;
+            }
         """)
         btn_ingresar.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_ingresar.clicked.connect(self.verificar_login)
+        
+        self.input_usuario.returnPressed.connect(lambda: self.simular_click_largo(btn_ingresar))
+        self.input_password.returnPressed.connect(lambda: self.simular_click_largo(btn_ingresar))
 
         btn_invitado = QPushButton("Continuar como invitado")
         btn_invitado.setStyleSheet("""
@@ -143,6 +148,12 @@ class VentanaLogin(QWidget):
         self.setTabOrder(btn_ingresar, btn_invitado)
         self.setTabOrder(btn_invitado, self.btn_config_red)
 
+    def simular_click_largo(self, btn):
+        btn.setDown(True)
+        btn.repaint()
+        from PyQt6.QtCore import QTimer
+        QTimer.singleShot(350, lambda: (btn.setDown(False), btn.click()))
+
     def abrir_config_red(self):
         from red.config_gui import DialogoConfigRed
         dialogo = DialogoConfigRed(self)
@@ -180,6 +191,13 @@ class VentanaLogin(QWidget):
                 except Exception as e_ses:
                     print(f"Error al registrar sesión: {e_ses}")
                 
+                from vistas.utilidades import DialogoCarga
+                from PyQt6.QtWidgets import QApplication
+                
+                dialogo_carga = DialogoCarga("Cargando entorno de trabajo...", self)
+                dialogo_carga.show()
+                QApplication.processEvents()
+
                 if rol == "Administrador":
                     from vistas.administrador import VentanaAdministrador
                     self.dashboard = VentanaAdministrador(id_usuario=id_user)
@@ -190,6 +208,7 @@ class VentanaLogin(QWidget):
                     from vistas.investigador import VentanaInvestigador
                     self.dashboard = VentanaInvestigador(id_usuario=id_user, rol=rol, nombre_usuario=usuario)
                 
+                dialogo_carga.close()
                 self.dashboard.show()
                 self.close()
             else:
@@ -200,8 +219,21 @@ class VentanaLogin(QWidget):
             DialogoNotificacion("Error", f"Falla en (BD): {e}", "error", self).exec()
 
     def login_invitado(self):
+        from vistas.utilidades import DialogoCarga
+        from PyQt6.QtWidgets import QApplication
+        
+        dialogo_carga = DialogoCarga("Cargando entorno de trabajo...", self)
+        dialogo_carga.show()
+        QApplication.processEvents()
+
+        # Limpiar cualquier dato huérfano de una sesión de invitado anterior
+        from bd.database import limpiar_datos_invitado
+        limpiar_datos_invitado()
+
         from vistas.invitado import VentanaInvitado
         self.dashboard = VentanaInvitado(id_usuario=0, rol="Invitado", nombre_usuario="Invitado")
+        
+        dialogo_carga.close()
         self.dashboard.show()
         self.close()
 
