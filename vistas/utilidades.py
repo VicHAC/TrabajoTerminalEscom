@@ -418,8 +418,8 @@ class DialogoCarga(QDialog):
         
         from PyQt6.QtWidgets import QProgressBar
         
-        lbl_mensaje = QLabel(mensaje)
-        lbl_mensaje.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.lbl_mensaje = QLabel(mensaje)
+        self.lbl_mensaje.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
         self.progress = QProgressBar()
         self.progress.setRange(0, 0) # Indeterminate
@@ -437,11 +437,20 @@ class DialogoCarga(QDialog):
             }
         """)
         
-        flayout.addWidget(lbl_mensaje)
+        flayout.addWidget(self.lbl_mensaje)
         flayout.addWidget(self.progress)
         layout.addWidget(frame)
         self.setLayout(layout)
-        self.setMinimumWidth(300)
+        self.setMinimumWidth(400)
+
+    def actualizar(self, valor, texto=None):
+        if self.progress.maximum() == 0:
+            self.progress.setRange(0, 100)
+        self.progress.setValue(valor)
+        if texto:
+            self.lbl_mensaje.setText(texto)
+            self.adjustSize()
+            self.centrar_en_padre()
 
     def eventFilter(self, obj, event):
         from PyQt6.QtCore import QEvent

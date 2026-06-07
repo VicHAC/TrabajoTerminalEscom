@@ -194,19 +194,35 @@ class VentanaLogin(QWidget):
                 from vistas.utilidades import DialogoCarga
                 from PyQt6.QtWidgets import QApplication
                 
-                dialogo_carga = DialogoCarga("Cargando entorno de trabajo...", self)
+                dialogo_carga = DialogoCarga("Verificando sesión...", self)
                 dialogo_carga.show()
+                dialogo_carga.actualizar(10, "Sesión verificada...")
                 QApplication.processEvents()
 
                 if rol == "Administrador":
+                    dialogo_carga.actualizar(40, "Cargando dependencias de Administración...")
+                    QApplication.processEvents()
                     from vistas.administrador import VentanaAdministrador
+                    dialogo_carga.actualizar(80, "Construyendo panel de Administrador...")
+                    QApplication.processEvents()
                     self.dashboard = VentanaAdministrador(id_usuario=id_user)
                 elif rol == "Tesista":
+                    dialogo_carga.actualizar(40, "Cargando dependencias de IA y análisis...")
+                    QApplication.processEvents()
                     from vistas.tesista import VentanaTesista
+                    dialogo_carga.actualizar(80, "Construyendo entorno de Tesista...")
+                    QApplication.processEvents()
                     self.dashboard = VentanaTesista(id_usuario=id_user, rol=rol, nombre_usuario=usuario)
                 else:
+                    dialogo_carga.actualizar(40, "Cargando dependencias de revisión...")
+                    QApplication.processEvents()
                     from vistas.investigador import VentanaInvestigador
+                    dialogo_carga.actualizar(80, "Construyendo entorno de Investigador...")
+                    QApplication.processEvents()
                     self.dashboard = VentanaInvestigador(id_usuario=id_user, rol=rol, nombre_usuario=usuario)
+                
+                dialogo_carga.actualizar(100, "¡Listo!")
+                QApplication.processEvents()
                 
                 dialogo_carga.close()
                 self.dashboard.showMaximized()
@@ -222,16 +238,25 @@ class VentanaLogin(QWidget):
         from vistas.utilidades import DialogoCarga
         from PyQt6.QtWidgets import QApplication
         
-        dialogo_carga = DialogoCarga("Cargando entorno de trabajo...", self)
+        dialogo_carga = DialogoCarga("Inicializando modo invitado...", self)
         dialogo_carga.show()
+        dialogo_carga.actualizar(20, "Limpiando sesiones previas...")
         QApplication.processEvents()
 
         # Limpiar cualquier dato huérfano de una sesión de invitado anterior
         from bd.database import limpiar_datos_invitado
         limpiar_datos_invitado()
 
+        dialogo_carga.actualizar(50, "Cargando módulos de análisis...")
+        QApplication.processEvents()
         from vistas.invitado import VentanaInvitado
+        
+        dialogo_carga.actualizar(80, "Construyendo panel de invitado...")
+        QApplication.processEvents()
         self.dashboard = VentanaInvitado(id_usuario=0, rol="Invitado", nombre_usuario="Invitado")
+        
+        dialogo_carga.actualizar(100, "¡Listo!")
+        QApplication.processEvents()
         
         dialogo_carga.close()
         self.dashboard.showMaximized()
