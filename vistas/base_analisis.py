@@ -1166,7 +1166,7 @@ class DialogoVistaCelular(QDialog):
         grid_offsets = QGridLayout()
         
         # CLAHE Offset
-        grid_offsets.addWidget(QLabel("Contraste:"), 0, 0)
+        grid_offsets.addWidget(QLabel("Realce Contraste:"), 0, 0)
         self.sld_o_clahe = QSlider(Qt.Orientation.Horizontal); self.sld_o_clahe.setRange(-5, 5)
         self.sld_o_clahe.setValue(self.box["offsets"]["clahe"])
         grid_offsets.addWidget(self.sld_o_clahe, 0, 1)
@@ -1178,13 +1178,13 @@ class DialogoVistaCelular(QDialog):
         grid_offsets.addWidget(self.sld_o_gauss, 1, 1)
         
         # Otsu Offset
-        grid_offsets.addWidget(QLabel("Umbral:"), 2, 0)
+        grid_offsets.addWidget(QLabel("Sensibilidad Umbral:"), 2, 0)
         self.sld_o_otsu = QSlider(Qt.Orientation.Horizontal); self.sld_o_otsu.setRange(-50, 50)
         self.sld_o_otsu.setValue(self.box["offsets"]["otsu"])
         grid_offsets.addWidget(self.sld_o_otsu, 2, 1)
         
         # Ruido Offset
-        grid_offsets.addWidget(QLabel("Ruido:"), 3, 0)
+        grid_offsets.addWidget(QLabel("Eliminar Ruido:"), 3, 0)
         self.sld_o_ruido = QSlider(Qt.Orientation.Horizontal); self.sld_o_ruido.setRange(-100, 100)
         self.sld_o_ruido.setValue(self.box["offsets"].get("ruido", 0))
         grid_offsets.addWidget(self.sld_o_ruido, 3, 1)
@@ -1431,6 +1431,8 @@ class DialogoVistaCelular(QDialog):
     def actualizar_offsets(self):
         # 1. Actualizar valores en el box
         self.box["offsets"]["clahe"] = self.sld_o_clahe.value()
+        self.box["offsets"]["gauss"] = self.sld_o_gauss.value()
+        self.box["offsets"]["otsu"] = self.sld_o_otsu.value()
         self.box["offsets"]["ruido"] = self.sld_o_ruido.value()
         
         # 2. Notificar al padre para que reprocese globalmente
@@ -3115,24 +3117,108 @@ class VentanaBaseAnalisis(ValidacionReporteMixin, QMainWindow):
         self.frame_filtros.hide()
         layout_filtros = QVBoxLayout(self.frame_filtros)
         layout_filtros.setContentsMargins(0, 10, 0, 10)
-        lbl_f_titulo = QLabel("Ajuste de Filtros Globales"); lbl_f_titulo.setStyleSheet("font-weight: bold; color: #003366;")
-
+        layout_filtros.setSpacing(6)
+        lbl_f_titulo = QLabel("Ajuste de Filtros Globales"); lbl_f_titulo.setStyleSheet("font-weight: bold; color: #003366; font-size: 12px;")
         layout_filtros.addWidget(lbl_f_titulo)
-        lbl_clahe = QLabel("Contraste (CLAHE):")
-        self.sld_clahe = QSlider(Qt.Orientation.Horizontal); self.sld_clahe.setRange(0, 10); self.sld_clahe.setValue(2)
-        layout_filtros.addWidget(lbl_clahe); layout_filtros.addWidget(self.sld_clahe)
-        lbl_gauss = QLabel("Suavizado Gaussiano:")
-        self.sld_gauss = QSlider(Qt.Orientation.Horizontal); self.sld_gauss.setRange(1, 15); self.sld_gauss.setSingleStep(2); self.sld_gauss.setValue(5)
-        layout_filtros.addWidget(lbl_gauss); layout_filtros.addWidget(self.sld_gauss)
-        lbl_otsu = QLabel("Umbral Binarización:")
-        self.sld_otsu = QSlider(Qt.Orientation.Horizontal); self.sld_otsu.setRange(-50, 50); self.sld_otsu.setValue(0)
-        layout_filtros.addWidget(lbl_otsu); layout_filtros.addWidget(self.sld_otsu)
-        lbl_ruido = QLabel("Eliminar Ruido Máx (px):")
-        self.sld_ruido = QSlider(Qt.Orientation.Horizontal); self.sld_ruido.setRange(0, 200); self.sld_ruido.setValue(50)
-        layout_filtros.addWidget(lbl_ruido); layout_filtros.addWidget(self.sld_ruido)
-        estilo_slider = "QSlider::groove:horizontal { border: 1px solid #d0d7de; height: 4px; background: #f6f8fa; margin: 2px 0; border-radius: 2px; } QSlider::handle:horizontal { background: #ffffff; border: 1px solid #3a61a0; width: 12px; height: 12px; margin: -5px 0; border-radius: 6px; } QSlider::handle:horizontal:hover { background: #eaf2ff; }"
-        self.sld_clahe.setStyleSheet(estilo_slider); self.sld_gauss.setStyleSheet(estilo_slider); self.sld_otsu.setStyleSheet(estilo_slider); self.sld_ruido.setStyleSheet(estilo_slider)
 
+        estilo_slider = "QSlider::groove:horizontal { border: 1px solid #d0d7de; height: 4px; background: #f6f8fa; margin: 2px 0; border-radius: 2px; } QSlider::handle:horizontal { background: #ffffff; border: 1px solid #3a61a0; width: 12px; height: 12px; margin: -5px 0; border-radius: 6px; } QSlider::handle:horizontal:hover { background: #eaf2ff; } QSlider::handle:horizontal:disabled { background: #e1e4e8; border-color: #d0d7de; }"
+        estilo_chk = "QCheckBox { font-size: 11px; font-weight: bold; color: #24292f; } QCheckBox::indicator { width: 14px; height: 14px; }"
+
+        # 1. Corrección Iluminación (White Top-Hat)
+        self.chk_tophat = QCheckBox("Homogeneizar Fondo")
+        self.chk_tophat.setStyleSheet(estilo_chk)
+        self.chk_tophat.setChecked(False)
+        self.sld_tophat = QSlider(Qt.Orientation.Horizontal)
+        self.sld_tophat.setRange(5, 50)
+        self.sld_tophat.setValue(30)
+        self.sld_tophat.setStyleSheet(estilo_slider)
+        self.sld_tophat.setEnabled(False)
+        layout_filtros.addWidget(self.chk_tophat)
+        layout_filtros.addWidget(self.sld_tophat)
+
+        # 2. Contraste (CLAHE)
+        self.chk_clahe = QCheckBox("Realzar Contraste")
+        self.chk_clahe.setStyleSheet(estilo_chk)
+        self.chk_clahe.setChecked(True)
+        self.sld_clahe = QSlider(Qt.Orientation.Horizontal)
+        self.sld_clahe.setRange(1, 10)
+        self.sld_clahe.setValue(2)
+        self.sld_clahe.setStyleSheet(estilo_slider)
+        layout_filtros.addWidget(self.chk_clahe)
+        layout_filtros.addWidget(self.sld_clahe)
+
+        # 3. Suavizado
+        self.chk_suavizado = QCheckBox("Aplicar Suavizado")
+        self.chk_suavizado.setStyleSheet(estilo_chk)
+        self.chk_suavizado.setChecked(True)
+        
+        self.combo_suavizado = QComboBox()
+        self.combo_suavizado.addItems(["Básico (Gaussiano)", "Conservar Bordes (Bilateral)"])
+        self.combo_suavizado.setStyleSheet("""
+            QComboBox { 
+                background-color: white; 
+                border: 1px solid #d0d7de; 
+                border-radius: 4px; 
+                padding: 4px 8px; 
+                font-size: 11px; 
+                color: #24292f; 
+                font-weight: bold;
+            }
+            QComboBox:hover { background-color: #f6f8fa; }
+            QComboBox QAbstractItemView { background-color: white; border: 1px solid #d0d7de; selection-background-color: #eaf2ff; selection-color: #0969da; }
+        """)
+        
+        self.sld_suavizado = QSlider(Qt.Orientation.Horizontal)
+        self.sld_suavizado.setRange(1, 15)
+        self.sld_suavizado.setSingleStep(2)
+        self.sld_suavizado.setValue(5)
+        self.sld_suavizado.setStyleSheet(estilo_slider)
+        
+        # Conectar el cambio de tipo de suavizado para ajustar el valor por defecto del slider y disparar el preview
+        def al_cambiar_tipo_suavizado(index):
+            if index == 0: # Gaussiano
+                self.sld_suavizado.setSingleStep(2)
+                self.sld_suavizado.setValue(5)
+            else: # Bilateral
+                self.sld_suavizado.setSingleStep(1)
+                self.sld_suavizado.setValue(9)
+            self.previsualizar_filtrado()
+            
+        self.combo_suavizado.currentIndexChanged.connect(al_cambiar_tipo_suavizado)
+        
+        # Conectar el checkbox para habilitar/deshabilitar el combo y el slider
+        def al_alternar_suavizado(checked):
+            self.combo_suavizado.setEnabled(checked)
+            self.sld_suavizado.setEnabled(checked)
+            self.previsualizar_filtrado()
+            
+        self.chk_suavizado.toggled.connect(al_alternar_suavizado)
+        
+        layout_filtros.addWidget(self.chk_suavizado)
+        layout_filtros.addWidget(self.combo_suavizado)
+        layout_filtros.addWidget(self.sld_suavizado)
+
+        # 4. Umbral Binarización (Offset)
+        lbl_otsu = QLabel("Sensibilidad de Umbral:")
+        lbl_otsu.setStyleSheet("font-size: 11px; font-weight: bold; color: #24292f;")
+        self.sld_otsu = QSlider(Qt.Orientation.Horizontal)
+        self.sld_otsu.setRange(-50, 50)
+        self.sld_otsu.setValue(0)
+        self.sld_otsu.setStyleSheet(estilo_slider)
+        layout_filtros.addWidget(lbl_otsu)
+        layout_filtros.addWidget(self.sld_otsu)
+
+        # 5. Eliminar Ruido
+        self.chk_ruido = QCheckBox("Eliminar Ruido Pequeño (px)")
+        self.chk_ruido.setStyleSheet(estilo_chk)
+        self.chk_ruido.setChecked(True)
+        self.sld_ruido = QSlider(Qt.Orientation.Horizontal)
+        self.sld_ruido.setRange(0, 200)
+        self.sld_ruido.setValue(50)
+        self.sld_ruido.setStyleSheet(estilo_slider)
+        self.chk_ruido.toggled.connect(lambda checked: [self.sld_ruido.setEnabled(checked), self.previsualizar_filtrado()])
+        layout_filtros.addWidget(self.chk_ruido)
+        layout_filtros.addWidget(self.sld_ruido)
 
         btn_f_layout = QHBoxLayout()
         btn_aceptar_filtro = QPushButton("Aceptar")
@@ -3174,10 +3260,17 @@ class VentanaBaseAnalisis(ValidacionReporteMixin, QMainWindow):
         layout_filtros.addLayout(btn_f_layout)
         self.menu_lateral.addWidget(self.frame_filtros)
         
-        self.sld_clahe.valueChanged.connect(self.previsualizar_filtrado)
-        self.sld_gauss.valueChanged.connect(self.previsualizar_filtrado)
-        self.sld_otsu.valueChanged.connect(self.previsualizar_filtrado)
-        self.sld_ruido.valueChanged.connect(self.previsualizar_filtrado)
+        # Conectar checkboxes restantes
+        self.chk_tophat.toggled.connect(lambda checked: [self.sld_tophat.setEnabled(checked), self.previsualizar_filtrado()])
+        self.chk_clahe.toggled.connect(lambda checked: [self.sld_clahe.setEnabled(checked), self.previsualizar_filtrado()])
+
+        # Conectar sliders
+        for sld in [self.sld_tophat, self.sld_clahe, self.sld_suavizado, self.sld_otsu, self.sld_ruido]:
+            sld.valueChanged.connect(lambda val: self.previsualizar_filtrado())
+
+        btn_aceptar_filtro.clicked.connect(self.confirmar_filtrado)
+        btn_cancelar_filtro.clicked.connect(self.cancelar_filtrado)
+
         btn_aceptar_filtro.clicked.connect(self.confirmar_filtrado)
         btn_cancelar_filtro.clicked.connect(self.cancelar_filtrado)
 
@@ -4597,10 +4690,30 @@ class VentanaBaseAnalisis(ValidacionReporteMixin, QMainWindow):
 
     def previsualizar_filtrado(self, *args):
         if not self.crops_en_memoria: return
+        
+        # Obtener valores de checkboxes
+        u_tophat = self.chk_tophat.isChecked()
+        u_clahe = self.chk_clahe.isChecked()
+        u_suavizado = self.chk_suavizado.isChecked()
+        u_ruido = self.chk_ruido.isChecked()
+
+        # Obtener valores de sliders
+        g_tophat = self.sld_tophat.value()
         g_clahe_clip = self.sld_clahe.value()
-        g_k_val = self.sld_gauss.value()
         g_otsu_offset = self.sld_otsu.value()
         g_ruido = self.sld_ruido.value()
+        
+        # Mapear suavizado
+        tipo_suavizado = self.combo_suavizado.currentIndex() # 0 = Gaussiano, 1 = Bilateral
+        val_suavizado = self.sld_suavizado.value()
+        
+        u_gauss = u_suavizado and (tipo_suavizado == 0)
+        u_bilateral = u_suavizado and (tipo_suavizado == 1)
+        
+        g_k_val = val_suavizado if u_gauss else 5
+        g_bilateral = val_suavizado if u_bilateral else 9
+        
+        logging.debug(f"[Preview] tophat={u_tophat}({g_tophat}), clahe={u_clahe}({g_clahe_clip}), gauss={u_gauss}({g_k_val}), bilateral={u_bilateral}({g_bilateral}), otsu={g_otsu_offset}, ruido={u_ruido}({g_ruido})")
         
         # Mapa de nombre a info (offsets y areas) para eficiencia
         mapa_info = {}
@@ -4615,7 +4728,22 @@ class VentanaBaseAnalisis(ValidacionReporteMixin, QMainWindow):
         for nombre, img in self.crops_en_memoria.items():
             info = mapa_info.get(nombre, {"offsets": {"clahe":0, "gauss":0, "otsu":0, "ruido":0}, "removal_areas": []})
             offsets = info["offsets"]
-            bin_img = procesar_crop_individual(img, g_clahe_clip, g_k_val, g_otsu_offset, g_ruido, offsets, info["removal_areas"])
+            bin_img = procesar_crop_individual(
+                img,
+                g_clahe_clip,
+                g_k_val,
+                g_otsu_offset,
+                g_ruido,
+                offsets,
+                info["removal_areas"],
+                usar_tophat=u_tophat,
+                g_tophat=g_tophat,
+                usar_clahe=u_clahe,
+                usar_gauss=u_gauss,
+                usar_bilateral=u_bilateral,
+                g_bilateral=g_bilateral,
+                usar_ruido=u_ruido
+            )
             self.crops_filtrados_temp[nombre] = bin_img
 
             
@@ -4738,10 +4866,16 @@ class VentanaBaseAnalisis(ValidacionReporteMixin, QMainWindow):
                     if os.path.exists(folder): shutil.rmtree(folder); os.makedirs(folder, exist_ok=True)
             except Exception as e: logging.error(f"Error al limpiar carpetas: {e}")
             
-        # Resetear sliders globales y offsets individuales
+        # Resetear sliders globales, checkboxes y offsets individuales
+        self.chk_tophat.setChecked(False)
+        self.sld_tophat.setValue(30)
+        self.chk_clahe.setChecked(True)
         self.sld_clahe.setValue(2)
-        self.sld_gauss.setValue(5)
+        self.chk_suavizado.setChecked(True)
+        self.combo_suavizado.setCurrentIndex(0)
+        self.sld_suavizado.setValue(5)
         self.sld_otsu.setValue(0)
+        self.chk_ruido.setChecked(True)
         self.sld_ruido.setValue(50)
         for box in self.visor_imagen.boxes:
             box["offsets"] = {"clahe": 0, "gauss": 0, "otsu": 0, "ruido": 0}
