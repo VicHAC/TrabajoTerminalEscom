@@ -154,8 +154,8 @@ def inicializar_bd():
     try: cursor.execute("ALTER TABLE Reporte ADD COLUMN estado TEXT DEFAULT 'En progreso'")
     except: pass
 
-    # 3. Crear usuario administrador por defecto
-    cursor.execute("SELECT COUNT(*) FROM Usuario")
+    # 3. Crear usuario administrador por defecto y usuario Invitado (ID 0)
+    cursor.execute("SELECT COUNT(*) FROM Usuario WHERE nombre_usuario = 'admin'")
     if cursor.fetchone()[0] == 0:
         pass_hash = hashlib.sha256("admin123".encode()).hexdigest()
         cursor.execute('''
@@ -163,9 +163,51 @@ def inicializar_bd():
             VALUES (?, ?, ?)
         ''', ("admin", pass_hash, "Administrador"))
         print("=> ¡BD lista! Usuario: admin | Pass: admin123")
+        
+    cursor.execute("SELECT COUNT(*) FROM Usuario WHERE id_usuario = 0")
+    if cursor.fetchone()[0] == 0:
+        cursor.execute('''
+            INSERT INTO Usuario (id_usuario, nombre_usuario, contrasenia_hash, rol) 
+            VALUES (0, 'Invitado_Volatil', 'none', 'Invitado')
+        ''')
 
     conexion.commit()
     conexion.close()
+
+def limpiar_datos_invitado():
+    """
+    Limpia todos los registros temporales creados por el rol de Invitado (id_usuario = 0)
+    para evitar que la base de datos se llene de datos de prueba.
+    """
+    try:
+        conn = conectar()
+        cur = conn.cursor()
+        
+        cur.execute("""
+            DELETE FROM Microglia 
+            WHERE id_analisis IN (
+                SELECT a.id_analisis FROM Analisis a
+                JOIN Reporte r ON a.id_reporte = r.id_reporte
+                WHERE r.id_usuario = 0
+            )
+        """)
+        
+        cur.execute("""
+            DELETE FROM Analisis 
+            WHERE id_reporte IN (
+                SELECT id_reporte FROM Reporte WHERE id_usuario = 0
+            )
+        """)
+        
+        cur.execute("DELETE FROM ReporteCompartido WHERE id_propietario = 0 OR id_destinatario = 0")
+        cur.execute("DELETE FROM Reporte WHERE id_usuario = 0")
+        cur.execute("DELETE FROM Sesion WHERE id_usuario = 0")
+        
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        import logging
+        logging.error(f"Error limpiando datos de invitado: {e}")
 
 if __name__ == "__main__":
     inicializar_bd()

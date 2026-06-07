@@ -194,8 +194,12 @@ class DropZone(QFrame):
 
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
+            from PyQt6.QtCore import QStandardPaths
+            import os
+            docs_dir = QStandardPaths.writableLocation(QStandardPaths.StandardLocation.DocumentsLocation)
+            default_dir = docs_dir if docs_dir and os.path.exists(docs_dir) else os.path.expanduser("~")
             ruta_archivo, _ = QFileDialog.getOpenFileName(
-                self, "Seleccionar imagen", "", "Imágenes TIFF (*.tiff *.tif);;Todas las imágenes (*.png *.jpg *.jpeg)",
+                self, "Seleccionar imagen", default_dir, "Imágenes TIFF (*.tiff *.tif);;Todas las imágenes (*.png *.jpg *.jpeg)",
                 options=QFileDialog.Option.DontUseNativeDialog
             )
             if ruta_archivo:
@@ -4621,7 +4625,7 @@ class VentanaBaseAnalisis(ValidacionReporteMixin, QMainWindow):
             elif clicked == btn_cancel or clicked is None:
                 return
                 
-        dialogo = DialogoCarga("Cargando IA y aplicando conteo...\nPor favor, espera.", self); dialogo.show()
+        dialogo = DialogoCarga("Aplicando conteo...\nPor favor, espera.", self); dialogo.show()
         from PyQt6.QtWidgets import QApplication; QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor); QApplication.processEvents()
         try:
             output_dir = os.path.join(os.getcwd(), "analisis_resultados")
@@ -5063,7 +5067,13 @@ class VentanaBaseAnalisis(ValidacionReporteMixin, QMainWindow):
         from datetime import datetime; from PyQt6.QtWidgets import QFileDialog; from pathlib import Path
         fecha_str = datetime.now().strftime("%Y%m%d_%H%M"); default_name = f"Reporte_{fecha_str}.xlsx"
         
-        filepath, filter_selected = QFileDialog.getSaveFileName(self, "Guardar Reporte", default_name, "Excel Files (*.xlsx);;PDF Files (*.pdf);;Both Formats (*.xlsx *.pdf)")
+        from PyQt6.QtCore import QStandardPaths
+        import os
+        docs_dir = QStandardPaths.writableLocation(QStandardPaths.StandardLocation.DocumentsLocation)
+        base_dir = docs_dir if docs_dir and os.path.exists(docs_dir) else os.path.expanduser("~")
+        default_path = os.path.join(base_dir, default_name)
+        
+        filepath, filter_selected = QFileDialog.getSaveFileName(self, "Guardar Reporte", default_path, "Excel Files (*.xlsx);;PDF Files (*.pdf);;Both Formats (*.xlsx *.pdf)")
         if not filepath: return
             
         try:

@@ -16,46 +16,50 @@ def extract_microglia_metrics(skeleton_image_path: str) -> dict:
     
     image = image > 0
     
-    skeleton = Skeleton(image)
-    
     try:
+        skeleton = Skeleton(image)
         summary = summarize(skeleton, separator='_')
-
     except Exception:
+        skeleton = None
         summary = pd.DataFrame()
     
-    degrees = skeleton.degrees
-    
-    end_points = int(np.sum(degrees == 1))
-    slab_voxels = int(np.sum(degrees == 2))
-    junction_voxels = int(np.sum(degrees > 2))
-    triple_points = int(np.sum(degrees == 3))
-    quadruple_points = int(np.sum(degrees == 4))
-    
-    lines = len(summary)
-    
-    junction_indices = np.where(degrees > 2)[0]
-    if len(junction_indices) > 0:
-        junction_subgraph = skeleton.graph[junction_indices, :][:, junction_indices]
-        junction_points, _ = connected_components(junction_subgraph, directed=False)
-    else:
-        junction_points = 0
+    if skeleton is not None:
+        degrees = skeleton.degrees
         
-    dist_col = 'branch_distance' if 'branch_distance' in summary.columns else 'branch-distance'
-    
-    if lines > 0 and dist_col in summary.columns:
-        avg_branch_length = float(summary[dist_col].mean())
-        max_branch_length = float(summary[dist_col].max())
-    else:
-        avg_branch_length = 0.0
-        max_branch_length = 0.0
+        end_points = int(np.sum(degrees == 1))
+        slab_voxels = int(np.sum(degrees == 2))
+        junction_voxels = int(np.sum(degrees > 2))
+        triple_points = int(np.sum(degrees == 3))
+        quadruple_points = int(np.sum(degrees == 4))
         
-    if skeleton.graph.nnz > 0:
-        dist_matrix = shortest_path(csgraph=skeleton.graph, directed=False)
-        dist_matrix[np.isinf(dist_matrix)] = 0
-        longest_shortest_path = float(dist_matrix.max())
+        lines = len(summary)
+        
+        junction_indices = np.where(degrees > 2)[0]
+        if len(junction_indices) > 0:
+            junction_subgraph = skeleton.graph[junction_indices, :][:, junction_indices]
+            junction_points, _ = connected_components(junction_subgraph, directed=False)
+        else:
+            junction_points = 0
+            
+        dist_col = 'branch_distance' if 'branch_distance' in summary.columns else 'branch-distance'
+        
+        if lines > 0 and dist_col in summary.columns:
+            avg_branch_length = float(summary[dist_col].mean())
+            max_branch_length = float(summary[dist_col].max())
+        else:
+            avg_branch_length = 0.0
+            max_branch_length = 0.0
+            
+        if skeleton.graph.nnz > 0:
+            dist_matrix = shortest_path(csgraph=skeleton.graph, directed=False)
+            dist_matrix[np.isinf(dist_matrix)] = 0
+            longest_shortest_path = float(dist_matrix.max())
+        else:
+            longest_shortest_path = 0.0
     else:
-        longest_shortest_path = 0.0
+        end_points = slab_voxels = junction_voxels = triple_points = quadruple_points = 0
+        lines = junction_points = 0
+        avg_branch_length = max_branch_length = longest_shortest_path = 0.0
     
     filename = os.path.basename(skeleton_image_path)
     

@@ -191,6 +191,13 @@ class VentanaLogin(QWidget):
                 except Exception as e_ses:
                     print(f"Error al registrar sesión: {e_ses}")
                 
+                from vistas.utilidades import DialogoCarga
+                from PyQt6.QtWidgets import QApplication
+                
+                dialogo_carga = DialogoCarga("Cargando entorno de trabajo...", self)
+                dialogo_carga.show()
+                QApplication.processEvents()
+
                 if rol == "Administrador":
                     from vistas.administrador import VentanaAdministrador
                     self.dashboard = VentanaAdministrador(id_usuario=id_user)
@@ -201,6 +208,7 @@ class VentanaLogin(QWidget):
                     from vistas.investigador import VentanaInvestigador
                     self.dashboard = VentanaInvestigador(id_usuario=id_user, rol=rol, nombre_usuario=usuario)
                 
+                dialogo_carga.close()
                 self.dashboard.show()
                 self.close()
             else:
@@ -211,8 +219,21 @@ class VentanaLogin(QWidget):
             DialogoNotificacion("Error", f"Falla en (BD): {e}", "error", self).exec()
 
     def login_invitado(self):
+        from vistas.utilidades import DialogoCarga
+        from PyQt6.QtWidgets import QApplication
+        
+        dialogo_carga = DialogoCarga("Cargando entorno de trabajo...", self)
+        dialogo_carga.show()
+        QApplication.processEvents()
+
+        # Limpiar cualquier dato huérfano de una sesión de invitado anterior
+        from bd.database import limpiar_datos_invitado
+        limpiar_datos_invitado()
+
         from vistas.invitado import VentanaInvitado
         self.dashboard = VentanaInvitado(id_usuario=0, rol="Invitado", nombre_usuario="Invitado")
+        
+        dialogo_carga.close()
         self.dashboard.show()
         self.close()
 
