@@ -2299,6 +2299,7 @@ class DialogoHistorial(QDialog):
             QPushButton:disabled { opacity: 0.3; }
         """)
         self.btn_borrar_icon.setEnabled(False)
+        self.btn_borrar_icon.setVisible(self.rol != "Tesista")
         self.btn_borrar_icon.setToolTip("Borrar seleccionados")
         self.btn_borrar_icon.clicked.connect(self.borrar_reportes_seleccionados)
 
@@ -2322,7 +2323,13 @@ class DialogoHistorial(QDialog):
         self.btn_borrar_icon.installEventFilter(self)
         self.btn_cerrar_x.installEventFilter(self)
         
-        header_layout.addSpacing(70) # Ajuste para centrar título
+        # Ajuste dinámico de espacio a la izquierda para centrar el título
+        spacing_izq = 0
+        if self.btn_compartir_icon.isVisible():
+            spacing_izq += 35
+        if self.btn_borrar_icon.isVisible():
+            spacing_izq += 35
+        header_layout.addSpacing(spacing_izq)
         header_layout.addStretch()
         header_layout.addWidget(lbl_titulo)
         header_layout.addStretch()
