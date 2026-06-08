@@ -1,3 +1,4 @@
+from utils_rutas import get_app_data_dir
 """
 red/servidor.py
 ===============
@@ -96,7 +97,7 @@ class ServidorMicrogliasHandler(BaseHTTPRequestHandler):
 
             # Sanitizar ruta y asegurar directorios
             relative_path = relative_path.replace("\\", "/")
-            dest_path = os.path.join(os.getcwd(), relative_path)
+            dest_path = os.path.join(get_app_data_dir(), relative_path)
             os.makedirs(os.path.dirname(dest_path), exist_ok=True)
 
             try:
@@ -118,8 +119,8 @@ class ServidorMicrogliasHandler(BaseHTTPRequestHandler):
                 confidence_threshold = data.get("confidence_threshold", 0.20)
 
                 # Asegurar rutas locales del servidor
-                ruta_imagen_local = os.path.join(os.getcwd(), ruta_imagen.replace("\\", "/"))
-                base_output_local = os.path.join(os.getcwd(), base_output_folder.replace("\\", "/"))
+                ruta_imagen_local = os.path.join(get_app_data_dir(), ruta_imagen.replace("\\", "/"))
+                base_output_local = os.path.join(get_app_data_dir(), base_output_folder.replace("\\", "/"))
 
                 from procesamiento.deteccion import ejecutar_conteo_ia
                 crops_folder, count, boxes_data = ejecutar_conteo_ia(
@@ -127,10 +128,10 @@ class ServidorMicrogliasHandler(BaseHTTPRequestHandler):
                 )
 
                 # Convertir rutas absolutas del servidor a relativas para el cliente
-                rel_crops_folder = os.path.relpath(crops_folder, os.getcwd()).replace("\\", "/")
+                rel_crops_folder = os.path.relpath(crops_folder, get_app_data_dir()).replace("\\", "/")
                 for box in boxes_data:
                     if "crop_path" in box:
-                        box["crop_path"] = os.path.relpath(box["crop_path"], os.getcwd()).replace("\\", "/")
+                        box["crop_path"] = os.path.relpath(box["crop_path"], get_app_data_dir()).replace("\\", "/")
 
                 self.send_json({
                     "crops_folder": rel_crops_folder,
@@ -150,8 +151,8 @@ class ServidorMicrogliasHandler(BaseHTTPRequestHandler):
                 esqueletos_dir = data.get("esqueletos_dir")
                 out_name = data.get("out_name")
 
-                fil_path_local = os.path.join(os.getcwd(), fil_path.replace("\\", "/"))
-                esqueletos_dir_local = os.path.join(os.getcwd(), esqueletos_dir.replace("\\", "/"))
+                fil_path_local = os.path.join(get_app_data_dir(), fil_path.replace("\\", "/"))
+                esqueletos_dir_local = os.path.join(get_app_data_dir(), esqueletos_dir.replace("\\", "/"))
                 os.makedirs(esqueletos_dir_local, exist_ok=True)
                 out_path_local = os.path.join(esqueletos_dir_local, out_name)
 
@@ -160,7 +161,7 @@ class ServidorMicrogliasHandler(BaseHTTPRequestHandler):
                 skeleton_img = generar_esqueleto_de_archivo(fil_path_local)
                 if skeleton_img is not None:
                     cv2.imwrite(out_path_local, skeleton_img)
-                    rel_out_path = os.path.relpath(out_path_local, os.getcwd()).replace("\\", "/")
+                    rel_out_path = os.path.relpath(out_path_local, get_app_data_dir()).replace("\\", "/")
                     self.send_json({"success": True, "esqueleto_path": rel_out_path})
                 else:
                     self.send_error_json("No se pudo generar el esqueleto")
@@ -174,7 +175,7 @@ class ServidorMicrogliasHandler(BaseHTTPRequestHandler):
             try:
                 data = json.loads(body.decode("utf-8"))
                 skeleton_image_path = data.get("skeleton_image_path")
-                skeleton_local = os.path.join(os.getcwd(), skeleton_image_path.replace("\\", "/"))
+                skeleton_local = os.path.join(get_app_data_dir(), skeleton_image_path.replace("\\", "/"))
 
                 from procesamiento.metricas import extraer_metricas_esqueleto
                 metrics = extraer_metricas_esqueleto(skeleton_local)
@@ -201,7 +202,7 @@ class ServidorMicrogliasHandler(BaseHTTPRequestHandler):
                 return
 
             relative_path = relative_path.replace("\\", "/")
-            full_path = os.path.join(os.getcwd(), relative_path)
+            full_path = os.path.join(get_app_data_dir(), relative_path)
 
             if not os.path.exists(full_path):
                 self.send_error_json(f"Archivo no encontrado: {relative_path}", 404)
@@ -231,7 +232,7 @@ class ServidorMicrogliasHandler(BaseHTTPRequestHandler):
                 return
 
             relative_path = relative_path.replace("\\", "/")
-            full_path = os.path.join(os.getcwd(), relative_path)
+            full_path = os.path.join(get_app_data_dir(), relative_path)
             
             self.send_json({"exists": os.path.exists(full_path)})
 

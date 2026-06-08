@@ -9,7 +9,7 @@ from PyQt6.QtGui import QPixmap, QIcon
 class VentanaLogin(QWidget):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Prototipo Microglías - Inicio de Sesión")
+        self.setWindowTitle("AVA Image Analytics - Inicio de Sesión")
         
         # Resolver ruta para PyInstaller
         try:

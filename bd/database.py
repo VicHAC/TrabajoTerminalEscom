@@ -2,11 +2,19 @@ import sqlite3
 import hashlib
 import os
 
-# Asegurarse de que la carpeta bd exista
-if not os.path.exists('bd'):
-    os.makedirs('bd')
+import sys
 
-DB_PATH = os.path.join("bd", "database.db")
+if getattr(sys, 'frozen', False):
+    app_data = os.getenv('LOCALAPPDATA', os.path.expanduser('~'))
+    base_dir = os.path.join(app_data, 'AVA_Image_Analytics')
+else:
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+bd_dir = os.path.join(base_dir, 'bd')
+if not os.path.exists(bd_dir):
+    os.makedirs(bd_dir, exist_ok=True)
+
+DB_PATH = os.path.join(bd_dir, "database.db")
 
 def conectar():
     """Crea la conexión a la base de datos SQLite (local o remota vía proxy de red)"""

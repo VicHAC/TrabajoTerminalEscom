@@ -1,3 +1,4 @@
+from utils_rutas import get_app_data_dir
 """
 red/cliente.py
 ==============
@@ -102,7 +103,7 @@ def conectar_cliente():
 def obtener_ruta_relativa_proyecto(ruta_completa):
     """Convierte una ruta absoluta al formato relativo del workspace del proyecto."""
     ruta_completa = ruta_completa.replace("\\", "/")
-    cwd = os.getcwd().replace("\\", "/")
+    cwd = get_app_data_dir().replace("\\", "/")
     
     if ruta_completa.startswith(cwd):
         rel = os.path.relpath(ruta_completa, cwd)
@@ -127,7 +128,7 @@ def cliente_existe_archivo_en_servidor(ruta_relativa):
 def cliente_descargar_archivo(ruta_relativa):
     """Descarga un archivo desde el servidor y lo guarda localmente en el cliente."""
     ruta_rel_limpia = obtener_ruta_relativa_proyecto(ruta_relativa)
-    local_path = os.path.join(os.getcwd(), ruta_rel_limpia)
+    local_path = os.path.join(get_app_data_dir(), ruta_rel_limpia)
     os.makedirs(os.path.dirname(local_path), exist_ok=True)
     
     url = f"{obtener_url_servidor()}/api/files/download?path={urllib.parse.quote(ruta_rel_limpia)}"
@@ -142,7 +143,7 @@ def cliente_descargar_archivo(ruta_relativa):
 def cliente_subir_archivo(ruta_relativa):
     """Sube un archivo local del cliente hacia el servidor central."""
     ruta_rel_limpia = obtener_ruta_relativa_proyecto(ruta_relativa)
-    local_path = os.path.join(os.getcwd(), ruta_rel_limpia)
+    local_path = os.path.join(get_app_data_dir(), ruta_rel_limpia)
     
     if not os.path.exists(local_path):
         logging.error(f"[cliente_files] No se pudo subir, archivo no existe localmente: {local_path}")
@@ -177,7 +178,7 @@ def asegurar_archivo_local(ruta):
         return ruta
         
     ruta_rel = obtener_ruta_relativa_proyecto(ruta)
-    ruta_local_abs = os.path.join(os.getcwd(), ruta_rel)
+    ruta_local_abs = os.path.join(get_app_data_dir(), ruta_rel)
     
     if es_cliente():
         # Si no existe localmente, descargarlo del servidor
@@ -230,7 +231,7 @@ def cliente_ejecutar_conteo_ia(ruta_imagen, base_output_folder, confidence_thres
             if c_path:
                 cliente_descargar_archivo(c_path)
                 
-        crops_folder_local = os.path.join(os.getcwd(), crops_folder_rel)
+        crops_folder_local = os.path.join(get_app_data_dir(), crops_folder_rel)
         return crops_folder_local, count, boxes
     except Exception as e:
         logging.error(f"[cliente_process] Error al ejecutar conteo IA remoto: {e}")
@@ -266,7 +267,7 @@ def cliente_generar_esqueleto_de_archivo(fil_path, esqueletos_dir, out_name):
         # Descargar el esqueleto resultante
         cliente_descargar_archivo(esqueleto_path_rel)
         
-        return os.path.join(os.getcwd(), esqueleto_path_rel)
+        return os.path.join(get_app_data_dir(), esqueleto_path_rel)
     except Exception as e:
         logging.error(f"[cliente_process] Error al ejecutar esqueletizado remoto: {e}")
         raise

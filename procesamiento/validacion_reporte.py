@@ -1,3 +1,4 @@
+from utils_rutas import get_resultados_dir
 """
 procesamiento/validacion_reporte.py
 ====================================
@@ -101,7 +102,7 @@ def db_resetear_progreso_analisis(id_reporte: int, paso_fallido: int) -> None:
         id_an, ruta_img = res
                 
         stem = Path(ruta_img).stem
-        base_dir = os.path.join(os.getcwd(), "analisis_resultados", stem)
+        base_dir = os.path.join(get_resultados_dir(), stem)
         
         # Determinar el nuevo paso_actual y qué limpiar según paso_fallido
         # paso_fallido: 1 = Conteo, 2 = Filtrar, 3 = Esqueletizado, 4 = Métricas

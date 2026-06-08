@@ -1,3 +1,4 @@
+from utils_rutas import get_resultados_dir
 import logging
 import os
 import subprocess
@@ -3179,7 +3180,7 @@ class VentanaBaseAnalisis(ValidacionReporteMixin, QMainWindow):
         self.paso_actual = 0
         self.metricas_extraidas_ciclo_actual = False
         self._init_validacion_estado()  # Inicializa reporte_validado_cargado = False
-        self.setWindowTitle(f"Prototipo Microglías - Panel ({self.rol})")
+        self.setWindowTitle(f"AVA Image Analytics - Panel ({self.rol})")
         
         from vistas.utilidades import set_app_icon
         set_app_icon(self)
@@ -3430,7 +3431,10 @@ class VentanaBaseAnalisis(ValidacionReporteMixin, QMainWindow):
 
         self.menu_lateral.addStretch()
         self.btn_cerrar_sesion = QPushButton("Cerrar Sesión"); self.btn_cerrar_sesion.setStyleSheet("QPushButton { background-color: transparent; border: 2px solid #cc0000; color: #cc0000; font-weight: bold; border-radius: 8px; padding: 10px; margin-top: 20px; } QPushButton:hover { background-color: #cc0000; color: white; }"); self.menu_lateral.addWidget(self.btn_cerrar_sesion)
-        frame_menu = QFrame(); frame_menu.setObjectName("menu_lateral"); frame_menu.setFixedWidth(200); frame_menu.setLayout(self.menu_lateral)
+        frame_menu_inner = QFrame(); frame_menu_inner.setLayout(self.menu_lateral); frame_menu_inner.setStyleSheet("background-color: transparent;")
+        frame_menu = QScrollArea(); frame_menu.setObjectName("menu_lateral"); frame_menu.setFixedWidth(215); frame_menu.setWidgetResizable(True); frame_menu.setWidget(frame_menu_inner)
+        frame_menu.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        frame_menu.setStyleSheet("QScrollArea#menu_lateral { border: none; border-right: 1px solid #d0d7de; background-color: white; } QScrollBar:vertical { width: 6px; background: transparent; } QScrollBar::handle:vertical { background: #d0d7de; border-radius: 3px; } QScrollBar::handle:vertical:hover { background: #8c95a0; } QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0px; }")
         
         area_imagen = QVBoxLayout()
         controles_superiores = QHBoxLayout()
@@ -4721,7 +4725,7 @@ class VentanaBaseAnalisis(ValidacionReporteMixin, QMainWindow):
         dialogo = DialogoCarga("Aplicando conteo...\nPor favor, espera.", self); dialogo.show()
         from PyQt6.QtWidgets import QApplication; QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor); QApplication.processEvents()
         try:
-            output_dir = os.path.join(os.getcwd(), "analisis_resultados")
+            output_dir = get_resultados_dir()
             from red.config import es_cliente
             if es_cliente():
                 from red.cliente import cliente_ejecutar_conteo_ia
@@ -4742,7 +4746,7 @@ class VentanaBaseAnalisis(ValidacionReporteMixin, QMainWindow):
             if inter_area > 0:
                 ioa_nueva = inter_area / area_nueva; ioa_existente = inter_area / (bw * bh)
                 if ioa_nueva >= 0.40 or ioa_existente >= 0.40: self.mostrar_notificacion("Acción bloqueada", "No puedes crear una microglía que esté contenida dentro de otra existente o que se superponga fuertemente.", "warning"); return
-        base_name = Path(self.ruta_imagen_actual).stem; crops_folder = os.path.join(os.getcwd(), "analisis_resultados", base_name, "crops"); os.makedirs(crops_folder, exist_ok=True)
+        base_name = Path(self.ruta_imagen_actual).stem; crops_folder = os.path.join(get_resultados_dir(), base_name, "crops"); os.makedirs(crops_folder, exist_ok=True)
         orig_pixmap = self.pixmaps_globales["Original"]
         if not orig_pixmap: return
         from procesamiento.deteccion import recortar_y_guardar_manual
@@ -4766,7 +4770,7 @@ class VentanaBaseAnalisis(ValidacionReporteMixin, QMainWindow):
         orig_w = orig_pixmap.width(); orig_h = orig_pixmap.height()
         lienzo = np.zeros((orig_h, orig_w), dtype=np.uint8)
         base_name = Path(self.ruta_imagen_actual).stem
-        base_dir = os.path.join(os.getcwd(), "analisis_resultados", base_name)
+        base_dir = os.path.join(get_resultados_dir(), base_name)
         
         for box in self.visor_imagen.boxes:
             x, y, w, h = int(box["x"]), int(box["y"]), int(box["w"]), int(box["h"])
@@ -4928,7 +4932,7 @@ class VentanaBaseAnalisis(ValidacionReporteMixin, QMainWindow):
 
 
     def confirmar_filtrado(self):
-        base_name = Path(self.ruta_imagen_actual).stem; filtradas_dir = os.path.join(os.getcwd(), "analisis_resultados", base_name, "filtradas"); os.makedirs(filtradas_dir, exist_ok=True); import cv2; count = 0
+        base_name = Path(self.ruta_imagen_actual).stem; filtradas_dir = os.path.join(get_resultados_dir(), base_name, "filtradas"); os.makedirs(filtradas_dir, exist_ok=True); import cv2; count = 0
         from PyQt6.QtWidgets import QApplication
         try:
             dialogo = DialogoCarga("Guardando filtros aplicados...\nPor favor, espera.", self); dialogo.show(); QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor); QApplication.processEvents()
@@ -4986,7 +4990,7 @@ class VentanaBaseAnalisis(ValidacionReporteMixin, QMainWindow):
 
     def mostrar_ramas_morfologia(self):
         if not self.ruta_imagen_actual or not self.visor_imagen.boxes: self.mostrar_notificacion("Advertencia", "Aplica el conteo y filtrado primero.", "warning"); return
-        base_name = Path(self.ruta_imagen_actual).stem; filtradas_dir = os.path.join(os.getcwd(), "analisis_resultados", base_name, "filtradas"); esqueletos_dir = os.path.join(os.getcwd(), "analisis_resultados", base_name, "esqueletos"); os.makedirs(esqueletos_dir, exist_ok=True)
+        base_name = Path(self.ruta_imagen_actual).stem; filtradas_dir = os.path.join(get_resultados_dir(), base_name, "filtradas"); esqueletos_dir = os.path.join(get_resultados_dir(), base_name, "esqueletos"); os.makedirs(esqueletos_dir, exist_ok=True)
         from PyQt6.QtWidgets import QApplication; count = 0
         import cv2
         from red.config import es_cliente
@@ -5035,7 +5039,7 @@ class VentanaBaseAnalisis(ValidacionReporteMixin, QMainWindow):
             try:
                 import shutil
                 base_name = Path(self.ruta_imagen_actual).stem
-                base_dir = os.path.join(os.getcwd(), "analisis_resultados", base_name)
+                base_dir = os.path.join(get_resultados_dir(), base_name)
                 for sub in ["filtradas", "esqueletos"]:
                     folder = os.path.join(base_dir, sub)
                     if os.path.exists(folder): shutil.rmtree(folder); os.makedirs(folder, exist_ok=True)
@@ -5069,7 +5073,7 @@ class VentanaBaseAnalisis(ValidacionReporteMixin, QMainWindow):
             return
             
         base_name = Path(self.ruta_imagen_actual).stem
-        esqueletos_dir = os.path.join(os.getcwd(), "analisis_resultados", base_name, "esqueletos")
+        esqueletos_dir = os.path.join(get_resultados_dir(), base_name, "esqueletos")
         
         if not os.path.exists(esqueletos_dir):
             self.mostrar_notificacion("Advertencia", "No se encontraron esqueletos generados.", "warning")

@@ -6,7 +6,13 @@ def ejecutar_conteo_ia(ruta_imagen, base_output_folder, confidence_threshold=0.2
     """
     Executes YOLO model detection on the image and returns crops folder, microglia count, and bounding boxes.
     """
-    model_path = os.path.join(os.getcwd(), "ia", "entrenamiento_resultados", "modelo_microglias5", "weights", "best.pt")
+    import sys
+    try:
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.getcwd()
+        
+    model_path = os.path.join(base_path, "ia", "entrenamiento_resultados", "modelo_microglias5", "weights", "best.pt")
     processor = MicrogliaProcessor(model_path=model_path, confidence_threshold=confidence_threshold)
     resultado = processor.process_and_crop(ruta_imagen, base_output_folder=base_output_folder)
     

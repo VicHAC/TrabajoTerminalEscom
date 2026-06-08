@@ -195,7 +195,7 @@ class VentanaAdministrador(QMainWindow):
     def __init__(self, id_usuario):
         super().__init__()
         self.id_usuario = id_usuario
-        self.setWindowTitle("Prototipo Microglías - Panel de Administración")
+        self.setWindowTitle("AVA Image Analytics - Panel de Administración")
         self.resize(1000, 600)
         
         from vistas.utilidades import set_app_icon

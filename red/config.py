@@ -1,3 +1,4 @@
+from utils_rutas import get_app_data_dir
 """
 red/config.py
 =============
@@ -7,8 +8,14 @@ funciona de forma local o remota (Cliente/Servidor) en la red Wi-Fi.
 
 import os
 import json
+import sys
 
-CONFIG_PATH = os.path.join(os.getcwd(), "config.json")
+try:
+    base_path = sys._MEIPASS
+except Exception:
+    base_path = get_app_data_dir()
+
+CONFIG_PATH = os.path.join(base_path, "config.json")
 
 # Valores por defecto
 DEFAULT_CONFIG = {

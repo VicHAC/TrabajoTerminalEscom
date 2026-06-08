@@ -9,3 +9,11 @@ bd/__pycache__/
 analisis_resultados/
 runs/
 **/*.pyc
+build/
+dist/
+*.spec
+.pytest_cache/
+scratch/
+test_output.txt
+bd/database.db
+*.exe

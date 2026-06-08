@@ -28,7 +28,7 @@ def main():
     # al ejecutarse como archivo compilado
     if os.name == 'nt':
         import ctypes
-        myappid = 'escom.tt.microglias.1'
+        myappid = 'escom.tt.ava.1'
         try:
             ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
         except Exception:
