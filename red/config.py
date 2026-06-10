@@ -40,11 +40,17 @@ def cargar_configuracion():
     except Exception:
         return DEFAULT_CONFIG
 
+def refrescar_configuracion():
+    """Vuelve a cargar la configuración en memoria desde el archivo config.json."""
+    global config_global
+    config_global = cargar_configuracion()
+
 def guardar_configuracion(config):
     """Guarda la configuración en config.json."""
     try:
         with open(CONFIG_PATH, "w", encoding="utf-8") as f:
             json.dump(config, f, indent=4, ensure_ascii=False)
+        refrescar_configuracion()
     except Exception as e:
         print(f"Error al guardar config.json: {e}")
 

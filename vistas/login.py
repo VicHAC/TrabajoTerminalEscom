@@ -41,7 +41,16 @@ class VentanaLogin(QWidget):
         layout_top = QHBoxLayout()
         layout_top.setContentsMargins(5, 5, 5, 0)
         layout_top.addWidget(self.btn_config_red)
+        
+        # Etiqueta de estado de red
+        self.lbl_estado_red = QLabel(self)
+        self.lbl_estado_red.setAlignment(Qt.AlignmentFlag.AlignVCenter)
+        layout_top.addWidget(self.lbl_estado_red)
+        
         layout_top.addStretch()
+        
+        # Cargar estado de red inicial
+        self.actualizar_estado_red()
         
         # Contenedor central de tamaño fijo para mantener la responsividad
         contenedor_login = QWidget()
@@ -157,7 +166,41 @@ class VentanaLogin(QWidget):
     def abrir_config_red(self):
         from red.config_gui import DialogoConfigRed
         dialogo = DialogoConfigRed(self)
-        dialogo.exec()
+        if dialogo.exec() == QDialog.DialogCode.Accepted:
+            self.actualizar_estado_red()
+
+    def actualizar_estado_red(self):
+        from red.config import obtener_modo_operacion, obtener_ip_servidor, obtener_puerto_servidor
+        modo = obtener_modo_operacion()
+        if modo == "local":
+            self.lbl_estado_red.setText("💻 Modo Local")
+            self.lbl_estado_red.setStyleSheet("color: #57606a; font-size: 11px; font-weight: bold; margin-left: 5px; background: #f6f8fa; border: 1px solid #d0d7de; border-radius: 4px; padding: 4px 8px;")
+        elif modo == "servidor":
+            self.lbl_estado_red.setText("🖥️ Modo Servidor (Activo)")
+            self.lbl_estado_red.setStyleSheet("color: #2da44e; font-size: 11px; font-weight: bold; margin-left: 5px; background: #dafbe1; border: 1px solid #2da44e; border-radius: 4px; padding: 4px 8px;")
+        elif modo == "cliente":
+            ip = obtener_ip_servidor()
+            self.lbl_estado_red.setText("🔌 Conectando...")
+            self.lbl_estado_red.setStyleSheet("color: #bf8700; font-size: 11px; font-weight: bold; margin-left: 5px; background: #fff8c5; border: 1px solid #bf8700; border-radius: 4px; padding: 4px 8px;")
+            from PyQt6.QtCore import QTimer
+            QTimer.singleShot(100, self.verificar_conexion_servidor)
+
+    def verificar_conexion_servidor(self):
+        from red.config import obtener_ip_servidor
+        from red.cliente import cliente_existe_archivo_en_servidor
+        ip = obtener_ip_servidor()
+        try:
+            # cliente_existe_archivo_en_servidor hace una petición HTTP rápida
+            conectado = cliente_existe_archivo_en_servidor("bd/database.db")
+            if conectado:
+                self.lbl_estado_red.setText(f"🟢 Conectado a Servidor ({ip})")
+                self.lbl_estado_red.setStyleSheet("color: #2da44e; font-size: 11px; font-weight: bold; margin-left: 5px; background: #dafbe1; border: 1px solid #2da44e; border-radius: 4px; padding: 4px 8px;")
+            else:
+                self.lbl_estado_red.setText(f"🔴 Sin Conexión a Servidor ({ip})")
+                self.lbl_estado_red.setStyleSheet("color: #cf222e; font-size: 11px; font-weight: bold; margin-left: 5px; background: #ffebe9; border: 1px solid #cf222e; border-radius: 4px; padding: 4px 8px;")
+        except Exception:
+            self.lbl_estado_red.setText(f"🔴 Sin Conexión a Servidor ({ip})")
+            self.lbl_estado_red.setStyleSheet("color: #cf222e; font-size: 11px; font-weight: bold; margin-left: 5px; background: #ffebe9; border: 1px solid #cf222e; border-radius: 4px; padding: 4px 8px;")
 
     def verificar_login(self):
         usuario = self.input_usuario.text()
