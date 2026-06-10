@@ -2580,9 +2580,9 @@ class DialogoHistorial(QDialog):
         if self.rol == "Tesista":
             tab_index = 1
             
-        # Mostrar botón refresh solo en pestaña "Compartidos" (index 1) para ambos roles
+        # Mostrar botón refresh solo en pestaña "Compartidos" (index 1) para ambos roles, o siempre para el Tesista
         if hasattr(self, "btn_refresh_icon"):
-            self.btn_refresh_icon.setVisible(actual_tab == 1)
+            self.btn_refresh_icon.setVisible(self.rol == "Tesista" or actual_tab == 1)
             
         # Actualizar ancho del spacer izquierdo para mantener centrado el título
         self.actualizar_left_spacer_width()
