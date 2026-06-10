@@ -22,7 +22,7 @@ class ServidorMicrogliasHandler(BaseHTTPRequestHandler):
     
     def log_message(self, format, *args):
         # Evitar inundar la terminal con peticiones GET de imágenes
-        if "GET /api/files/download" in args[0]:
+        if args and isinstance(args[0], str) and "GET /api/files/download" in args[0]:
             return
         logging.info("%s - - %s" % (self.address_string(), format % args))
 
