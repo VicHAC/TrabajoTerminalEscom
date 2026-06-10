@@ -2568,17 +2568,21 @@ class DialogoHistorial(QDialog):
             w += 35  # Botón borrar
             if hasattr(self, "btn_refresh_icon") and self.btn_refresh_icon.isVisible():
                 w += 35  # Botón refresh
+        else: # Tesista
+            if hasattr(self, "btn_refresh_icon") and self.btn_refresh_icon.isVisible():
+                w += 35  # Botón refresh
         if hasattr(self, "left_spacer"):
             self.left_spacer.setFixedWidth(w)
 
     def actualizar_estado_boton_borrar(self):
         tab_index = self.tabs.currentIndex()
+        actual_tab = self.tabs.currentIndex()
         if self.rol == "Tesista":
             tab_index = 1
             
-        # Mostrar botón refresh solo en pestaña "Compartidos" (index 1) para el Investigador
+        # Mostrar botón refresh solo en pestaña "Compartidos" (index 1) para ambos roles
         if hasattr(self, "btn_refresh_icon"):
-            self.btn_refresh_icon.setVisible(self.rol == "Investigador" and tab_index == 1)
+            self.btn_refresh_icon.setVisible(actual_tab == 1)
             
         # Actualizar ancho del spacer izquierdo para mantener centrado el título
         self.actualizar_left_spacer_width()
