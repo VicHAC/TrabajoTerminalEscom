@@ -118,6 +118,17 @@ class DialogoConfigRed(QDialog):
         self.input_puerto.setStyleSheet("QLineEdit { border: 1px solid #d0d7de; border-radius: 6px; padding: 6px; }")
         layout_cliente.addWidget(self.input_puerto)
         
+        # Ayuda de verificación
+        self.lbl_ayuda_cliente = QLabel(
+            "<b>Verificación de Conexión:</b><br>"
+            "Una vez guardado y habiendo reiniciado la app, puedes verificar la comunicación abriendo un navegador e ingresando a:<br>"
+            "<u>http://[IP_SERVIDOR]:[PUERTO]/api/files/exists?path=bd/database.db</u><br>"
+            "Si responde <i>{\"exists\":...}</i>, la conexión es correcta."
+        )
+        self.lbl_ayuda_cliente.setWordWrap(True)
+        self.lbl_ayuda_cliente.setStyleSheet("color: #57606a; font-size: 11px; margin-top: 5px; line-height: 1.4;")
+        layout_cliente.addWidget(self.lbl_ayuda_cliente)
+        
         main_layout.addWidget(self.grupo_cliente)
         
         # ----------------------------------------------------
@@ -284,7 +295,7 @@ class DialogoConfigRed(QDialog):
         elif idx == 1:  # Cliente
             self.grupo_cliente.show()
             self.grupo_servidor.hide()
-            self.resize(420, 360)
+            self.resize(420, 440)
         elif idx == 2:  # Servidor
             self.grupo_cliente.hide()
             self.grupo_servidor.show()
