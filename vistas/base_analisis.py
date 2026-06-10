@@ -2288,6 +2288,20 @@ class DialogoHistorial(QDialog):
         self.btn_compartir_icon.setToolTip("Compartir seleccionados")
         self.btn_compartir_icon.clicked.connect(self.abrir_compartir)
 
+        self.btn_refresh_icon = QPushButton()
+        self.btn_refresh_icon.setIcon(QIcon("assets/buttons/refresh.png"))
+        self.btn_refresh_icon.setIconSize(QSize(22, 22))
+        self.btn_refresh_icon.setFixedSize(35, 35)
+        self.btn_refresh_icon.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_refresh_icon.setStyleSheet("""
+            QPushButton { background-color: transparent; border: 1px solid transparent; outline: none; }
+            QPushButton:hover { background-color: #eaf2ff; border-radius: 17px; }
+            QPushButton:disabled { opacity: 0.3; }
+        """)
+        self.btn_refresh_icon.setVisible(False)
+        self.btn_refresh_icon.setToolTip("Actualizar datos")
+        self.btn_refresh_icon.clicked.connect(self.cargar_datos)
+
         self.btn_borrar_icon = QPushButton()
         self.btn_borrar_icon.setIcon(QIcon("assets/buttons/borrar.png"))
         self.btn_borrar_icon.setIconSize(QSize(22, 22))
@@ -2320,20 +2334,19 @@ class DialogoHistorial(QDialog):
         self.btn_cerrar_x.setToolTip("Cerrar")
         
         self.btn_compartir_icon.installEventFilter(self)
+        self.btn_refresh_icon.installEventFilter(self)
         self.btn_borrar_icon.installEventFilter(self)
         self.btn_cerrar_x.installEventFilter(self)
         
         # Ajuste dinámico de espacio a la izquierda para centrar el título
-        spacing_izq = 0
-        if self.btn_compartir_icon.isVisible():
-            spacing_izq += 35
-        if self.btn_borrar_icon.isVisible():
-            spacing_izq += 35
-        header_layout.addSpacing(spacing_izq)
+        self.left_spacer = QWidget()
+        self.left_spacer.setFixedHeight(1)
+        header_layout.addWidget(self.left_spacer)
         header_layout.addStretch()
         header_layout.addWidget(lbl_titulo)
         header_layout.addStretch()
         header_layout.addWidget(self.btn_compartir_icon)
+        header_layout.addWidget(self.btn_refresh_icon)
         header_layout.addWidget(self.btn_borrar_icon)
         header_layout.addWidget(self.btn_cerrar_x)
         
@@ -2548,10 +2561,28 @@ class DialogoHistorial(QDialog):
         finally:
             conn.close()
 
+    def actualizar_left_spacer_width(self):
+        w = 0
+        if self.rol == "Investigador":
+            w += 35  # Botón compartir
+            w += 35  # Botón borrar
+            if hasattr(self, "btn_refresh_icon") and self.btn_refresh_icon.isVisible():
+                w += 35  # Botón refresh
+        if hasattr(self, "left_spacer"):
+            self.left_spacer.setFixedWidth(w)
+
     def actualizar_estado_boton_borrar(self):
         tab_index = self.tabs.currentIndex()
         if self.rol == "Tesista":
             tab_index = 1
+            
+        # Mostrar botón refresh solo en pestaña "Compartidos" (index 1) para el Investigador
+        if hasattr(self, "btn_refresh_icon"):
+            self.btn_refresh_icon.setVisible(self.rol == "Investigador" and tab_index == 1)
+            
+        # Actualizar ancho del spacer izquierdo para mantener centrado el título
+        self.actualizar_left_spacer_width()
+        
         if tab_index == 0:
             selected_items = self.tree.selectedItems()
             selected_reports = [item for item in selected_items if item.data(0, Qt.ItemDataRole.UserRole) and item.data(0, Qt.ItemDataRole.UserRole).get("type") == "reporte"]
