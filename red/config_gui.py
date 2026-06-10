@@ -196,6 +196,36 @@ class DialogoConfigRed(QDialog):
         lbl_info_ips.setStyleSheet("color: #57606a; font-size: 11px; margin-top: 5px; line-height: 1.4;")
         layout_servidor.addWidget(lbl_info_ips)
         
+        # Botón para configurar firewall (redes públicas/privadas)
+        self.btn_config_firewall = QPushButton("Permitir Acceso en Firewall de Windows")
+        self.btn_config_firewall.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_config_firewall.setStyleSheet("""
+            QPushButton { 
+                background-color: transparent; 
+                border: 2px solid #0969da; 
+                color: #0969da; 
+                border-radius: 6px; 
+                padding: 8px; 
+                font-weight: bold; 
+                margin-top: 5px;
+            }
+            QPushButton:hover { 
+                background-color: #0969da; 
+                color: white; 
+            }
+        """)
+        self.btn_config_firewall.clicked.connect(self.configurar_firewall_windows)
+        layout_servidor.addWidget(self.btn_config_firewall)
+
+        # Nota aclaratoria sobre perfiles de red
+        lbl_nota_firewall = QLabel(
+            "Nota: En redes Públicas o Privadas, el Firewall de Windows suele bloquear la conexión de otras computadoras. "
+            "Presiona el botón de arriba para abrir automáticamente los puertos necesarios."
+        )
+        lbl_nota_firewall.setWordWrap(True)
+        lbl_nota_firewall.setStyleSheet("color: #cf222e; font-size: 11px; margin-top: 2px; font-weight: bold;")
+        layout_servidor.addWidget(lbl_nota_firewall)
+        
         main_layout.addWidget(self.grupo_servidor)
         
         main_layout.addStretch()
@@ -259,7 +289,7 @@ class DialogoConfigRed(QDialog):
             self.grupo_cliente.hide()
             self.grupo_servidor.show()
             self.actualizar_label_estado()
-            self.resize(420, 390)
+            self.resize(420, 480)
 
     def actualizar_label_estado(self):
         corriendo = esta_servidor_corriendo()
@@ -293,6 +323,50 @@ class DialogoConfigRed(QDialog):
         if exito:
             from vistas.utilidades import DialogoNotificacion
             DialogoNotificacion("Listo", "Servidor detenido.", "info", self).exec()
+
+    def configurar_firewall_windows(self):
+        import sys
+        from vistas.utilidades import DialogoNotificacion
+        if sys.platform != "win32":
+            DialogoNotificacion("Información", "La configuración del firewall solo es necesaria y compatible con Windows.", "info", self).exec()
+            return
+            
+        try:
+            puerto = int(self.input_puerto.text() if self.input_puerto.text() else 5000)
+        except ValueError:
+            puerto = 5000
+            
+        import ctypes
+        # Comando para eliminar regla anterior si existe, y crear la nueva que permita Dominio, Privado y Público
+        ps_command = (
+            f"Remove-NetFirewallRule -DisplayName 'Trabajo Terminal - Servidor Microglias ({puerto})' -ErrorAction SilentlyContinue; "
+            f"New-NetFirewallRule -DisplayName 'Trabajo Terminal - Servidor Microglias ({puerto})' -Direction Inbound -Action Allow "
+            f"-Protocol TCP -LocalPort {puerto} -Profile Domain,Private,Public -Enabled True"
+        )
+        
+        try:
+            # Solicitar ejecución como Administrador (UAC prompt)
+            ret = ctypes.windll.shell32.ShellExecuteW(
+                None, 
+                "runas", 
+                "powershell.exe", 
+                f"-Command \"{ps_command}\"", 
+                None, 
+                1 # SW_SHOWNORMAL
+            )
+            # Si ret > 32 indica que se inició la solicitud
+            if int(ret) > 32:
+                DialogoNotificacion(
+                    "Permiso Solicitado", 
+                    "Se ha solicitado permiso de administrador para abrir el puerto en el Firewall de Windows.<br><br>"
+                    "Por favor, acepta la ventana de confirmación (UAC) para permitir que otras computadoras se conecten en redes públicas o privadas.", 
+                    "info", 
+                    self
+                ).exec()
+            else:
+                DialogoNotificacion("Error", "No se pudo solicitar la elevación de permisos.", "error", self).exec()
+        except Exception as e:
+            DialogoNotificacion("Error", f"Error al configurar firewall: {e}", "error", self).exec()
 
     def guardar_y_aplicar(self):
         idx = self.combo_modo.currentIndex()
