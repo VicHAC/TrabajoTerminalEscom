@@ -2482,8 +2482,12 @@ class DialogoHistorial(QDialog):
         # Obtener todos los IDs de reportes seleccionados
         id_reps = [item.data(0, Qt.ItemDataRole.UserRole)["id"] for item in selected_reports]
         diag = DialogoCompartirReporte(self.id_usuario, id_reps, self)
-        diag.exec()
-        self.cargar_datos()
+        if diag.exec():
+            self.cargar_datos()
+            main_window = self.parent()
+            if main_window and hasattr(main_window, "id_reporte_actual") and main_window.id_reporte_actual in id_reps:
+                main_window.cerrar_reporte_actual()
+                self.accept()
 
     def validar_reporte(self, id_reporte):
         """Inicia el flujo de revisión: cierra el historial y carga el reporte para inspección."""
@@ -4330,6 +4334,10 @@ class VentanaBaseAnalisis(ValidacionReporteMixin, QMainWindow):
         if hasattr(self, "stacked_visor"):
             self.stacked_visor.setCurrentIndex(0)
         
+        # Salir de modo validación si estaba activo
+        if hasattr(self, "_salir_modo_validacion"):
+            self._salir_modo_validacion()
+            
         # Restablecer estado de los botones laterales del flujo
         self.actualizar_estado_flujo(0)
 
