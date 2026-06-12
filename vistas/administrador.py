@@ -826,31 +826,15 @@ class VentanaAdministrador(QMainWindow):
         
         if dialogo.exec() and dialogo.resultado:
             try:
-                conexion = conectar()
-                cursor = conexion.cursor()
-                
+                from procesamiento.borrado_reportes import eliminar_reportes_y_archivos
+                ids_reportes = []
                 for index in filas_seleccionadas:
                     row = index.row()
                     item_id = self.tabla_reportes.item(row, 0)
-                    item_ruta = self.tabla_reportes.item(row, 7)
-                    if not item_id:
-                        continue
-                    id_reporte = item_id.text()
-                    ruta_archivo = item_ruta.text() if item_ruta else 'Sin archivo'
-                    
-                    # Borrado manual en cascada para mantener la integridad referencial en SQLite
-                    cursor.execute("DELETE FROM Microglia WHERE id_analisis IN (SELECT id_analisis FROM Analisis WHERE id_reporte = ?)", (id_reporte,))
-                    cursor.execute("DELETE FROM Analisis WHERE id_reporte = ?", (id_reporte,))
-                    cursor.execute("DELETE FROM Reporte WHERE id_reporte = ?", (id_reporte,))
-                    
-                    try:
-                        if ruta_archivo and ruta_archivo != 'Sin archivo' and os.path.exists(ruta_archivo):
-                            os.remove(ruta_archivo)
-                    except Exception as e:
-                        print(f"No se pudo borrar el archivo físico: {e}")
+                    if item_id:
+                        ids_reportes.append(int(item_id.text()))
                 
-                conexion.commit()
-                conexion.close()
+                eliminar_reportes_y_archivos(ids_reportes)
                 
                 from vistas.utilidades import DialogoNotificacion
                 DialogoNotificacion("Listo", "Reporte(s) eliminado(s)", "info", self).exec()

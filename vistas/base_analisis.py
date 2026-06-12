@@ -3187,22 +3187,18 @@ class DialogoHistorial(QDialog):
         msg = f"¿Estás seguro de borrar {len(items_a_borrar)} reporte(s) seleccionado(s) y todos sus datos asociados?"
         if not DialogoConfirmacion("Borrar Selección", msg).exec(): return
         
-        from bd.database import conectar
-        conn = conectar(); cur = conn.cursor()
         try:
+            from procesamiento.borrado_reportes import eliminar_reportes_y_archivos
+            id_reps = [item.data(0, Qt.ItemDataRole.UserRole)["id"] for item in items_a_borrar]
+            eliminar_reportes_y_archivos(id_reps)
+            
             for item in items_a_borrar:
-                data = item.data(0, Qt.ItemDataRole.UserRole)
-                id_rep = data["id"]
-                cur.execute("DELETE FROM ReporteCompartido WHERE id_reporte = ?", (id_rep,))
-                cur.execute("DELETE FROM Microglia WHERE id_analisis IN (SELECT id_analisis FROM Analisis WHERE id_reporte = ?)", (id_rep,))
-                cur.execute("DELETE FROM Analisis WHERE id_reporte = ?", (id_rep,))
-                cur.execute("DELETE FROM Reporte WHERE id_reporte = ?", (id_rep,))
                 self.tree.takeTopLevelItem(self.tree.indexOfTopLevelItem(item))
-            conn.commit()
         except Exception as e: 
             logging.error(f"Error borrado masivo: {e}")
+            from vistas.utilidades import DialogoNotificacion
+            DialogoNotificacion("Error", f"No se pudieron borrar todos los datos del reporte: {e}", "error", self).exec()
         finally: 
-            conn.close()
             self.actualizar_estado_boton_borrar()
 
 
