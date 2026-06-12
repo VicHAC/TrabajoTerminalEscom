@@ -31,7 +31,7 @@ def get_optimal_device():
     return "cpu"
 
 class MicrogliaProcessor:
-    def __init__(self, model_path, confidence_threshold=0.20):
+    def __init__(self, model_path, confidence_threshold=0.25):
         """Initializes the YOLO model and sets the device."""
         if not os.path.exists(model_path):
             raise FileNotFoundError(f"Model file not found: {model_path}")
