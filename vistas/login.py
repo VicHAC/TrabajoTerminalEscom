@@ -74,6 +74,16 @@ class VentanaLogin(QWidget):
         self.input_password = QLineEdit()
         self.input_password.setPlaceholderText("Contraseña")
         self.input_password.setEchoMode(QLineEdit.EchoMode.Password)
+        
+        # Acción para mostrar/ocultar contraseña
+        from PyQt6.QtGui import QAction
+        self.action_ver_pass = QAction(self)
+        self.action_ver_pass.setToolTip("Mostrar contraseña")
+        self.input_password.addAction(self.action_ver_pass, QLineEdit.ActionPosition.TrailingPosition)
+        
+        self.pass_visible = False
+        self.actualizar_icono_password()
+        self.action_ver_pass.triggered.connect(self.alternar_visibilidad_password)
 
         btn_ingresar = QPushButton("Iniciar Sesión")
         btn_ingresar.setStyleSheet("""
@@ -277,6 +287,53 @@ class VentanaLogin(QWidget):
             portapapeles.setText(correos)
             
             DialogoCorreosAdministrador(self).exec()
+
+    def actualizar_icono_password(self):
+        # Crear icono dinámico en base al estado de visibilidad
+        from PyQt6.QtGui import QPixmap, QPainter, QPen, QColor, QBrush, QIcon
+        from PyQt6.QtCore import Qt
+        
+        pix = QPixmap(20, 20)
+        pix.fill(Qt.GlobalColor.transparent)
+        painter = QPainter(pix)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        
+        # Color del ojo
+        color_ojo = QColor("#57606a")
+        pen = QPen(color_ojo, 1.8)
+        painter.setPen(pen)
+        
+        # Dibujar forma de ojo (arcos superior e inferior)
+        painter.drawArc(2, 3, 16, 14, 35 * 16, 110 * 16)
+        painter.drawArc(2, 3, 16, 14, 215 * 16, 110 * 16)
+        
+        # Dibujar iris
+        painter.setBrush(QBrush(QColor("#24292f")))
+        painter.setPen(QPen(QColor("#24292f"), 1))
+        painter.drawEllipse(7, 7, 6, 6)
+        
+        # Dibujar pupila (brillo blanco)
+        painter.setBrush(QBrush(QColor("white")))
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.drawEllipse(9, 9, 2, 2)
+        
+        if not self.pass_visible:
+            # Dibujar la línea diagonal para el ojo tachado (oculto)
+            painter.setPen(QPen(QColor("#cf222e"), 1.8))
+            painter.drawLine(3, 3, 17, 17)
+            
+        painter.end()
+        self.action_ver_pass.setIcon(QIcon(pix))
+
+    def alternar_visibilidad_password(self):
+        self.pass_visible = not self.pass_visible
+        if self.pass_visible:
+            self.input_password.setEchoMode(QLineEdit.EchoMode.Normal)
+            self.action_ver_pass.setToolTip("Ocultar contraseña")
+        else:
+            self.input_password.setEchoMode(QLineEdit.EchoMode.Password)
+            self.action_ver_pass.setToolTip("Mostrar contraseña")
+        self.actualizar_icono_password()
 
 
 class DialogoCorreosAdministrador(QDialog):
