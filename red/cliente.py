@@ -19,6 +19,54 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 # 1. TRANSPARENT DATABASE PROXY (SQLite Mock Connection and Cursor)
 # ---------------------------------------------------------------------------
 
+import socket
+import urllib.error
+
+def conmutar_a_modo_local(error_context=""):
+    """
+    Cambia automáticamente el modo de operación de la aplicación a LOCAL
+    escribiendo en el archivo config.json para evitar bloqueos adicionales.
+    """
+    try:
+        from red.config import cargar_configuracion, guardar_configuracion
+        config = cargar_configuracion()
+        if config.get("modo") == "cliente":
+            config["modo"] = "local"
+            guardar_configuracion(config)
+            logging.warning(f"[cliente] Servidor no disponible ({error_context}). Se ha cambiado automáticamente el modo a LOCAL.")
+    except Exception as e:
+        logging.error(f"[cliente] Error al cambiar modo a local: {e}")
+
+def realizar_peticion_servidor(url_or_req, data=None, timeout=5):
+    """
+    Realiza una petición HTTP al servidor con un timeout determinado.
+    Si se detecta una desconexión o timeout, cambia la app a modo local y lanza ConnectionError.
+    """
+    try:
+        if data is not None:
+            if isinstance(data, (dict, list)):
+                body = json.dumps(data).encode("utf-8")
+                req = urllib.request.Request(
+                    url_or_req,
+                    data=body,
+                    headers={"Content-Type": "application/json"}
+                )
+            else:
+                req = urllib.request.Request(url_or_req, data=data)
+        else:
+            req = url_or_req
+            
+        with urllib.request.urlopen(req, timeout=timeout) as response:
+            return response.read()
+    except urllib.error.HTTPError as http_err:
+        raise http_err
+    except (urllib.error.URLError, TimeoutError, socket.timeout, ConnectionError) as conn_err:
+        conmutar_a_modo_local(str(conn_err))
+        raise ConnectionError(
+            f"No se pudo establecer conexión con el servidor: {conn_err}. "
+            "El modo de operación se ha cambiado automáticamente a LOCAL. Por favor, reintente la operación."
+        ) from conn_err
+
 class ClienteDBCursor:
     def __init__(self, connection):
         self.connection = connection
@@ -32,16 +80,11 @@ class ClienteDBCursor:
             "sql": sql,
             "params": list(params) if params else []
         }
+        url = f"{obtener_url_servidor()}/api/db/execute"
         try:
-            url = f"{obtener_url_servidor()}/api/db/execute"
-            req = urllib.request.Request(
-                url,
-                data=json.dumps(payload).encode("utf-8"),
-                headers={"Content-Type": "application/json"}
-            )
             try:
-                with urllib.request.urlopen(req) as response:
-                    res_data = json.loads(response.read().decode("utf-8"))
+                response_bytes = realizar_peticion_servidor(url, data=payload, timeout=5)
+                res_data = json.loads(response_bytes.decode("utf-8"))
             except urllib.error.HTTPError as http_err:
                 err_body = http_err.read().decode("utf-8")
                 try:
@@ -60,6 +103,10 @@ class ClienteDBCursor:
             self.lastrowid = res_data.get("lastrowid")
             self.rowcount = res_data.get("rowcount", -1)
             self._idx = 0
+        except ConnectionError as conn_err:
+            logging.error(f"[cliente_db] Conexión perdida con el servidor: {conn_err}")
+            import sqlite3
+            raise sqlite3.OperationalError(str(conn_err)) from conn_err
         except Exception as e:
             logging.error(f"[cliente_db] Error al ejecutar consulta SQL en el servidor: {e}")
             raise
@@ -118,9 +165,9 @@ def cliente_existe_archivo_en_servidor(ruta_relativa):
     try:
         ruta_rel_limpia = obtener_ruta_relativa_proyecto(ruta_relativa)
         url = f"{obtener_url_servidor()}/api/files/exists?path={urllib.parse.quote(ruta_rel_limpia)}"
-        with urllib.request.urlopen(url) as response:
-            res_data = json.loads(response.read().decode("utf-8"))
-            return res_data.get("exists", False)
+        response_bytes = realizar_peticion_servidor(url, timeout=5)
+        res_data = json.loads(response_bytes.decode("utf-8"))
+        return res_data.get("exists", False)
     except Exception as e:
         logging.error(f"[cliente_files] Error al comprobar existencia en servidor ({ruta_relativa}): {e}")
         return False
@@ -134,7 +181,9 @@ def cliente_descargar_archivo(ruta_relativa):
     url = f"{obtener_url_servidor()}/api/files/download?path={urllib.parse.quote(ruta_rel_limpia)}"
     try:
         logging.info(f"[cliente_files] Descargando {ruta_rel_limpia}...")
-        urllib.request.urlretrieve(url, local_path)
+        file_bytes = realizar_peticion_servidor(url, timeout=10)
+        with open(local_path, "wb") as f:
+            f.write(file_bytes)
         return True
     except Exception as e:
         logging.error(f"[cliente_files] Error al descargar archivo del servidor ({ruta_rel_limpia}): {e}")
@@ -155,14 +204,9 @@ def cliente_subir_archivo(ruta_relativa):
         with open(local_path, "rb") as f:
             file_data = f.read()
             
-        req = urllib.request.Request(
-            url,
-            data=file_data,
-            headers={"Content-Type": "application/octet-stream"}
-        )
-        with urllib.request.urlopen(req) as response:
-            res_data = json.loads(response.read().decode("utf-8"))
-            return res_data.get("success", False)
+        response_bytes = realizar_peticion_servidor(url, data=file_data, timeout=10)
+        res_data = json.loads(response_bytes.decode("utf-8"))
+        return res_data.get("success", False)
     except Exception as e:
         logging.error(f"[cliente_files] Error al subir archivo al servidor ({ruta_rel_limpia}): {e}")
         return False
@@ -210,15 +254,11 @@ def cliente_ejecutar_conteo_ia(ruta_imagen, base_output_folder, confidence_thres
         "confidence_threshold": confidence_threshold
     }
     
+    url = f"{obtener_url_servidor()}/api/process/deteccion"
     try:
-        url = f"{obtener_url_servidor()}/api/process/deteccion"
-        req = urllib.request.Request(
-            url,
-            data=json.dumps(payload).encode("utf-8"),
-            headers={"Content-Type": "application/json"}
-        )
-        with urllib.request.urlopen(req) as response:
-            res = json.loads(response.read().decode("utf-8"))
+        # Usar timeout más largo (25s) para el procesamiento pesado de IA
+        response_bytes = realizar_peticion_servidor(url, data=payload, timeout=25)
+        res = json.loads(response_bytes.decode("utf-8"))
             
         crops_folder_rel = res.get("crops_folder")
         count = res.get("count")
@@ -252,15 +292,10 @@ def cliente_generar_esqueleto_de_archivo(fil_path, esqueletos_dir, out_name):
         "out_name": out_name
     }
     
+    url = f"{obtener_url_servidor()}/api/process/esqueletizado"
     try:
-        url = f"{obtener_url_servidor()}/api/process/esqueletizado"
-        req = urllib.request.Request(
-            url,
-            data=json.dumps(payload).encode("utf-8"),
-            headers={"Content-Type": "application/json"}
-        )
-        with urllib.request.urlopen(req) as response:
-            res = json.loads(response.read().decode("utf-8"))
+        response_bytes = realizar_peticion_servidor(url, data=payload, timeout=15)
+        res = json.loads(response_bytes.decode("utf-8"))
             
         esqueleto_path_rel = res.get("esqueleto_path")
         
@@ -284,15 +319,10 @@ def cliente_extraer_metricas_esqueleto(skeleton_image_path):
         "skeleton_image_path": skeleton_path_rel
     }
     
+    url = f"{obtener_url_servidor()}/api/process/metricas"
     try:
-        url = f"{obtener_url_servidor()}/api/process/metricas"
-        req = urllib.request.Request(
-            url,
-            data=json.dumps(payload).encode("utf-8"),
-            headers={"Content-Type": "application/json"}
-        )
-        with urllib.request.urlopen(req) as response:
-            res = json.loads(response.read().decode("utf-8"))
+        response_bytes = realizar_peticion_servidor(url, data=payload, timeout=15)
+        res = json.loads(response_bytes.decode("utf-8"))
             
         return res.get("metricas")
     except Exception as e:

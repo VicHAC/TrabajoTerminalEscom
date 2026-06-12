@@ -1,5 +1,5 @@
 {
-    "modo": "servidor",
+    "modo": "local",
     "ip_servidor": "10.101.252.192",
     "puerto_servidor": 5000,
     "servidor_ip": "10.101.252.192",
